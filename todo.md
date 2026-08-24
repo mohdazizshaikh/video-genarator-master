@@ -190,8 +190,8 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Run full regression, production build, Docker smoke, and update checklist/status/migration evidence.
 
 ## Repository Delivery
-- [ ] Audit git status, remotes, ignore rules, and sensitive files.
-- [ ] Create a new private GitHub repository and configure the local remote.
-- [ ] Commit the current canonical implementation with a descriptive message.
-- [ ] Push the commit to the main branch.
-- [ ] Verify the remote repository and commit without exposing secrets.
+- [x] Audit git status, remotes, ignore rules, and sensitive files.
+- [x] Create a new private GitHub repository and configure the local remote.
+- [x] Commit the current canonical implementation with a descriptive message.
+- [x] Push the commit to the main branch.
+- [x] Verify the remote repository and commit without exposing secrets.
