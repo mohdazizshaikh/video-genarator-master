@@ -164,6 +164,18 @@ export class FFMpeg {
   }
 
   async getAudioDuration(filePath: string): Promise<number> {
+    try {
+      return await this.probeDurationWithFfprobe(filePath);
+    } catch (ffprobeError) {
+      logger.warn(
+        { ffprobeError, filePath },
+        "ffprobe unavailable, falling back to ffmpeg stderr duration parsing",
+      );
+      return this.probeDurationWithFfmpeg(filePath);
+    }
+  }
+
+  private async probeDurationWithFfprobe(filePath: string): Promise<number> {
     return new Promise((resolve, reject) => {
       ffmpeg.ffprobe(filePath, (error, metadata) => {
         if (error) {
@@ -179,6 +191,39 @@ export class FFMpeg {
 
         resolve(duration);
       });
+    });
+  }
+
+  private async probeDurationWithFfmpeg(filePath: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      execFile(
+        this.ffmpegBinPath,
+        ["-i", filePath],
+        { timeout: 30_000 },
+        (error, _stdout, stderr) => {
+          if (!stderr) {
+            reject(new Error(`No ffmpeg output for ${filePath}`));
+            return;
+          }
+
+          const match = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+          if (!match) {
+            reject(new Error(`Could not parse duration from ffmpeg output for ${filePath}`));
+            return;
+          }
+
+          const hours = Number(match[1]);
+          const minutes = Number(match[2]);
+          const seconds = Number(match[3]);
+          const duration = hours * 3600 + minutes * 60 + seconds;
+          if (duration <= 0) {
+            reject(new Error(`Invalid audio duration for ${filePath}`));
+            return;
+          }
+
+          resolve(duration);
+        },
+      );
     });
   }
 }

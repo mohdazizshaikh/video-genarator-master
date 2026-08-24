@@ -75,6 +75,7 @@ export class SchedulerService {
    * Manually enqueue a render job (called by REST API or future automation).
    */
   async enqueueRenderJob(params: {
+    tenantId: string;
     sceneInput: unknown;
     orientation: string;
     category: string;
@@ -93,6 +94,7 @@ export class SchedulerService {
     const namingKey = params.namingKey ?? cuid();
 
     const record = await this.renderJobStore.create({
+      tenantId: params.tenantId,
       scriptPlanId: "",
       videoType: params.videoType ?? "short",
       language: "en",
@@ -106,6 +108,7 @@ export class SchedulerService {
     if (this.config.redisEnabled) {
       const renderQueue = createRenderQueue(this.config);
       const payload: RenderJobPayload = {
+        tenantId: params.tenantId,
         renderJobId: jobId,
         scriptPlanId: "",
         sceneInput: params.sceneInput as any,

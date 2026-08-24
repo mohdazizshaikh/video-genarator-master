@@ -20,6 +20,7 @@ import express from "express";
 import type { Config } from "../../config";
 import { VideoLibraryStore } from "../../db/VideoLibraryStore";
 import { logger } from "../../logger";
+import { getAuthenticatedTenantId } from "../auth";
 
 export class VideoLibraryRouter {
   public router: Router;
@@ -53,24 +54,28 @@ export class VideoLibraryRouter {
       const status = req.query["status"] as string | undefined;
       const platform = req.query["platform"] as string | undefined;
 
+      const tenantId = getAuthenticatedTenantId(req) ?? "";
       let videos;
       if (category) {
-        videos = await this.store.listByCategory(category, limit, offset);
+        const result = (await this.store.listForTenant(tenantId, 200, 0)).videos.filter((video) => video.category === category).slice(offset, offset + limit);
+        videos = result;
         res.json({ status: "ok", videos, total: videos.length });
         return;
       }
       if (status) {
-        videos = await this.store.listByStatus(status as any, limit, offset);
+        const result = (await this.store.listForTenant(tenantId, 200, 0)).videos.filter((video) => video.status === status).slice(offset, offset + limit);
+        videos = result;
         res.json({ status: "ok", videos, total: videos.length });
         return;
       }
       if (platform) {
-        videos = await this.store.listByPlatform(platform, limit, offset);
+        const result = (await this.store.listForTenant(tenantId, 200, 0)).videos.filter((video) => video.platform === platform).slice(offset, offset + limit);
+        videos = result;
         res.json({ status: "ok", videos, total: videos.length });
         return;
       }
 
-      const result = await this.store.list(limit, offset);
+      const result = await this.store.listForTenant(tenantId, limit, offset);
       res.json({ status: "ok", ...result });
     } catch (err) {
       logger.error(err, "VideoLibrary: list failed");
@@ -102,6 +107,7 @@ export class VideoLibraryRouter {
       }
 
       const record = await this.store.create({
+        tenantId: getAuthenticatedTenantId(req) ?? "",
         title,
         description,
         category,
@@ -126,7 +132,7 @@ export class VideoLibraryRouter {
 
   private async getVideo(req: Request, res: Response): Promise<void> {
     try {
-      const video = await this.store.get(req.params.id);
+      const video = await this.store.getForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id);
       if (!video) {
         res.status(404).json({ error: "Video not found" });
         return;
@@ -140,7 +146,7 @@ export class VideoLibraryRouter {
 
   private async updateVideo(req: Request, res: Response): Promise<void> {
     try {
-      const updated = await this.store.update(req.params.id, req.body);
+      const updated = await this.store.updateForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id, req.body);
       if (!updated) {
         res.status(404).json({ error: "Video not found" });
         return;
@@ -160,7 +166,7 @@ export class VideoLibraryRouter {
         res.status(400).json({ error: `status must be one of: ${allowed.join(", ")}` });
         return;
       }
-      const updated = await this.store.updateStatus(req.params.id, status as any);
+      const updated = await this.store.updateStatusForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id, status as any);
       if (!updated) {
         res.status(404).json({ error: "Video not found" });
         return;
@@ -175,7 +181,7 @@ export class VideoLibraryRouter {
   private async updateMetrics(req: Request, res: Response): Promise<void> {
     try {
       const { views, likes, comments, shares } = req.body as any;
-      const updated = await this.store.updateMetrics(req.params.id, { views, likes, comments, shares });
+      const updated = await this.store.updateMetricsForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id, { views, likes, comments, shares });
       if (!updated) {
         res.status(404).json({ error: "Video not found" });
         return;
@@ -189,7 +195,7 @@ export class VideoLibraryRouter {
 
   private async deleteVideo(req: Request, res: Response): Promise<void> {
     try {
-      const deleted = await this.store.delete(req.params.id);
+      const deleted = await this.store.deleteForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id);
       if (!deleted) {
         res.status(404).json({ error: "Video not found" });
         return;
@@ -210,7 +216,7 @@ export class VideoLibraryRouter {
       }
       const limit = Math.min(parseInt(String(req.query["limit"] || "50")), 200);
       const offset = parseInt(String(req.query["offset"] || "0"));
-      const videos = await this.store.search(q, limit, offset);
+      const videos = await this.store.searchForTenant(getAuthenticatedTenantId(req) ?? "", q, limit, offset);
       res.json({ status: "ok", videos, query: q });
     } catch (err) {
       logger.error(err, "VideoLibrary: search failed");
@@ -220,7 +226,7 @@ export class VideoLibraryRouter {
 
   private async getStats(req: Request, res: Response): Promise<void> {
     try {
-      const stats = await this.store.getStats();
+      const stats = await this.store.getStatsForTenant(getAuthenticatedTenantId(req) ?? "");
       res.json({ status: "ok", stats });
     } catch (err) {
       logger.error(err, "VideoLibrary: stats failed");
@@ -231,7 +237,7 @@ export class VideoLibraryRouter {
   private async getTrendingTags(req: Request, res: Response): Promise<void> {
     try {
       const limit = parseInt(String(req.query["limit"] || "20"));
-      const tags = await this.store.getTrendingTags(limit);
+      const tags = await this.store.getTrendingTagsForTenant(getAuthenticatedTenantId(req) ?? "", limit);
       res.json({ status: "ok", tags });
     } catch (err) {
       logger.error(err, "VideoLibrary: tags failed");

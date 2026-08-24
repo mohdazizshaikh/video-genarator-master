@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 export interface SkipDataPoint {
+  tenantId?: string;
   videoId: string;
   category: string;
   platform: string;
@@ -42,14 +43,15 @@ export class SkipAnalysisEngine {
     try { fs.writeJsonSync(this.dataPath, this.data, { spaces: 2 }); } catch { /* ignore */ }
   }
 
-  record(videoId: string, category: string, platform: string, skipData: { at3sec: number; at10sec: number; at30sec: number; avgWatchPercent: number }) {
-    this.data.push({ videoId, category, platform, ...skipData, recordedAt: new Date().toISOString() });
+  recordForTenant(tenantId: string, videoId: string, category: string, platform: string, skipData: { at3sec: number; at10sec: number; at30sec: number; avgWatchPercent: number }) {
+    if (!tenantId.trim()) throw new Error("tenantId is required");
+    this.data.push({ tenantId, videoId, category, platform, ...skipData, recordedAt: new Date().toISOString() });
     if (this.data.length > 5000) this.data = this.data.slice(-4000);
     this.save();
   }
 
-  analyze(category: string, platform: string): SkipAnalysis {
-    const points = this.data.filter((d) => d.category === category && d.platform === platform);
+  analyzeForTenant(tenantId: string, category: string, platform: string): SkipAnalysis {
+    const points = this.data.filter((d) => d.tenantId === tenantId && d.category === category && d.platform === platform);
 
     if (points.length === 0) {
       return {
@@ -84,5 +86,8 @@ export class SkipAnalysisEngine {
     return { category, platform, avgSkipAt3sec, avgSkipAt10sec, avgSkipAt30sec, avgWatchPercent, hookQuality, recommendations, sampleCount: points.length };
   }
 
-  getAll(): SkipDataPoint[] { return this.data; }
+  getAllForTenant(tenantId: string): SkipDataPoint[] {
+    if (!tenantId.trim()) return [];
+    return this.data.filter((point) => point.tenantId === tenantId);
+  }
 }

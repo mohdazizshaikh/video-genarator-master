@@ -1,4 +1,6 @@
 import { Kokoro } from "./Kokoro";
+import { EdgeTts } from "./EdgeTts";
+import { Chatterbox } from "./Chatterbox";
 import { LanguageEnum, type SceneInput, type Voices } from "../../types/shorts";
 import { AiLlmGenerator } from "../../script-generator/AiLlmGenerator";
 import { defaultVoiceForLanguage } from "../../config/languageSupport";
@@ -6,6 +8,8 @@ import { logger } from "../../logger";
 
 export class TtsAdapter {
   private translator: AiLlmGenerator;
+  private edgeTts: EdgeTts;
+  private chatterbox: Chatterbox;
 
   constructor(
     private kokoro: Kokoro,
@@ -13,6 +17,8 @@ export class TtsAdapter {
     aiLlmModel?: string,
   ) {
     this.translator = new AiLlmGenerator(aiLlmUrl, aiLlmModel);
+    this.edgeTts = new EdgeTts();
+    this.chatterbox = new Chatterbox();
   }
 
   private languageNeedsTransliteration(language: LanguageEnum): boolean {
@@ -85,6 +91,24 @@ export class TtsAdapter {
     const voiceKey = preferredVoice || defaultVoiceForLanguage(targetLanguage);
     const translatedText = await this.translateIfNeeded(scene, sourceLanguage);
     const speechReadyText = await this.prepareTextForSpeech(translatedText);
+    if (Chatterbox.isChatterboxVoice(voiceKey)) {
+      try {
+        const result = await this.chatterbox.generate(speechReadyText, voiceKey);
+        if (result.audio.byteLength > 0) {
+          return result;
+        }
+        logger.warn({ voiceKey }, "Chatterbox returned empty audio, falling back to Edge TTS");
+      } catch (error) {
+        logger.warn({ error, voiceKey }, "Chatterbox synthesis failed, falling back to Edge TTS");
+      }
+    }
+    if (EdgeTts.isEdgeVoice(voiceKey)) {
+      const result = await this.edgeTts.generate(speechReadyText, voiceKey);
+      if (result.audio.byteLength > 0) {
+        return result;
+      }
+      logger.warn({ voiceKey }, "Edge TTS returned empty audio, falling back to Kokoro");
+    }
     return this.kokoro.generate(speechReadyText, voiceKey);
   }
 }

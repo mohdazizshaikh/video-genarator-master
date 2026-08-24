@@ -22,6 +22,8 @@ export interface RepurposeClip {
 }
 
 export interface RepurposeOptions {
+  /** Auth-derived owner for generated artifacts. */
+  tenantId?: string;
   /** Target clip length in seconds. */
   clipSeconds?: number;
   /** Number of clips to produce. */
@@ -69,13 +71,14 @@ export class RepurposeEngine {
     options: RepurposeOptions = {},
   ): Promise<RepurposeClip[]> {
     const fileBase = path.basename(videoPath, path.extname(videoPath));
+    const ownerPrefix = options.tenantId ? `${options.tenantId.replace(/[^a-zA-Z0-9_-]/g, "-")}__` : "legacy__";
     const outDir = path.join(this.config.videosDirPath, "repurposed", fileBase);
     fs.ensureDirSync(outDir);
 
     const clipSeconds = options.clipSeconds ?? 20;
     const maxClips = options.maxClips ?? 3;
 
-    const wavPath = path.join(outDir, `${fileBase}.wav`);
+    const wavPath = path.join(outDir, `${ownerPrefix}${fileBase}.wav`);
     logger.info({ videoPath }, "Repurposing: extracting normalized audio for Whisper");
     await this.extractAudio(videoPath, wavPath);
 
@@ -93,7 +96,7 @@ export class RepurposeEngine {
     for (let i = 0; i < windows.length; i++) {
       const window = windows[i];
       const fileTitle = (fileBase + "-" + (i + 1)).replace(/[^a-zA-Z0-9-_]/g, "-");
-      const outputName = `${fileTitle}.mp4`;
+      const outputName = `${ownerPrefix}${fileTitle}.mp4`;
       const outputPath = path.join(outDir, outputName);
 
       if (!options.force && fs.existsSync(outputPath)) {

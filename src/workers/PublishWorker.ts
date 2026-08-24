@@ -8,12 +8,17 @@
 import { Worker, Job } from "bullmq";
 import { Config } from "../config";
 import { PublishJobStore } from "../db/PublishJobStore";
+import { JobEventStore } from "../db/JobEventStore";
+import { JobEventOutboxStore } from "../db/JobEventOutboxStore";
+import { JobLifecycleEventService } from "../services/JobLifecycleEventService";
 import { logger } from "../logger";
 import { getRedisConnection, QUEUE_NAMES } from "./QueueManager";
 import type { PlatformType } from "../types/shorts";
 import { enforcePlatformMetadataLimits, validatePublishPayload } from "../publishers/PlatformLimits";
 
 export interface PublishJobPayload {
+  /** Auth-derived tenant owner; legacy jobs without this field cannot access accounts. */
+  tenantId?: string;
   publishJobId: string;
   renderOutputPath: string;
   platform: PlatformType;
@@ -32,9 +37,11 @@ export interface PublishJobPayload {
 export class PublishWorker {
   private worker: Worker;
   private publishJobStore: PublishJobStore;
+  private lifecycleEvents: JobLifecycleEventService;
 
   constructor(private config: Config) {
     this.publishJobStore = new PublishJobStore(config.dataDirPath);
+    this.lifecycleEvents = new JobLifecycleEventService(new JobEventStore(config.dataDirPath), new JobEventOutboxStore(config.dataDirPath));
 
     const publishConcurrency = Math.max(1, this.config.publishWorkerConcurrency || 3);
     // Phase 4.9: configurable worker scaling
@@ -49,6 +56,7 @@ export class PublishWorker {
     );
 
     this.worker.on("completed", (job) => {
+      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: job.data.publishJobId, type: "completed", payload: { queueJobId: job.id, platform: job.data.platform } });
       logger.info(
         { jobId: job.id, publishJobId: job.data.publishJobId, platform: job.data.platform },
         "Publish job completed",
@@ -58,9 +66,10 @@ export class PublishWorker {
     this.worker.on("failed", async (job, err) => {
       if (!job) return;
       const { publishJobId } = job.data;
+      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "failed", attempt: (job.attemptsMade ?? 0) + 1, payload: { error: err.message } });
 
-      await this.publishJobStore.incrementAttempt(publishJobId);
-      const record = await this.publishJobStore.getJob(publishJobId);
+      await this.publishJobStore.incrementAttemptForTenant(job.data.tenantId ?? "", publishJobId);
+      const record = await this.publishJobStore.getJobForTenant(job.data.tenantId ?? "", publishJobId);
       const attempts = record?.attemptCount ?? 0;
 
       if (attempts >= 2) {
@@ -75,7 +84,7 @@ export class PublishWorker {
           originalJobData: job.data,
         });
 
-        await this.publishJobStore.updateJobStatus(publishJobId, "failed", {
+        await this.publishJobStore.updateJobStatusForTenant(job.data.tenantId ?? "", publishJobId, "failed", {
           error: `Max retries exceeded: ${err.message}`,
           attemptCount: attempts,
         });
@@ -84,7 +93,7 @@ export class PublishWorker {
           "Publish job moved to dead-letter after max retries",
         );
       } else {
-        await this.publishJobStore.updateJobStatus(publishJobId, "failed", {
+        await this.publishJobStore.updateJobStatusForTenant(job.data.tenantId ?? "", publishJobId, "failed", {
           error: err.message,
           attemptCount: attempts,
         });
@@ -99,7 +108,8 @@ export class PublishWorker {
 
     logger.info({ jobId: job.id, publishJobId, platform, channelId }, "PublishWorker processing job");
 
-    await this.publishJobStore.updateJobStatus(publishJobId, "publishing");
+    this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "publishing", attempt: job.attemptsMade ?? 0 });
+    await this.publishJobStore.updateJobStatusForTenant(job.data.tenantId ?? "", publishJobId, "publishing");
     await job.updateProgress(10);
 
     // Dynamic import of the right publisher based on platform
@@ -113,8 +123,8 @@ export class PublishWorker {
           this.config.dataDirPath,
           process.env.TENANT_KEYS_SECRET || "",
         );
-        const credentials = await service.getAccountCredentials(job.data.accountId);
-        const account = await service.getAccount(job.data.accountId);
+        const credentials = await service.getAccountCredentials(job.data.tenantId ?? "", job.data.accountId);
+        const account = await service.getAccount(job.data.tenantId ?? "", job.data.accountId);
         if (!account || account.provider !== platform) {
           throw new Error(`Account ${job.data.accountId} not found or provider mismatch`);
         }
@@ -160,7 +170,7 @@ export class PublishWorker {
         throw new Error(result.error ?? "Unknown publish error");
       }
 
-      await this.publishJobStore.updateJobStatus(publishJobId, "published", {
+      await this.publishJobStore.updateJobStatusForTenant(job.data.tenantId ?? "", publishJobId, "published", {
         externalId: result.externalId,
         publishedUrl: result.publishedUrl,
       });

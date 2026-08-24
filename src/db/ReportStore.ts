@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from "uuid";
 export type ReportStatus = "pending" | "merged" | "published";
 
 export interface ReportRecord {
+  /** Auth-derived owner. Legacy reports without this field are not tenant-visible. */
+  tenantId?: string;
   id: string;
   sourceId: string;
   sourceName: string;
@@ -55,12 +57,30 @@ export class ReportStore {
     return record;
   }
 
+  public async listForTenant(tenantId: string): Promise<ReportRecord[]> {
+    if (!tenantId) return [];
+    return (await this.readAll())
+      .filter((record) => record.tenantId === tenantId)
+      .sort((a, b) => new Date(b.insertedAt).getTime() - new Date(a.insertedAt).getTime());
+  }
+
   public async list(): Promise<ReportRecord[]> {
     return (await this.readAll()).sort((a, b) => new Date(b.insertedAt).getTime() - new Date(a.insertedAt).getTime());
   }
 
+  public async getForTenant(tenantId: string, reportId: string): Promise<ReportRecord | undefined> {
+    if (!tenantId) return undefined;
+    const report = await this.get(reportId);
+    return report?.tenantId === tenantId ? report : undefined;
+  }
+
   public async get(reportId: string): Promise<ReportRecord | undefined> {
     return (await this.readAll()).find((item) => item.id === reportId);
+  }
+
+  public async updateStatusForTenant(tenantId: string, reportId: string, status: ReportStatus): Promise<ReportRecord | undefined> {
+    if (!(await this.getForTenant(tenantId, reportId))) return undefined;
+    return this.updateStatus(reportId, status);
   }
 
   public async updateStatus(reportId: string, status: ReportStatus): Promise<ReportRecord | undefined> {

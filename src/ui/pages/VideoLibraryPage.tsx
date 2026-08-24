@@ -2,6 +2,7 @@
  * VideoLibraryPage – Full video library management with CRUD, search, filters, stats + analytics
  */
 import React, { useState, useEffect, useCallback } from "react";
+import { apiClient } from "../services/apiClient";
 import {
   Box, Typography, Grid, Card, CardContent, CardActions, Button, TextField,
   MenuItem, Select, FormControl, InputLabel, Chip, CircularProgress, Alert,
@@ -88,24 +89,22 @@ export const VideoLibraryPage: React.FC = () => {
       if (filterPlatform) url = `/api/videolibrary?platform=${filterPlatform}&limit=100`;
       if (filterCategory) url = `/api/videolibrary?category=${filterCategory}&limit=100`;
       if (searchQ.trim().length >= 2) url = `/api/videolibrary/search?q=${encodeURIComponent(searchQ)}&limit=100`;
-      const res = await fetch(url);
-      const data = await res.json();
-      setVideos(data.videos || []);
-      setTotal(data.total || (data.videos || []).length);
+      const data = await apiClient.get<{ videos?: VideoRecord[]; total?: number }>(url);
+      const nextVideos = Array.isArray(data.videos) ? data.videos : [];
+      setVideos(nextVideos);
+      setTotal(data.total || nextVideos.length);
     } catch { setError("Failed to load video library"); }
     setLoading(false);
   }, [searchQ, filterStatus, filterPlatform, filterCategory]);
 
   const fetchStats = useCallback(async () => {
     try {
-      const [statsRes, tagsRes] = await Promise.all([
-        fetch("/api/videolibrary/stats"),
-        fetch("/api/videolibrary/tags"),
+      const [s, t] = await Promise.all([
+        apiClient.get<{ status?: string; stats?: LibraryStats }>("/api/videolibrary/stats"),
+        apiClient.get<{ status?: string; tags?: Array<{ tag: string; count: number }> }>("/api/videolibrary/tags"),
       ]);
-      const s = await statsRes.json();
-      const t = await tagsRes.json();
-      if (s.status === "ok") setStats(s.stats);
-      if (t.status === "ok") setTrendingTags(t.tags);
+      if (s.status === "ok" && s.stats) setStats(s.stats);
+      if (t.status === "ok" && Array.isArray(t.tags)) setTrendingTags(t.tags);
     } catch {}
   }, []);
 
@@ -128,9 +127,10 @@ export const VideoLibraryPage: React.FC = () => {
       const body = { ...form, tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean) };
       const url = editRecord ? `/api/videolibrary/${editRecord.id}` : "/api/videolibrary";
       const method = editRecord ? "PATCH" : "POST";
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (data.status !== "ok") throw new Error(data.error || "Save failed");
+      const data = editRecord
+        ? await apiClient.patch<{ status?: string; error?: string }>(url, body)
+        : await apiClient.post<{ status?: string; error?: string }>(url, body);
+      if (data.status && data.status !== "ok") throw new Error(data.error || "Save failed");
       setAddOpen(false); fetchVideos(); fetchStats();
     } catch (err) { setError(err instanceof Error ? err.message : "Save failed"); }
     setSaving(false);
@@ -138,14 +138,14 @@ export const VideoLibraryPage: React.FC = () => {
 
   const deleteVideo = async (id: string) => {
     try {
-      await fetch(`/api/videolibrary/${id}`, { method: "DELETE" });
+      await apiClient.delete(`/api/videolibrary/${id}`);
       setDeleteConfirm(null); fetchVideos(); fetchStats();
     } catch { setError("Delete failed"); }
   };
 
   const updateStatus = async (id: string, status: string) => {
     try {
-      await fetch(`/api/videolibrary/${id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+      await apiClient.patch(`/api/videolibrary/${id}/status`, { status });
       fetchVideos(); fetchStats();
     } catch {}
   };

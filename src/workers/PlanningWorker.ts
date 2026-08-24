@@ -3,10 +3,14 @@ import cuid from "cuid";
 import type { Config } from "../config";
 import { ReportStore } from "../db/ReportStore";
 import { ScriptPlanStore } from "../db/ScriptPlanStore";
+import { JobEventStore } from "../db/JobEventStore";
+import { JobEventOutboxStore } from "../db/JobEventOutboxStore";
+import { JobLifecycleEventService } from "../services/JobLifecycleEventService";
 import { logger } from "../logger";
 import { getRedisConnection, QUEUE_NAMES } from "./QueueManager";
 
 export interface PlanningJobPayload {
+  tenantId?: string;
   category: string;
   maxItems?: number;
 }
@@ -15,10 +19,12 @@ export class PlanningWorker {
   private worker: Worker;
   private reportStore: ReportStore;
   private scriptPlanStore: ScriptPlanStore;
+  private lifecycleEvents: JobLifecycleEventService;
 
   constructor(private readonly config: Config) {
     this.reportStore = new ReportStore(config.dataDirPath);
     this.scriptPlanStore = new ScriptPlanStore(config.dataDirPath);
+    this.lifecycleEvents = new JobLifecycleEventService(new JobEventStore(config.dataDirPath), new JobEventOutboxStore(config.dataDirPath));
     this.worker = new Worker(
       QUEUE_NAMES.PLANNING,
       async (job: Job<PlanningJobPayload>) => this.processJob(job),
@@ -30,6 +36,7 @@ export class PlanningWorker {
     );
 
     this.worker.on("completed", (job) => {
+      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: job.id, type: "completed", payload: { planId: job.returnvalue } });
       logger.info({ jobId: job.id }, "Planning job completed");
     });
 
@@ -37,7 +44,12 @@ export class PlanningWorker {
   }
 
   private async processJob(job: Job<PlanningJobPayload>): Promise<string | null> {
-    const reports = (await this.reportStore.list())
+    this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: job.id, type: "processing" });
+    if (!job.data.tenantId) {
+      logger.warn({ jobId: job.id }, "Skipping unowned planning job");
+      return null;
+    }
+    const reports = (await this.reportStore.listForTenant(job.data.tenantId))
       .filter((report) => report.category.toLowerCase() === job.data.category.toLowerCase())
       .slice(0, job.data.maxItems ?? 5);
 
@@ -47,6 +59,7 @@ export class PlanningWorker {
     }
 
     const plan = {
+      tenantId: job.data.tenantId,
       id: cuid(),
       category: job.data.category,
       createdAt: new Date().toISOString(),
@@ -61,7 +74,7 @@ export class PlanningWorker {
     };
 
     await this.scriptPlanStore.add(plan);
-    await Promise.all(reports.map((report) => this.reportStore.updateStatus(report.id, "merged")));
+    await Promise.all(reports.map((report) => this.reportStore.updateStatusForTenant(job.data.tenantId!, report.id, "merged")));
     return plan.id;
   }
 

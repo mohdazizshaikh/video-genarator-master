@@ -17,6 +17,7 @@ export interface Episode {
 
 export interface Series {
   id: string;
+  tenantId?: string;
   title: string;
   category: string;
   platform: string[];
@@ -57,9 +58,11 @@ export class SeriesBuilderEngine {
     try { fs.writeJsonSync(this.seriesPath, this.series, { spaces: 2 }); } catch { /* ignore */ }
   }
 
-  createSeries(data: { title: string; category: string; platform: string[]; totalEpisodes: number; style: Series["style"]; autoCliffhanger?: boolean }): Series {
+  createSeriesForTenant(tenantId: string, data: { title: string; category: string; platform: string[]; totalEpisodes: number; style: Series["style"]; autoCliffhanger?: boolean }): Series {
+    if (!tenantId.trim()) throw new Error("tenantId is required");
     const series: Series = {
       id: `series_${Date.now()}`,
+      tenantId,
       title: data.title,
       category: data.category,
       platform: data.platform,
@@ -84,16 +87,16 @@ export class SeriesBuilderEngine {
     return series;
   }
 
-  generateCliffhanger(seriesId: string, currentEpisode: number): string {
-    const series = this.series.find((s) => s.id === seriesId);
+  generateCliffhangerForTenant(tenantId: string, seriesId: string, currentEpisode: number): string {
+    const series = this.series.find((s) => s.id === seriesId && s.tenantId === tenantId);
     if (!series || !series.autoCliffhanger) return "";
     if (currentEpisode >= series.totalEpisodes) return "Thank you for watching the series!";
     const template = CLIFFHANGER_TEMPLATES[Math.floor(Math.random() * CLIFFHANGER_TEMPLATES.length)];
     return template.replace(/\{next\}/g, String(currentEpisode + 1));
   }
 
-  updateEpisode(seriesId: string, episodeNumber: number, update: Partial<Episode>): boolean {
-    const series = this.series.find((s) => s.id === seriesId);
+  updateEpisodeForTenant(tenantId: string, seriesId: string, episodeNumber: number, update: Partial<Episode>): boolean {
+    const series = this.series.find((s) => s.id === seriesId && s.tenantId === tenantId);
     if (!series) return false;
     const ep = series.episodes.find((e) => e.episodeNumber === episodeNumber);
     if (!ep) return false;
@@ -103,18 +106,23 @@ export class SeriesBuilderEngine {
     return true;
   }
 
-  getNextEpisode(seriesId: string): Episode | null {
-    const series = this.series.find((s) => s.id === seriesId);
+  getNextEpisodeForTenant(tenantId: string, seriesId: string): Episode | null {
+    const series = this.series.find((s) => s.id === seriesId && s.tenantId === tenantId);
     if (!series) return null;
     return series.episodes.find((e) => e.status === "planned") || null;
   }
 
-  getAllSeries(): Series[] { return this.series; }
-  getSeries(id: string): Series | undefined { return this.series.find((s) => s.id === id); }
+  getAllSeriesForTenant(tenantId: string): Series[] {
+    if (!tenantId.trim()) return [];
+    return this.series.filter((series) => series.tenantId === tenantId);
+  }
+  getSeriesForTenant(tenantId: string, id: string): Series | undefined {
+    return this.series.find((series) => series.id === id && series.tenantId === tenantId);
+  }
 
-  deleteSeries(id: string): boolean {
+  deleteSeriesForTenant(tenantId: string, id: string): boolean {
     const before = this.series.length;
-    this.series = this.series.filter((s) => s.id !== id);
+    this.series = this.series.filter((s) => !(s.tenantId === tenantId && s.id === id));
     if (this.series.length !== before) { this.save(); return true; }
     return false;
   }

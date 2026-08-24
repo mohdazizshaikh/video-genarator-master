@@ -65,9 +65,9 @@ export class ProfileService {
     };
   }
 
-  async listProfiles(): Promise<ProfileSummary[]> {
+  async listProfiles(tenantId: string): Promise<ProfileSummary[]> {
     const [profiles, accounts] = await Promise.all([
-      this.profileStore.list(),
+      this.profileStore.listForTenant(tenantId),
       this.accountStore.list(),
     ]);
     return profiles.map((profile) => ({
@@ -83,8 +83,8 @@ export class ProfileService {
     }));
   }
 
-  async getProfile(id: string): Promise<ProfileSummary | undefined> {
-    const profile = await this.profileStore.get(id);
+  async getProfile(tenantId: string, id: string): Promise<ProfileSummary | undefined> {
+    const profile = await this.profileStore.getForTenant(tenantId, id);
     if (!profile) return undefined;
     const accounts = await this.accountStore.listByProfile(id);
     return {
@@ -98,25 +98,27 @@ export class ProfileService {
     };
   }
 
-  async getProfileRecord(id: string): Promise<ProfileRecord | undefined> {
-    return this.profileStore.get(id);
+  async getProfileRecord(tenantId: string, id: string): Promise<ProfileRecord | undefined> {
+    return this.profileStore.getForTenant(tenantId, id);
   }
 
-  async createProfile(data: {
+  async createProfile(tenantId: string, data: {
     name: string;
     description?: string;
     genres?: string[];
   }): Promise<ProfileSummary | undefined> {
     const genres = (data.genres || []).filter((genre) => isContentCategory(genre));
     const profile = await this.profileStore.create({
+      tenantId,
       name: data.name,
       description: data.description,
       genres,
     });
-    return this.getProfile(profile.id);
+    return this.getProfile(tenantId, profile.id);
   }
 
   async updateProfile(
+    tenantId: string,
     id: string,
     patch: Partial<Pick<ProfileRecord, "name" | "description" | "genres">>,
   ): Promise<ProfileSummary | undefined> {
@@ -126,19 +128,20 @@ export class ProfileService {
     if (patch.genres !== undefined) {
       normalized.genres = patch.genres.filter((genre) => isContentCategory(genre));
     }
-    await this.profileStore.update(id, normalized);
-    return this.getProfile(id);
+    await this.profileStore.updateForTenant(tenantId, id, normalized);
+    return this.getProfile(tenantId, id);
   }
 
-  async removeProfile(id: string): Promise<boolean> {
+  async removeProfile(tenantId: string, id: string): Promise<boolean> {
+    if (!(await this.profileStore.getForTenant(tenantId, id))) return false;
     const accounts = await this.accountStore.listByProfile(id);
     for (const account of accounts) {
       await this.accountStore.remove(account.id);
     }
-    return this.profileStore.remove(id);
+    return this.profileStore.removeForTenant(tenantId, id);
   }
 
-  async addAccount(data: {
+  async addAccount(tenantId: string, data: {
     profileId: string;
     provider: PlatformType;
     label: string;
@@ -147,7 +150,7 @@ export class ProfileService {
     displayName?: string;
     avatarUrl?: string;
   }): Promise<ProfileAccountSummary | undefined> {
-    const profile = await this.profileStore.get(data.profileId);
+    const profile = await this.profileStore.getForTenant(tenantId, data.profileId);
     if (!profile) return undefined;
     const account = await this.accountStore.create({
       profileId: data.profileId,
@@ -163,12 +166,14 @@ export class ProfileService {
     return this.toAccountSummary(account);
   }
 
-  async getAccount(accountId: string): Promise<ProfileAccountRecord | undefined> {
-    return this.accountStore.get(accountId);
+  async getAccount(tenantId: string, accountId: string): Promise<ProfileAccountRecord | undefined> {
+    const account = await this.accountStore.get(accountId);
+    if (!account || !(await this.profileStore.getForTenant(tenantId, account.profileId))) return undefined;
+    return account;
   }
 
-  async getAccountCredentials(accountId: string): Promise<ProfileAccountCredentials | undefined> {
-    const account = await this.accountStore.get(accountId);
+  async getAccountCredentials(tenantId: string, accountId: string): Promise<ProfileAccountCredentials | undefined> {
+    const account = await this.getAccount(tenantId, accountId);
     if (!account) return undefined;
     return this.decryptCredentials(account.credentials);
   }
@@ -182,7 +187,8 @@ export class ProfileService {
     return this.toAccountSummary(account);
   }
 
-  async removeAccount(profileId: string, accountId: string): Promise<boolean> {
+  async removeAccount(tenantId: string, profileId: string, accountId: string): Promise<boolean> {
+    if (!(await this.profileStore.getForTenant(tenantId, profileId))) return false;
     const account = await this.accountStore.get(accountId);
     if (!account || account.profileId !== profileId) return false;
     await this.profileStore.removeAccountId(profileId, accountId);
@@ -190,9 +196,9 @@ export class ProfileService {
   }
 
   /** Resolve the active accounts that should receive a video of `category` on `platform`. */
-  async resolveAccountsFor(category: string, platform: PlatformType): Promise<ProfileAccountSummary[]> {
+  async resolveAccountsFor(tenantId: string, category: string, platform: PlatformType): Promise<ProfileAccountSummary[]> {
     const [profiles, accounts] = await Promise.all([
-      this.profileStore.list(),
+      this.profileStore.listForTenant(tenantId),
       this.accountStore.list(),
     ]);
     const matchingProfiles = profiles.filter((profile) =>

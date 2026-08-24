@@ -7,6 +7,8 @@ import { logger } from "../logger";
 export type ImageType = "quote_card" | "banner" | "poster" | "thumbnail" | "announcement";
 
 export interface ImageGenerationOptions {
+  /** Auth-derived owner used only for local artifact isolation. */
+  tenantId?: string;
   type: ImageType;
   title: string;
   subtitle?: string;
@@ -111,7 +113,8 @@ export class ImageGenerationEngine {
       ? { w: options.width, h: options.height }
       : PLATFORM_DIMENSIONS[platform] || PLATFORM_DIMENSIONS.default;
 
-    const fileName = `img_${options.type}_${Date.now()}.png`;
+    const ownerPrefix = options.tenantId ? `${options.tenantId.replace(/[^a-zA-Z0-9_-]/g, "-")}__` : "legacy__";
+    const fileName = `${ownerPrefix}img_${options.type}_${Date.now()}.png`;
     const filePath = path.join(this.outputDir, fileName);
 
     if (this.canvasLib) {
@@ -154,7 +157,7 @@ export class ImageGenerationEngine {
       const buffer = canvas.toBuffer("image/png");
       await fs.writeFile(filePath, buffer);
     } else {
-      const svgFileName = `img_${options.type}_${Date.now()}.svg`;
+      const svgFileName = `${ownerPrefix}img_${options.type}_${Date.now()}.svg`;
       const svgPath = path.join(this.outputDir, svgFileName);
       const svg = await this.generateSvgFallback(options, dims);
       await fs.writeFile(svgPath, svg, "utf-8");
@@ -166,15 +169,15 @@ export class ImageGenerationEngine {
     return { filePath, width: dims.w, height: dims.h, type: options.type, createdAt: new Date().toISOString() };
   }
 
-  async generateQuoteCard(quote: string, author?: string, category?: string): Promise<GeneratedImage> {
-    return this.generate({ type: "quote_card", title: `"${quote}"`, subtitle: author ? `— ${author}` : undefined, category: category || "Motivation" });
+  async generateQuoteCard(quote: string, author?: string, category?: string, tenantId?: string): Promise<GeneratedImage> {
+    return this.generate({ tenantId, type: "quote_card", title: `"${quote}"`, subtitle: author ? `— ${author}` : undefined, category: category || "Motivation" });
   }
 
-  async generateThumbnail(title: string, category?: string): Promise<GeneratedImage> {
-    return this.generate({ type: "thumbnail", title, category: category || "General", platform: "youtube_thumbnail", width: 1280, height: 720 });
+  async generateThumbnail(title: string, category?: string, tenantId?: string): Promise<GeneratedImage> {
+    return this.generate({ tenantId, type: "thumbnail", title, category: category || "General", platform: "youtube_thumbnail", width: 1280, height: 720 });
   }
 
-  async generateAnnouncement(title: string, subtitle?: string, platform?: string): Promise<GeneratedImage> {
-    return this.generate({ type: "announcement", title, subtitle, platform: platform || "instagram_story" });
+  async generateAnnouncement(title: string, subtitle?: string, platform?: string, tenantId?: string): Promise<GeneratedImage> {
+    return this.generate({ tenantId, type: "announcement", title, subtitle, platform: platform || "instagram_story" });
   }
 }

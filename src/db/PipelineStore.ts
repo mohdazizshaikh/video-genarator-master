@@ -13,6 +13,8 @@ export interface AIScores {
 }
 
 export interface GeneratedVariation {
+  /** Auth-derived owner. Legacy variations without this field are not tenant-visible. */
+  tenantId?: string;
   id: string;
   jobId: string;
   hook: string;
@@ -28,6 +30,8 @@ export interface GeneratedVariation {
 }
 
 export interface PipelineJob {
+  /** Auth-derived owner. Legacy jobs without this field are not tenant-visible. */
+  tenantId?: string;
   id: string;
   topic: string;
   platform: string;
@@ -64,6 +68,8 @@ export interface PlatformComparisonEntry {
 }
 
 export interface ComparisonRun {
+  /** Auth-derived owner. Legacy comparisons without this field are not tenant-visible. */
+  tenantId?: string;
   id: string;
   topic: string;
   tone: string;
@@ -106,7 +112,7 @@ export class PipelineStore {
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
   }
 
-  async createJob(params: Pick<PipelineJob, "topic" | "platform" | "tone" | "bulkCount" | "autoSchedule">): Promise<PipelineJob> {
+  async createJob(params: Pick<PipelineJob, "topic" | "platform" | "tone" | "bulkCount" | "autoSchedule"> & { tenantId?: string }): Promise<PipelineJob> {
     const jobs = await this.read<PipelineJob>(this.jobsPath);
     const now = new Date().toISOString();
     const job: PipelineJob = {
@@ -125,6 +131,11 @@ export class PipelineStore {
     return job;
   }
 
+  async updateJobForTenant(tenantId: string, id: string, updates: Partial<Omit<PipelineJob, "id" | "tenantId" | "createdAt">>): Promise<PipelineJob | null> {
+    if (!(await this.getJobForTenant(tenantId, id))) return null;
+    return this.updateJob(id, updates);
+  }
+
   async updateJob(id: string, updates: Partial<PipelineJob>): Promise<PipelineJob | null> {
     const jobs = await this.read<PipelineJob>(this.jobsPath);
     const idx = jobs.findIndex((j) => j.id === id);
@@ -134,9 +145,21 @@ export class PipelineStore {
     return jobs[idx];
   }
 
+  async getJobForTenant(tenantId: string, id: string): Promise<PipelineJob | null> {
+    if (!tenantId) return null;
+    const job = await this.getJob(id);
+    return job?.tenantId === tenantId ? job : null;
+  }
+
   async getJob(id: string): Promise<PipelineJob | null> {
     const jobs = await this.read<PipelineJob>(this.jobsPath);
     return jobs.find((j) => j.id === id) ?? null;
+  }
+
+  async listJobsForTenant(tenantId: string, limit = 50): Promise<PipelineJob[]> {
+    if (!tenantId) return [];
+    const jobs = await this.read<PipelineJob>(this.jobsPath);
+    return jobs.filter((job) => job.tenantId === tenantId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
   }
 
   async listJobs(limit = 50): Promise<PipelineJob[]> {
@@ -156,9 +179,34 @@ export class PipelineStore {
     return variation;
   }
 
+  async getVariationsForJobForTenant(tenantId: string, jobId: string): Promise<GeneratedVariation[]> {
+    if (!(await this.getJobForTenant(tenantId, jobId))) return [];
+    const variations = await this.read<GeneratedVariation>(this.variationsPath);
+    return variations.filter((variation) => variation.jobId === jobId && variation.tenantId === tenantId).sort((a, b) => a.rank - b.rank);
+  }
+
   async getVariationsForJob(jobId: string): Promise<GeneratedVariation[]> {
     const variations = await this.read<GeneratedVariation>(this.variationsPath);
     return variations.filter((v) => v.jobId === jobId).sort((a, b) => a.rank - b.rank);
+  }
+
+  async getStatsForTenant(tenantId: string): Promise<{ totalJobs: number; completedJobs: number; failedJobs: number; totalVariations: number; avgScore: number }> {
+    if (!tenantId) return { totalJobs: 0, completedJobs: 0, failedJobs: 0, totalVariations: 0, avgScore: 0 };
+    const [jobs, variations] = await Promise.all([
+      this.read<PipelineJob>(this.jobsPath),
+      this.read<GeneratedVariation>(this.variationsPath),
+    ]);
+    const tenantJobs = jobs.filter((job) => job.tenantId === tenantId);
+    const tenantJobIds = new Set(tenantJobs.map((job) => job.id));
+    const tenantVariations = variations.filter((variation) => variation.tenantId === tenantId && tenantJobIds.has(variation.jobId));
+    const avgScore = tenantVariations.length ? tenantVariations.reduce((sum, variation) => sum + variation.aiScores.overallScore, 0) / tenantVariations.length : 0;
+    return {
+      totalJobs: tenantJobs.length,
+      completedJobs: tenantJobs.filter((job) => job.status === "completed").length,
+      failedJobs: tenantJobs.filter((job) => job.status === "failed").length,
+      totalVariations: tenantVariations.length,
+      avgScore: Math.round(avgScore * 100) / 100,
+    };
   }
 
   async getStats(): Promise<{ totalJobs: number; completedJobs: number; failedJobs: number; totalVariations: number; avgScore: number }> {
@@ -178,7 +226,7 @@ export class PipelineStore {
     };
   }
 
-  async createComparison(params: Pick<ComparisonRun, "topic" | "tone" | "platforms">): Promise<ComparisonRun> {
+  async createComparison(params: Pick<ComparisonRun, "topic" | "tone" | "platforms"> & { tenantId?: string }): Promise<ComparisonRun> {
     const runs = await this.read<ComparisonRun>(this.comparisonsPath);
     const now = new Date().toISOString();
     const run: ComparisonRun = {
@@ -192,6 +240,17 @@ export class PipelineStore {
     runs.push(run);
     await this.write(this.comparisonsPath, runs);
     return run;
+  }
+
+  async getComparisonForTenant(tenantId: string, id: string): Promise<ComparisonRun | null> {
+    if (!tenantId) return null;
+    const run = await this.getComparison(id);
+    return run?.tenantId === tenantId ? run : null;
+  }
+
+  async updateComparisonEntryForTenant(tenantId: string, runId: string, platform: string, entryUpdates: Partial<PlatformComparisonEntry>): Promise<ComparisonRun | null> {
+    if (!(await this.getComparisonForTenant(tenantId, runId))) return null;
+    return this.updateComparisonEntry(runId, platform, entryUpdates);
   }
 
   async updateComparison(id: string, updates: Partial<ComparisonRun>): Promise<ComparisonRun | null> {
@@ -229,6 +288,12 @@ export class PipelineStore {
   async getComparison(id: string): Promise<ComparisonRun | null> {
     const runs = await this.read<ComparisonRun>(this.comparisonsPath);
     return runs.find((r) => r.id === id) ?? null;
+  }
+
+  async listComparisonsForTenant(tenantId: string, limit = 20): Promise<ComparisonRun[]> {
+    if (!tenantId) return [];
+    const runs = await this.read<ComparisonRun>(this.comparisonsPath);
+    return runs.filter((run) => run.tenantId === tenantId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
   }
 
   async listComparisons(limit = 20): Promise<ComparisonRun[]> {

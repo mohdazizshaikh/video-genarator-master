@@ -6,6 +6,7 @@ import { HashtagLearningEngine } from "../../services/HashtagLearningEngine";
 import { SkipAnalysisEngine } from "../../services/SkipAnalysisEngine";
 import { HumanMimicryEngine } from "../../services/HumanMimicryEngine";
 import { Config } from "../../config";
+import { getAuthenticatedTenantId } from "../auth";
 
 export class ShadowbanRouter {
   public router: express.Router;
@@ -74,12 +75,17 @@ export class ShadowbanRouter {
 
     // Skip analysis
     this.router.get("/skip/:platform/:category", (req: ExpressRequest, res: ExpressResponse) => {
-      res.json({ status: "ok", data: this.skipAnalysis.analyze(req.params.category, req.params.platform) });
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      res.json({ status: "ok", data: this.skipAnalysis.analyzeForTenant(tenantId, req.params.category, req.params.platform) });
     });
 
     this.router.post("/skip/record", (req: ExpressRequest, res: ExpressResponse) => {
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
       const { videoId, category, platform, at3sec, at10sec, at30sec, avgWatchPercent } = req.body;
-      this.skipAnalysis.record(videoId, category, platform, { at3sec, at10sec, at30sec, avgWatchPercent });
+      if (!videoId || !category || !platform) return res.status(400).json({ error: "videoId, category, and platform required" });
+      this.skipAnalysis.recordForTenant(tenantId, videoId, category, platform, { at3sec, at10sec, at30sec, avgWatchPercent });
       res.json({ status: "ok" });
     });
 

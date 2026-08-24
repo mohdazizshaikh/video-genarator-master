@@ -17,6 +17,7 @@ import { CustomNewsSourceStore } from "../../db/CustomNewsSourceStore";
 import { ReportMerger } from "../../aggregator/ReportMerger";
 import { RssFetcher } from "../../news-fetcher/RssFetcher";
 import { AiLlmGenerator, configureLlmDefaults, type AutoScriptStyle, type HookOption } from "../../script-generator/AiLlmGenerator";
+import { getAuthenticatedTenantId } from "../auth";
 
 // Resolve a user-supplied file name safely inside a base directory,
 // rejecting any path traversal attempt (e.g. ../../.env or %2e%2e).
@@ -145,7 +146,7 @@ export class APIRouter {
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
           const videoId = validateVideoId(req.params.videoId);
-          const metadata = await this.videoMetadataStore.get(videoId);
+          const metadata = await this.videoMetadataStore.get(videoId, getAuthenticatedTenantId(req) ?? undefined);
           if (!metadata) {
             res.status(404).json({ error: "Video metadata not found" });
             return;
@@ -365,7 +366,7 @@ export class APIRouter {
       "/reports",
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
-          const reports = await this.reportStore.list();
+          const reports = await this.reportStore.listForTenant(getAuthenticatedTenantId(req) ?? "");
           res.status(200).json({ reports });
         } catch (error: unknown) {
           logger.error(error, "Error listing reports");
@@ -378,7 +379,7 @@ export class APIRouter {
       "/reports/:reportId",
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
-          const report = await this.reportStore.get(req.params.reportId);
+          const report = await this.reportStore.getForTenant(getAuthenticatedTenantId(req) ?? "", req.params.reportId);
           if (!report) {
             res.status(404).json({ error: "Report not found" });
             return;
@@ -414,6 +415,7 @@ export class APIRouter {
           const insertedReports = [];
           for (const story of stories) {
             const record = await this.reportStore.add({
+              tenantId: getAuthenticatedTenantId(req) ?? "",
               sourceId: source.id,
               sourceName: source.name,
               category: source.category || "General",
@@ -443,19 +445,19 @@ export class APIRouter {
           const category = req.body.category || "World";
           const maxDuration = Number(req.body.maxDuration) || 120;
 
-          const reports = await this.reportStore.list();
+          const reports = await this.reportStore.listForTenant(getAuthenticatedTenantId(req) ?? "");
           if (reports.length === 0) {
             res.status(404).json({ error: "No reports available to merge" });
             return;
           }
 
           const plan = ReportMerger.mergeReports(reports, category, maxDuration);
-          const saved = await this.scriptPlanStore.add(plan);
+          const saved = await this.scriptPlanStore.add({ ...plan, tenantId: getAuthenticatedTenantId(req) ?? "" });
 
           await Promise.all(
             reports
               .filter((item) => item.category.toLowerCase() === category.toLowerCase())
-              .map((item) => this.reportStore.updateStatus(item.id, "merged")),
+              .map((item) => this.reportStore.updateStatusForTenant(getAuthenticatedTenantId(req) ?? "", item.id, "merged")),
           );
 
           res.status(201).json({ plan: saved });
@@ -470,7 +472,7 @@ export class APIRouter {
       "/script-plans",
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
-          const plans = await this.scriptPlanStore.list();
+          const plans = await this.scriptPlanStore.listForTenant(getAuthenticatedTenantId(req) ?? "");
           res.status(200).json({ plans });
         } catch (error: unknown) {
           logger.error(error, "Error listing script plans");

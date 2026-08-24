@@ -11,7 +11,7 @@ import { CredentialRotationEngine } from "../../services/CredentialRotationEngin
 import { CreatorKnowledgeBase } from "../../services/CreatorKnowledgeBase";
 import { MarketingEngine } from "../../services/MarketingEngine";
 import type { Config } from "../../config";
-import { requireAdminKey } from "../auth";
+import { getAuthenticatedTenantId, isAdminRequest, requireAdminKey, requireAuth } from "../auth";
 
 
 export class SystemEnginesRouter {
@@ -47,41 +47,57 @@ export class SystemEnginesRouter {
 
   private register() {
     // ─── Resource Engine ───
-    this.router.get("/resource/snapshot", (_req: Request, res: Response) => {
+    this.router.get("/resource/snapshot", requireAdminKey, (_req: Request, res: Response) => {
       try { res.json({ status: "ok", data: this.resource.getSnapshot() }); }
       catch (err) { res.status(500).json({ error: String(err) }); }
     });
-    this.router.get("/resource/optimize", (_req: Request, res: Response) => {
+    this.router.get("/resource/optimize", requireAdminKey, (_req: Request, res: Response) => {
       res.json({ status: "ok", data: this.resource.optimize() });
     });
-    this.router.post("/resource/predict", (req: Request, res: Response) => {
+    this.router.post("/resource/predict", requireAdminKey, (req: Request, res: Response) => {
       const { plannedJobs = 1 } = req.body;
       res.json({ status: "ok", data: this.resource.predictNeeds(plannedJobs) });
     });
-    this.router.get("/resource/history", (_req: Request, res: Response) => {
+    this.router.get("/resource/history", requireAdminKey, (_req: Request, res: Response) => {
       res.json({ status: "ok", data: this.resource.getHistory() });
     });
 
     // ─── Throttling Engine ───
+    this.router.use("/throttle", requireAuth);
     this.router.post("/throttle/check", (req: Request, res: Response) => {
-      const { tenantId, action = "request", plan } = req.body;
+      const authTenantId = getAuthenticatedTenantId(req);
+      const requestedTenantId = typeof req.body.tenantId === "string" ? req.body.tenantId : undefined;
+      const tenantId = isAdminRequest(req) ? requestedTenantId : authTenantId;
       if (!tenantId) { res.status(400).json({ error: "tenantId required" }); return; }
+      if (!isAdminRequest(req) && requestedTenantId && requestedTenantId !== authTenantId) {
+        res.status(403).json({ error: "Tenant access denied" }); return;
+      }
+      const { action = "request", plan } = req.body;
       res.json({ status: "ok", data: this.throttle.check(tenantId, action, plan) });
     });
-    this.router.get("/throttle/quotas", (_req: Request, res: Response) => {
-      res.json({ status: "ok", data: this.throttle.getAllQuotas() });
+    this.router.get("/throttle/quotas", (req: Request, res: Response) => {
+      if (isAdminRequest(req)) {
+        res.json({ status: "ok", data: this.throttle.getAllQuotas() });
+        return;
+      }
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
+      res.json({ status: "ok", data: this.throttle.getQuota(tenantId) ?? null });
     });
     this.router.get("/throttle/quotas/:tenantId", (req: Request, res: Response) => {
+      if (!isAdminRequest(req) && req.params.tenantId !== getAuthenticatedTenantId(req)) {
+        res.status(403).json({ error: "Tenant access denied" }); return;
+      }
       const q = this.throttle.getQuota(req.params.tenantId);
       if (!q) { res.status(404).json({ error: "Tenant not found" }); return; }
       res.json({ status: "ok", data: q });
     });
-    this.router.post("/throttle/plan", (req: Request, res: Response) => {
+    this.router.post("/throttle/plan", requireAdminKey, (req: Request, res: Response) => {
       const { tenantId, plan } = req.body;
       if (!tenantId || !plan) { res.status(400).json({ error: "tenantId and plan required" }); return; }
       res.json({ status: "ok", data: this.throttle.setPlan(tenantId, plan) });
     });
-    this.router.post("/throttle/reset", (req: Request, res: Response) => {
+    this.router.post("/throttle/reset", requireAdminKey, (req: Request, res: Response) => {
       const { tenantId } = req.body;
       if (!tenantId) { res.status(400).json({ error: "tenantId required" }); return; }
       this.throttle.resetUsage(tenantId);
@@ -194,63 +210,66 @@ export class SystemEnginesRouter {
       } catch (err) { res.status(404).json({ error: String(err) }); }
     });
 
+    // All system-engine operations below the public auth bootstrap are tenant-authenticated.
+    this.router.use(requireAuth);
+
     // ─── Error Recovery Engine ───
-    this.router.get("/errorrecovery", (_req: Request, res: Response) => {
+    this.router.get("/errorrecovery", requireAdminKey, (_req: Request, res: Response) => {
       res.json({ status: "ok", data: this.errorRecovery.getAll() });
     });
-    this.router.get("/errorrecovery/stats", (_req: Request, res: Response) => {
+    this.router.get("/errorrecovery/stats", requireAdminKey, (_req: Request, res: Response) => {
       res.json({ status: "ok", data: this.errorRecovery.getStats() });
     });
-    this.router.get("/errorrecovery/deadletter", (_req: Request, res: Response) => {
+    this.router.get("/errorrecovery/deadletter", requireAdminKey, (_req: Request, res: Response) => {
       res.json({ status: "ok", data: this.errorRecovery.getDeadLetterQueue() });
     });
-    this.router.post("/errorrecovery/record", (req: Request, res: Response) => {
+    this.router.post("/errorrecovery/record", requireAdminKey, (req: Request, res: Response) => {
       const { category, message, context, tenantId } = req.body;
       if (!category || !message) { res.status(400).json({ error: "category and message required" }); return; }
       res.status(201).json({ status: "ok", data: this.errorRecovery.recordError(category, message, context, { tenantId }) });
     });
-    this.router.post("/errorrecovery/process", (_req: Request, res: Response) => {
+    this.router.post("/errorrecovery/process", requireAdminKey, (_req: Request, res: Response) => {
       const processed = this.errorRecovery.processDeadLetter();
       res.json({ status: "ok", data: { processed: processed.length } });
     });
-    this.router.post("/errorrecovery/:id/recover", (req: Request, res: Response) => {
+    this.router.post("/errorrecovery/:id/recover", requireAdminKey, (req: Request, res: Response) => {
       const { resolution } = req.body;
       const result = this.errorRecovery.markRecovered(req.params.id, resolution);
       if (!result) { res.status(404).json({ error: "Error not found" }); return; }
       res.json({ status: "ok", data: result });
     });
-    this.router.post("/errorrecovery/:id/dead", (req: Request, res: Response) => {
+    this.router.post("/errorrecovery/:id/dead", requireAdminKey, (req: Request, res: Response) => {
       const { reason } = req.body;
       const result = this.errorRecovery.markDead(req.params.id, reason);
       if (!result) { res.status(404).json({ error: "Error not found" }); return; }
       res.json({ status: "ok", data: result });
     });
-    this.router.post("/errorrecovery/clear", (_req: Request, res: Response) => {
+    this.router.post("/errorrecovery/clear", requireAdminKey, (_req: Request, res: Response) => {
       const count = this.errorRecovery.clearResolved();
       res.json({ status: "ok", data: { cleared: count } });
     });
 
     // ─── Credential Rotation ───
-    this.router.get("/credentials", (_req: Request, res: Response) => {
+    this.router.get("/credentials", requireAdminKey, (_req: Request, res: Response) => {
       res.json({ status: "ok", data: this.credentials.getAll() });
     });
-    this.router.post("/credentials", (req: Request, res: Response) => {
+    this.router.post("/credentials", requireAdminKey, (req: Request, res: Response) => {
       const { name, platform, type, value, ...opts } = req.body;
       if (!name || !platform || !type || !value) {
         res.status(400).json({ error: "name, platform, type, value required" }); return;
       }
       res.status(201).json({ status: "ok", data: this.credentials.register(name, platform, type, value, opts) });
     });
-    this.router.post("/credentials/schedule", (req: Request, res: Response) => {
+    this.router.post("/credentials/schedule", requireAdminKey, (req: Request, res: Response) => {
       const { ids } = req.body;
       res.json({ status: "ok", data: this.credentials.scheduleRotation(ids) });
     });
-    this.router.post("/credentials/:id/rotate", (req: Request, res: Response) => {
+    this.router.post("/credentials/:id/rotate", requireAdminKey, (req: Request, res: Response) => {
       const { newValue } = req.body;
       if (!newValue) { res.status(400).json({ error: "newValue required" }); return; }
       res.json({ status: "ok", data: this.credentials.rotateNow(req.params.id, newValue) });
     });
-    this.router.get("/credentials/expiring", (req: Request, res: Response) => {
+    this.router.get("/credentials/expiring", requireAdminKey, (req: Request, res: Response) => {
       const { days = "7" } = req.query as Record<string, string>;
       res.json({ status: "ok", data: this.credentials.detectExpiring(parseInt(days)) });
     });

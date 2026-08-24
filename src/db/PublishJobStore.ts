@@ -39,6 +39,7 @@ export class PublishJobStore {
   }
 
   public async createJob(params: {
+    tenantId: string;
     renderOutputPath: string;
     platform: PlatformType;
     channelId: string;
@@ -54,6 +55,7 @@ export class PublishJobStore {
     const jobs = await this.readJobs();
     const now = new Date().toISOString();
     const record: PublishJobRecord = {
+      tenantId: params.tenantId,
       id: cuid(),
       renderOutputPath: params.renderOutputPath,
       platform: params.platform,
@@ -83,8 +85,21 @@ export class PublishJobStore {
     return (await this.readJobs()).find((j) => j.id === id);
   }
 
+  public async getJobForTenant(tenantId: string, id: string): Promise<PublishJobRecord | undefined> {
+    if (!tenantId) return undefined;
+    const job = await this.getJob(id);
+    return job?.tenantId === tenantId ? job : undefined;
+  }
+
   public async listJobs(): Promise<PublishJobRecord[]> {
     return (await this.readJobs()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }
+
+  public async listJobsForTenant(tenantId: string): Promise<PublishJobRecord[]> {
+    if (!tenantId) return [];
+    return (await this.readJobs()).filter((job) => job.tenantId === tenantId).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
   }
@@ -93,10 +108,22 @@ export class PublishJobStore {
     return (await this.readJobs()).filter((j) => j.status === status);
   }
 
+  public async listJobsByStatusForTenant(tenantId: string, status: PublishJobStatus): Promise<PublishJobRecord[]> {
+    if (!tenantId) return [];
+    return (await this.readJobs()).filter((job) => job.tenantId === tenantId && job.status === status);
+  }
+
   /** Idempotency check: same render output + platform + channel */
   public async findDuplicate(renderOutputPath: string, platform: PlatformType): Promise<PublishJobRecord | undefined> {
     return (await this.readJobs()).find(
       (j) => j.renderOutputPath === renderOutputPath && j.platform === platform,
+    );
+  }
+
+  public async findDuplicateForTenant(tenantId: string, renderOutputPath: string, platform: PlatformType): Promise<PublishJobRecord | undefined> {
+    if (!tenantId) return undefined;
+    return (await this.readJobs()).find(
+      (job) => job.tenantId === tenantId && job.renderOutputPath === renderOutputPath && job.platform === platform,
     );
   }
 
@@ -113,6 +140,16 @@ export class PublishJobStore {
     return jobs[idx];
   }
 
+  public async updateJobStatusForTenant(
+    tenantId: string,
+    id: string,
+    status: PublishJobStatus,
+    extras: Partial<Pick<PublishJobRecord, "externalId" | "publishedUrl" | "error" | "attemptCount">> = {},
+  ): Promise<PublishJobRecord | undefined> {
+    if (!(await this.getJobForTenant(tenantId, id))) return undefined;
+    return this.updateJobStatus(id, status, extras);
+  }
+
   public async incrementAttempt(id: string): Promise<PublishJobRecord | undefined> {
     const jobs = await this.readJobs();
     const idx = jobs.findIndex((j) => j.id === id);
@@ -121,6 +158,11 @@ export class PublishJobStore {
     jobs[idx].updatedAt = new Date().toISOString();
     await this.writeJobs(jobs);
     return jobs[idx];
+  }
+
+  public async incrementAttemptForTenant(tenantId: string, id: string): Promise<PublishJobRecord | undefined> {
+    if (!(await this.getJobForTenant(tenantId, id))) return undefined;
+    return this.incrementAttempt(id);
   }
 
   public async addAttempt(params: {
@@ -147,6 +189,11 @@ export class PublishJobStore {
 
   public async getAttempts(publishJobId: string): Promise<PublishAttemptRecord[]> {
     return (await this.readAttempts()).filter((a) => a.publishJobId === publishJobId);
+  }
+
+  public async getAttemptsForTenant(tenantId: string, publishJobId: string): Promise<PublishAttemptRecord[]> {
+    if (!(await this.getJobForTenant(tenantId, publishJobId))) return [];
+    return this.getAttempts(publishJobId);
   }
 
   public async getStats(): Promise<Record<PublishJobStatus, number>> {

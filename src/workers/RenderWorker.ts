@@ -9,11 +9,15 @@ import { Worker, Job } from "bullmq";
 import { Config } from "../config";
 import { ShortCreator } from "../short-creator/ShortCreator";
 import { RenderJobStore } from "../db/RenderJobStore";
+import { JobEventStore } from "../db/JobEventStore";
+import { JobEventOutboxStore } from "../db/JobEventOutboxStore";
+import { JobLifecycleEventService } from "../services/JobLifecycleEventService";
 import { logger } from "../logger";
 import { getRedisConnection, QUEUE_NAMES } from "./QueueManager";
 import type { OrientationEnum, SceneInput, RenderConfig } from "../types/shorts";
 
 export interface RenderJobPayload {
+  tenantId: string;
   renderJobId: string;
   scriptPlanId: string;
   sceneInput: SceneInput[];
@@ -28,12 +32,14 @@ export interface RenderJobPayload {
 export class RenderWorker {
   private worker: Worker;
   private renderJobStore: RenderJobStore;
+  private lifecycleEvents: JobLifecycleEventService;
 
   constructor(
     private config: Config,
     private shortCreator: ShortCreator,
   ) {
     this.renderJobStore = new RenderJobStore(config.dataDirPath);
+    this.lifecycleEvents = new JobLifecycleEventService(new JobEventStore(config.dataDirPath), new JobEventOutboxStore(config.dataDirPath));
 
     const renderConcurrency = Math.max(1, this.config.renderWorkerConcurrency || 1);
     // Phase 4.9: configurable worker scaling
@@ -48,16 +54,18 @@ export class RenderWorker {
     );
 
     this.worker.on("completed", (job) => {
+      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: job.data.renderJobId, type: "completed", payload: { queueJobId: job.id } });
       logger.info({ jobId: job.id, renderJobId: job.data.renderJobId }, "Render job completed");
     });
 
     this.worker.on("failed", async (job, err) => {
       if (!job) return;
-      const { renderJobId } = job.data;
+      const { renderJobId, tenantId } = job.data;
       const maxAttempts = 2;
+      this.lifecycleEvents.emit({ tenantId, jobId: renderJobId, type: "failed", attempt: (job.attemptsMade ?? 0) + 1, payload: { error: err.message } });
 
-      await this.renderJobStore.incrementAttempt(renderJobId);
-      const record = await this.renderJobStore.get(renderJobId);
+      await this.renderJobStore.incrementAttemptForTenant(tenantId, renderJobId);
+      const record = await this.renderJobStore.getForTenant(tenantId, renderJobId);
       const attempts = record?.attemptCount ?? 0;
 
       if (attempts >= maxAttempts) {
@@ -74,7 +82,7 @@ export class RenderWorker {
         });
 
         // Mark as skipped after max retries – do NOT block queue
-        await this.renderJobStore.updateStatus(renderJobId, "skipped", {
+        await this.renderJobStore.updateStatusForTenant(tenantId, renderJobId, "skipped", {
           error: `Max retries (${maxAttempts}) exceeded: ${err.message}`,
         });
         logger.warn(
@@ -82,7 +90,7 @@ export class RenderWorker {
           "Render job skipped after max retries",
         );
       } else {
-        await this.renderJobStore.updateStatus(renderJobId, "failed", {
+        await this.renderJobStore.updateStatusForTenant(tenantId, renderJobId, "failed", {
           error: err.message,
           attemptCount: attempts,
         });
@@ -98,6 +106,7 @@ export class RenderWorker {
 
   private async processJob(job: Job<RenderJobPayload>): Promise<void> {
     const {
+      tenantId,
       renderJobId,
       sceneInput,
       config,
@@ -113,7 +122,8 @@ export class RenderWorker {
       "RenderWorker processing job",
     );
 
-    await this.renderJobStore.updateStatus(renderJobId, "processing");
+    this.lifecycleEvents.emit({ tenantId, jobId: renderJobId, type: "processing", attempt: job.attemptsMade ?? 0 });
+    await this.renderJobStore.updateStatusForTenant(tenantId, renderJobId, "processing");
 
     // Update job progress
     await job.updateProgress(5);
@@ -128,6 +138,7 @@ export class RenderWorker {
       renderConfig,
       videoType,
       subtitleLanguage,
+      tenantId,
     );
 
     // Poll until the short creator finishes this video
@@ -146,11 +157,11 @@ export class RenderWorker {
 
     const outputPath = this.shortCreator.getVideoPath(videoId);
 
-    await this.renderJobStore.updateStatus(renderJobId, "ready", {
+    await this.renderJobStore.updateStatusForTenant(tenantId, renderJobId, "ready", {
       outputPath,
     });
 
-    await this.renderJobStore.updateStatus(renderJobId, "rendered", {
+    await this.renderJobStore.updateStatusForTenant(tenantId, renderJobId, "rendered", {
       outputPath,
     });
 

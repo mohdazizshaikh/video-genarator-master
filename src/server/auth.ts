@@ -3,6 +3,24 @@ import { logger } from "../logger";
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
 
+export interface AuthClaims {
+  tenantId: string;
+  name?: string;
+  plan?: string;
+  permissions?: string[];
+  issuedAt?: number;
+  expiresAt?: number;
+}
+
+export function getAuthenticatedTenantId(req: Request): string | undefined {
+  const claims = (req as Request & { auth?: AuthClaims }).auth;
+  return claims?.tenantId;
+}
+
+export function isAdminRequest(req: Request): boolean {
+  return Boolean(ADMIN_API_KEY) && req.get("X-Admin-Key") === ADMIN_API_KEY;
+}
+
 export function adminKeyConfigured(): boolean {
   return ADMIN_API_KEY.length > 0;
 }
@@ -31,6 +49,21 @@ export function requireAdminKey(req: Request, res: Response, next: NextFunction)
  * token (or with an invalid one) are NOT rejected so the existing UI keeps
  * working while clients migrate to authenticated calls.
  */
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const auth = (req as Request & { auth?: AuthClaims }).auth;
+  if (isAdminRequest(req)) {
+    next();
+    return;
+  }
+  if (!auth?.tenantId) {
+    return res.status(401).json({
+      error: "Authentication required",
+      code: "AUTH_REQUIRED",
+    });
+  }
+  next();
+}
+
 export function validateTokenIfPresent(req: Request, res: Response, next: NextFunction) {
   const header = req.get("Authorization");
   if (!header || !header.startsWith("Bearer ")) {
@@ -45,7 +78,7 @@ export function validateTokenIfPresent(req: Request, res: Response, next: NextFu
     };
     const payload = verifyJwtToken(token);
     if (payload) {
-      (req as Request & { auth?: unknown }).auth = payload;
+      (req as Request & { auth?: AuthClaims }).auth = payload as AuthClaims;
     }
   } catch {
     // Invalid token is ignored (non-blocking).

@@ -3,6 +3,8 @@ import path from "path";
 import cuid from "cuid";
 
 export interface VideoRecord {
+  /** Auth-derived owner. Legacy records without this field are not tenant-visible. */
+  tenantId?: string;
   id: string;
   title: string;
   description: string;
@@ -52,12 +54,13 @@ export class VideoLibraryStore {
     await fs.writeFile(this.storePath, JSON.stringify(records, null, 2), "utf-8");
   }
 
-  async create(data: Omit<VideoRecord, "id" | "createdAt" | "updatedAt">): Promise<VideoRecord> {
+  async create(data: Omit<VideoRecord, "id" | "createdAt" | "updatedAt"> & { tenantId: string }): Promise<VideoRecord> {
     const records = await this.readAll();
     const now = new Date().toISOString();
     const record: VideoRecord = {
-      id: `vid_${cuid()}`,
       ...data,
+      tenantId: data.tenantId,
+      id: `vid_${cuid()}`,
       createdAt: now,
       updatedAt: now,
     };
@@ -70,6 +73,12 @@ export class VideoLibraryStore {
     return (await this.readAll()).find((r) => r.id === id);
   }
 
+  async getForTenant(tenantId: string, id: string): Promise<VideoRecord | undefined> {
+    if (!tenantId) return undefined;
+    const video = await this.get(id);
+    return video?.tenantId === tenantId ? video : undefined;
+  }
+
   async list(limit = 50, offset = 0): Promise<{ videos: VideoRecord[]; total: number }> {
     const all = await this.readAll();
     const sorted = all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -77,6 +86,13 @@ export class VideoLibraryStore {
       videos: sorted.slice(offset, offset + limit),
       total: sorted.length,
     };
+  }
+
+  async listForTenant(tenantId: string, limit = 50, offset = 0): Promise<{ videos: VideoRecord[]; total: number }> {
+    if (!tenantId) return { videos: [], total: 0 };
+    const all = (await this.readAll()).filter((video) => video.tenantId === tenantId);
+    const sorted = all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return { videos: sorted.slice(offset, offset + limit), total: sorted.length };
   }
 
   async listByCategory(category: string, limit = 50, offset = 0): Promise<VideoRecord[]> {
@@ -94,12 +110,26 @@ export class VideoLibraryStore {
     return all.filter((v) => v.platform === platform).slice(offset, offset + limit);
   }
 
+  async searchForTenant(tenantId: string, query: string, limit = 50, offset = 0): Promise<VideoRecord[]> {
+    if (!tenantId) return [];
+    const all = (await this.readAll()).filter((video) => video.tenantId === tenantId);
+    const q = query.toLowerCase();
+    return all
+      .filter((v) => v.title.toLowerCase().includes(q) || v.description.toLowerCase().includes(q) || v.tags.some((t) => t.toLowerCase().includes(q)))
+      .slice(offset, offset + limit);
+  }
+
   async search(query: string, limit = 50, offset = 0): Promise<VideoRecord[]> {
     const all = await this.readAll();
     const q = query.toLowerCase();
     return all
       .filter((v) => v.title.toLowerCase().includes(q) || v.description.toLowerCase().includes(q) || v.tags.some((t) => t.toLowerCase().includes(q)))
       .slice(offset, offset + limit);
+  }
+
+  async updateForTenant(tenantId: string, id: string, data: Partial<Omit<VideoRecord, "id" | "createdAt" | "tenantId">>): Promise<VideoRecord | undefined> {
+    if (!(await this.getForTenant(tenantId, id))) return undefined;
+    return this.update(id, data);
   }
 
   async update(id: string, data: Partial<Omit<VideoRecord, "id" | "createdAt">>): Promise<VideoRecord | undefined> {
@@ -111,8 +141,17 @@ export class VideoLibraryStore {
     return records[idx];
   }
 
+  async updateStatusForTenant(tenantId: string, id: string, status: VideoRecord["status"]): Promise<VideoRecord | undefined> {
+    return this.updateForTenant(tenantId, id, { status });
+  }
+
   async updateStatus(id: string, status: VideoRecord["status"]): Promise<VideoRecord | undefined> {
     return this.update(id, { status, updatedAt: new Date().toISOString() });
+  }
+
+  async deleteForTenant(tenantId: string, id: string): Promise<boolean> {
+    if (!(await this.getForTenant(tenantId, id))) return false;
+    return this.delete(id);
   }
 
   async delete(id: string): Promise<boolean> {
@@ -122,6 +161,24 @@ export class VideoLibraryStore {
     records.splice(idx, 1);
     await this.writeAll(records);
     return true;
+  }
+
+  async updateMetricsForTenant(
+    tenantId: string,
+    id: string,
+    metrics: Partial<NonNullable<VideoRecord["engagementMetrics"]>>,
+  ): Promise<VideoRecord | undefined> {
+    const record = await this.getForTenant(tenantId, id);
+    if (!record) return undefined;
+    const current = record.engagementMetrics ?? { views: 0, likes: 0, comments: 0, shares: 0 };
+    return this.updateForTenant(tenantId, id, {
+      engagementMetrics: {
+        views: metrics.views ?? current.views,
+        likes: metrics.likes ?? current.likes,
+        comments: metrics.comments ?? current.comments,
+        shares: metrics.shares ?? current.shares,
+      },
+    });
   }
 
   async updateMetrics(
@@ -139,6 +196,25 @@ export class VideoLibraryStore {
         shares: metrics.shares ?? current.shares,
       },
     });
+  }
+
+  async getStatsForTenant(tenantId: string): Promise<{
+    total: number;
+    byStatus: Record<string, number>;
+    byCategory: Record<string, number>;
+    byPlatform: Record<string, number>;
+  }> {
+    if (!tenantId) return { total: 0, byStatus: {}, byCategory: {}, byPlatform: {} };
+    const records = (await this.readAll()).filter((video) => video.tenantId === tenantId);
+    const byStatus: Record<string, number> = {};
+    const byCategory: Record<string, number> = {};
+    const byPlatform: Record<string, number> = {};
+    records.forEach((video) => {
+      byStatus[video.status] = (byStatus[video.status] || 0) + 1;
+      byCategory[video.category] = (byCategory[video.category] || 0) + 1;
+      byPlatform[video.platform] = (byPlatform[video.platform] || 0) + 1;
+    });
+    return { total: records.length, byStatus, byCategory, byPlatform };
   }
 
   async getStats(): Promise<{
@@ -159,6 +235,14 @@ export class VideoLibraryStore {
     });
 
     return { total: records.length, byStatus, byCategory, byPlatform };
+  }
+
+  async getTrendingTagsForTenant(tenantId: string, limit = 20): Promise<Array<{ tag: string; count: number }>> {
+    if (!tenantId) return [];
+    const records = (await this.readAll()).filter((video) => video.tenantId === tenantId);
+    const tagCounts: Record<string, number> = {};
+    records.forEach((video) => video.tags.forEach((tag) => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }));
+    return Object.entries(tagCounts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count).slice(0, limit);
   }
 
   async getTrendingTags(limit = 20): Promise<Array<{ tag: string; count: number }>> {

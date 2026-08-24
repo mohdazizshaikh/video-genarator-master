@@ -5,6 +5,7 @@ import { AiLearningStore } from "../../db/AiLearningStore";
 import { AiPredictionService } from "../../services/AiPredictionService";
 import { AiMonitoringService } from "../../services/AiMonitoringService";
 import { AiTrainingService } from "../../services/AiTrainingService";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 export class AiRouter {
   public router: Router;
@@ -16,6 +17,7 @@ export class AiRouter {
   constructor(config: Config) {
     this.router = Router();
     this.router.use(jsonMiddleware());
+    this.router.use(requireAuth);
     this.store = new AiLearningStore(config.dataDirPath);
     this.predictor = new AiPredictionService();
     this.monitoring = new AiMonitoringService();
@@ -38,28 +40,39 @@ export class AiRouter {
       res.status(400).json({ error: "jobId, phase, outcome, latencyMs are required" });
       return;
     }
-    const saved = await this.store.addEvent(req.body);
+    const tenantId = getAuthenticatedTenantId(req);
+    if (!tenantId) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
+    const { tenantId: _ignoredTenantId, ...eventPayload } = req.body;
+    const saved = await this.store.addEventForTenant(tenantId, eventPayload);
     res.status(201).json(saved);
   }
 
   private async listEvents(req: Request, res: Response): Promise<void> {
     const limit = Number(req.query.limit || 200);
-    res.json(await this.store.listEvents(limit));
+    const tenantId = getAuthenticatedTenantId(req);
+    if (!tenantId) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
+    res.json(await this.store.listEventsForTenant(tenantId, limit));
   }
 
-  private async train(_req: Request, res: Response): Promise<void> {
-    await this.trainer.runTrainingNow();
-    res.json({ ok: true, model: await this.store.getModelState() });
+  private async train(req: Request, res: Response): Promise<void> {
+    const tenantId = getAuthenticatedTenantId(req);
+    if (!tenantId) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
+    await this.trainer.runTrainingNow(tenantId);
+    res.json({ ok: true, model: await this.store.getModelStateForTenant(tenantId) });
   }
 
-  private async getModel(_req: Request, res: Response): Promise<void> {
-    const model = await this.store.getModelState();
+  private async getModel(req: Request, res: Response): Promise<void> {
+    const tenantId = getAuthenticatedTenantId(req);
+    if (!tenantId) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
+    const model = await this.store.getModelStateForTenant(tenantId);
     const health = this.monitoring.evaluateModelHealth(model);
     res.json({ model, health });
   }
 
   private async suggest(req: Request, res: Response): Promise<void> {
-    const model = await this.store.getModelState();
+    const tenantId = getAuthenticatedTenantId(req);
+    if (!tenantId) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
+    const model = await this.store.getModelStateForTenant(tenantId);
     const health = this.monitoring.evaluateModelHealth(model);
     const suggestion = health.fallbackMode
       ? this.monitoring.fallbackSuggestion(req.body || {})
@@ -68,10 +81,12 @@ export class AiRouter {
     res.json({ suggestion, health });
   }
 
-  private async dashboard(_req: Request, res: Response): Promise<void> {
+  private async dashboard(req: Request, res: Response): Promise<void> {
+    const tenantId = getAuthenticatedTenantId(req);
+    if (!tenantId) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
     const [events, model] = await Promise.all([
-      this.store.listEvents(500),
-      this.store.getModelState(),
+      this.store.listEventsForTenant(tenantId, 500),
+      this.store.getModelStateForTenant(tenantId),
     ]);
 
     const total = events.length;

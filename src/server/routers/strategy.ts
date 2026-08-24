@@ -7,6 +7,7 @@ import { ContentBucketEngine } from "../../services/ContentBucketEngine";
 import { SeriesBuilderEngine } from "../../services/SeriesBuilderEngine";
 import { CommentCtaEngine } from "../../services/CommentCtaEngine";
 import { Config } from "../../config";
+import { getAuthenticatedTenantId } from "../auth";
 
 export class StrategyRouter {
   public router: express.Router;
@@ -60,13 +61,17 @@ export class StrategyRouter {
     });
 
     // Series builder
-    this.router.get("/series", (_req: ExpressRequest, res: ExpressResponse) => {
-      res.json({ status: "ok", data: this.series.getAllSeries() });
+    this.router.get("/series", (req: ExpressRequest, res: ExpressResponse) => {
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      res.json({ status: "ok", data: this.series.getAllSeriesForTenant(tenantId) });
     });
 
     this.router.post("/series", (req: ExpressRequest, res: ExpressResponse) => {
       try {
-        const s = this.series.createSeries(req.body);
+        const tenantId = getAuthenticatedTenantId(req);
+        if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+        const s = this.series.createSeriesForTenant(tenantId, req.body);
         res.status(201).json({ status: "ok", data: s });
       } catch (err) {
         res.status(400).json({ error: (err as Error).message });
@@ -74,29 +79,39 @@ export class StrategyRouter {
     });
 
     this.router.get("/series/:id", (req: ExpressRequest, res: ExpressResponse) => {
-      const s = this.series.getSeries(req.params.id);
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      const s = this.series.getSeriesForTenant(tenantId, req.params.id);
       if (!s) return res.status(404).json({ error: "Series not found" });
       res.json({ status: "ok", data: s });
     });
 
     this.router.get("/series/:id/next-episode", (req: ExpressRequest, res: ExpressResponse) => {
-      const ep = this.series.getNextEpisode(req.params.id);
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      const ep = this.series.getNextEpisodeForTenant(tenantId, req.params.id);
       res.json({ status: "ok", data: ep });
     });
 
     this.router.get("/series/:id/cliffhanger/:episode", (req: ExpressRequest, res: ExpressResponse) => {
-      const text = this.series.generateCliffhanger(req.params.id, parseInt(req.params.episode));
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      const text = this.series.generateCliffhangerForTenant(tenantId, req.params.id, parseInt(req.params.episode));
       res.json({ status: "ok", data: { cliffhanger: text } });
     });
 
     this.router.patch("/series/:id/episode/:ep", (req: ExpressRequest, res: ExpressResponse) => {
-      const ok = this.series.updateEpisode(req.params.id, parseInt(req.params.ep), req.body);
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      const ok = this.series.updateEpisodeForTenant(tenantId, req.params.id, parseInt(req.params.ep), req.body);
       if (!ok) return res.status(404).json({ error: "Series or episode not found" });
       res.json({ status: "ok" });
     });
 
     this.router.delete("/series/:id", (req: ExpressRequest, res: ExpressResponse) => {
-      const ok = this.series.deleteSeries(req.params.id);
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      const ok = this.series.deleteSeriesForTenant(tenantId, req.params.id);
       if (!ok) return res.status(404).json({ error: "Series not found" });
       res.json({ status: "ok" });
     });

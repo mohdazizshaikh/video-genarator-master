@@ -87,13 +87,16 @@ export class AiLearningStore {
     await fs.writeFile(this.eventsPath, JSON.stringify(events, null, 2), "utf-8");
   }
 
-  public async addEvent(
-    payload: Omit<LearningEvent, "id" | "createdAt">,
+  public async addEventForTenant(
+    tenantId: string,
+    payload: Omit<LearningEvent, "id" | "createdAt" | "tenantId">,
   ): Promise<LearningEvent> {
+    if (!tenantId.trim()) throw new Error("tenantId is required");
     const events = await this.readEvents();
     const event: LearningEvent = {
       id: cuid(),
       createdAt: new Date().toISOString(),
+      tenantId,
       ...payload,
     };
     events.push(event);
@@ -101,24 +104,50 @@ export class AiLearningStore {
     return event;
   }
 
-  public async listEvents(limit = 200): Promise<LearningEvent[]> {
-    const all = await this.readEvents();
-    return all
+  public async listEventsForTenant(tenantId: string, limit = 200): Promise<LearningEvent[]> {
+    if (!tenantId.trim()) return [];
+    return (await this.readEvents())
+      .filter((event) => event.tenantId === tenantId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, Math.max(1, limit));
   }
 
-  public async listByTenant(tenantId: string): Promise<LearningEvent[]> {
-    return (await this.readEvents()).filter((e) => e.tenantId === tenantId);
+  private defaultModelState(): LearningModelState {
+    return {
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      weights: { successRate: 0.5, engagementRate: 0.3, speedScore: 0.2 },
+      samples: 0,
+      metrics: { accuracy: 0.5, drift: 0, biasRisk: "low" },
+    };
   }
 
-  public async getModelState(): Promise<LearningModelState> {
+  public async getModelStateForTenant(tenantId: string): Promise<LearningModelState> {
+    if (!tenantId.trim()) throw new Error("tenantId is required");
     const content = await fs.readFile(this.modelPath, "utf-8");
-    return JSON.parse(content) as LearningModelState;
+    let models: Record<string, LearningModelState> = {};
+    try {
+      const parsed = JSON.parse(content) as Record<string, LearningModelState> | LearningModelState;
+      if (parsed && !("version" in parsed) && typeof parsed === "object") models = parsed;
+      // A legacy single model is deliberately quarantined and never returned to a tenant.
+    } catch {
+      models = {};
+    }
+    return models[tenantId] ?? this.defaultModelState();
   }
 
-  public async saveModelState(state: LearningModelState): Promise<LearningModelState> {
-    await fs.writeFile(this.modelPath, JSON.stringify(state, null, 2), "utf-8");
+  public async saveModelStateForTenant(tenantId: string, state: LearningModelState): Promise<LearningModelState> {
+    if (!tenantId.trim()) throw new Error("tenantId is required");
+    const content = await fs.readFile(this.modelPath, "utf-8");
+    let models: Record<string, LearningModelState> = {};
+    try {
+      const parsed = JSON.parse(content) as Record<string, LearningModelState>;
+      if (parsed && !("version" in parsed) && typeof parsed === "object") models = parsed;
+    } catch {
+      models = {};
+    }
+    models[tenantId] = state;
+    await fs.writeFile(this.modelPath, JSON.stringify(models, null, 2), "utf-8");
     return state;
   }
 }

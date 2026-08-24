@@ -30,6 +30,8 @@ export type FilterType =
   | "pastel";
 
 export interface FilterOptions {
+  /** Auth-derived owner used only for local artifact isolation. */
+  tenantId?: string;
   filter: FilterType;
   intensity?: number; // 0-100, default 100
   brightness?: number; // 0-200, default 100
@@ -410,7 +412,8 @@ export class ImageFiltersEngine {
         `<rect filter="url(#${filterId})"`,
       );
 
-    const outputFileName = `filtered_${options.filter}_${Date.now()}.svg`;
+    const ownerPrefix = options.tenantId ? `${options.tenantId.replace(/[^a-zA-Z0-9_-]/g, "-")}__` : "legacy__";
+    const outputFileName = `${ownerPrefix}filtered_${options.filter}_${Date.now()}.svg`;
     const outputPath = path.join(this.outputDir, outputFileName);
     await fs.writeFile(outputPath, filteredSvg, "utf-8");
 
@@ -455,7 +458,8 @@ export class ImageFiltersEngine {
         this.applyVignette(ctx, w, h, vignette);
       }
 
-      const outputFileName = `canvas_${options.filter}_${Date.now()}.png`;
+      const ownerPrefix = options.tenantId ? `${options.tenantId.replace(/[^a-zA-Z0-9_-]/g, "-")}__` : "legacy__";
+      const outputFileName = `${ownerPrefix}canvas_${options.filter}_${Date.now()}.png`;
       const outputPath = path.join(this.outputDir, outputFileName);
       const buffer = canvas.toBuffer("image/png");
       await fs.writeFile(outputPath, buffer);
@@ -499,7 +503,8 @@ export class ImageFiltersEngine {
   <text x="${width / 2}" y="${height * 0.82}" text-anchor="middle" font-family="Arial" font-size="${Math.round(height * 0.038)}" fill="${textColor}88">${(preset?.tags || []).slice(0, 3).map((t) => `#${t}`).join(" ")}</text>
 </svg>`;
 
-    const fileName = `preview_${options.filter}_${Date.now()}.svg`;
+    const ownerPrefix = options.tenantId ? `${options.tenantId.replace(/[^a-zA-Z0-9_-]/g, "-")}__` : "legacy__";
+    const fileName = `${ownerPrefix}preview_${options.filter}_${Date.now()}.svg`;
     const filePath = path.join(this.outputDir, fileName);
     await fs.writeFile(filePath, svg, "utf-8");
     return filePath;

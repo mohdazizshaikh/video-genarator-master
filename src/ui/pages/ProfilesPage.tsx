@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { apiClient } from "../services/apiClient";
 import {
   Container, Paper, TextField, Button, FormControl, InputLabel,
   Select, MenuItem, Box, Typography, Alert, Stack, Chip,
@@ -97,10 +98,8 @@ function ProfilesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/profiles");
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const data = await res.json();
-      setProfiles(data.data || []);
+      const data = await apiClient.get<ProfileSummary[]>("/api/profiles");
+      setProfiles(Array.isArray(data) ? data : []);
     } catch (err) {
       setError((err instanceof Error ? err.message : String(err)) || "Failed to load profiles");
     } finally {
@@ -117,12 +116,7 @@ function ProfilesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/profiles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, description: newDescription, genres: newGenres }),
-      });
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      await apiClient.post("/api/profiles", { name: newName, description: newDescription, genres: newGenres });
       setNewName("");
       setNewDescription("");
       setNewGenres([]);
@@ -138,8 +132,7 @@ function ProfilesPage() {
     if (!window.confirm("Delete this profile and all its accounts?")) return;
     setError(null);
     try {
-      const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      await apiClient.delete(`/api/profiles/${id}`);
       await fetchProfiles();
     } catch (err) {
       setError((err instanceof Error ? err.message : String(err)) || "Failed to delete profile");
@@ -158,16 +151,11 @@ function ProfilesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/profiles/${accountProfile}/accounts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: accProvider,
-          label: accLabel,
-          credentials: accCredentials,
-        }),
+      await apiClient.post(`/api/profiles/${accountProfile}/accounts`, {
+        provider: accProvider,
+        label: accLabel,
+        credentials: accCredentials,
       });
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       setAccountProfile(null);
       await fetchProfiles();
     } catch (err) {
@@ -180,8 +168,7 @@ function ProfilesPage() {
   const deleteAccount = async (profileId: string, accountId: string) => {
     setError(null);
     try {
-      const res = await fetch(`/api/profiles/${profileId}/accounts/${accountId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      await apiClient.delete(`/api/profiles/${profileId}/accounts/${accountId}`);
       await fetchProfiles();
     } catch (err) {
       setError((err instanceof Error ? err.message : String(err)) || "Failed to delete account");
@@ -191,18 +178,9 @@ function ProfilesPage() {
   const startOAuth = async (profileId: string, provider: string) => {
     setError(null);
     try {
-      const res = await fetch(`/api/oauth/${provider}/connect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.hint ? `${data.error} — ${data.hint}` : (data?.error || "OAuth connect failed"));
-        return;
-      }
-      if (data?.data?.authorizationUrl) {
-        window.open(data.data.authorizationUrl, "_blank");
+      const data = await apiClient.post<{ authorizationUrl?: string }>(`/api/oauth/${provider}/connect`, { profileId });
+      if (data?.authorizationUrl) {
+        window.open(data.authorizationUrl, "_blank");
       }
     } catch (err) {
       setError((err instanceof Error ? err.message : String(err)) || "Failed to start OAuth");
@@ -212,14 +190,11 @@ function ProfilesPage() {
   const runResolve = async () => {
     setError(null);
     try {
-      const res = await fetch("/api/profiles/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category: resolveCategory, platform: resolvePlatform }),
+      const data = await apiClient.post<ProfileAccountSummary[]>("/api/profiles/resolve", {
+        category: resolveCategory,
+        platform: resolvePlatform,
       });
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const data = await res.json();
-      setResolveResult(data.data || []);
+      setResolveResult(Array.isArray(data) ? data : []);
     } catch (err) {
       setError((err instanceof Error ? err.message : String(err)) || "Failed to resolve accounts");
     }

@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import { ChannelConfigStore } from "../../db/ChannelConfigStore";
+import { getAuthenticatedTenantId } from "../auth";
 
 export class ChannelConfigRouter {
   public router: Router;
@@ -19,8 +20,9 @@ export class ChannelConfigRouter {
     this.router.delete("/:id", (req: Request, res: Response) => this.remove(req, res));
   }
 
-  private async list(_req: Request, res: Response): Promise<void> {
-    const mappings = await this.store.list();
+  private async list(req: Request, res: Response): Promise<void> {
+    const tenantId = getAuthenticatedTenantId(req) ?? "";
+    const mappings = await this.store.listForTenant(tenantId);
     res.json({ status: "ok", data: mappings });
   }
 
@@ -30,12 +32,14 @@ export class ChannelConfigRouter {
       res.status(400).json({ error: "category, platform and channelId are required" });
       return;
     }
-    const record = await this.store.create({ category, platform, channelId });
+    const tenantId = getAuthenticatedTenantId(req) ?? "";
+    const record = await this.store.create({ tenantId, category, platform, channelId });
     res.status(201).json({ status: "ok", data: record });
   }
 
   private async remove(req: Request, res: Response): Promise<void> {
-    const deleted = await this.store.delete(req.params.id);
+    const tenantId = getAuthenticatedTenantId(req) ?? "";
+    const deleted = await this.store.deleteForTenant(tenantId, req.params.id);
     if (!deleted) {
       res.status(404).json({ error: "Channel config not found" });
       return;

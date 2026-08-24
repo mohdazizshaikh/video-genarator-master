@@ -6,6 +6,7 @@ import { logger } from "./logger";
 import { Server } from "./server/server";
 import { runEnvironmentValidation } from "./config/validate";
 import { MusicManager } from "./short-creator/music";
+import { shutdownChatterbox } from "./short-creator/libraries/Chatterbox";
 
 async function main() {
   runEnvironmentValidation();
@@ -147,8 +148,8 @@ async function main() {
       const scheduler = new SchedulerService(config, shortCreator);
       scheduler.start();
 
-      process.on("SIGTERM", () => { scheduler.stop(); process.exit(0); });
-      process.on("SIGINT",  () => { scheduler.stop(); process.exit(0); });
+      process.on("SIGTERM", () => { scheduler.stop(); void shutdownChatterbox(); process.exit(0); });
+      process.on("SIGINT",  () => { scheduler.stop(); void shutdownChatterbox(); process.exit(0); });
     } catch (err: unknown) {
       logger.error(err, "Fatal error during library initialization");
       shortCreatorReject!(err);

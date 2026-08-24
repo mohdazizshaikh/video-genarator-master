@@ -1,4 +1,4 @@
-import { KokoroTTS, TextSplitterStream } from "kokoro-js";
+import { KokoroTTS, TextSplitterStream, type GenerateOptions } from "kokoro-js";
 import {
   VoiceEnum,
   type kokoroModelPrecision,
@@ -18,7 +18,7 @@ export class Kokoro {
   }> {
     const splitter = new TextSplitterStream();
     const stream = this.tts.stream(splitter, {
-      voice,
+      voice: voice as GenerateOptions["voice"],
     });
     splitter.push(text);
     splitter.close();

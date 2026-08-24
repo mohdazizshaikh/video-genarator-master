@@ -70,6 +70,7 @@ export class Remotion {
       // preventing memory issues with docker
       concurrency: this.config.concurrency,
       offthreadVideoCacheSizeInBytes: this.config.videoCacheSizeInBytes,
+      timeoutInMilliseconds: 60_000,
     });
 
     logger.debug(
@@ -101,6 +102,7 @@ export class Remotion {
       // preventing memory issues with docker
       concurrency: this.config.concurrency,
       offthreadVideoCacheSizeInBytes: this.config.videoCacheSizeInBytes,
+      timeoutInMilliseconds: 60_000,
     });
   }
 }

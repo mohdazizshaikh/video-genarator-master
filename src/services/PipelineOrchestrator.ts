@@ -11,6 +11,7 @@ import { PipelineStore, type PipelineJob, type GeneratedVariation, type AIScores
 import { ScheduleStore } from "../db/ScheduleStore";
 
 export interface PipelineInput {
+  tenantId?: string;
   topic: string;
   platform: "tiktok" | "instagram" | "youtube" | "youtube_shorts" | "linkedin";
   tone: "excited" | "calm" | "urgent" | "informative" | "humorous";
@@ -71,6 +72,7 @@ export class PipelineOrchestrator {
     const bulkCount = Math.min(Math.max(input.bulkCount ?? 1, 1), 30);
 
     const job = await this.store.createJob({
+      tenantId: input.tenantId,
       topic: input.topic,
       platform: input.platform,
       tone: input.tone,
@@ -131,6 +133,7 @@ export class PipelineOrchestrator {
         );
 
         const variation = await this.store.saveVariation({
+          tenantId: input.tenantId,
           jobId: job.id,
           hook: hookText,
           caption,
@@ -157,7 +160,7 @@ export class PipelineOrchestrator {
 
         for (const variation of topVariations) {
           const publishAt = new Date(Date.now() + (scheduleIds.length + 1) * 24 * 60 * 60 * 1000);
-          const schedule = await this.scheduleStore.create({
+          const schedule = await this.scheduleStore.createForTenant(input.tenantId ?? "", {
             name: `Pipeline: ${input.topic} — Variation #${variation.rank}`,
             videoId: `pipeline_${job.id}_${variation.id}`,
             platforms: [input.platform],

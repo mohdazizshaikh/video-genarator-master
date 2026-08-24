@@ -8,7 +8,7 @@ export type SupportedLanguageOption = {
 
 export const supportedCreateLanguages: SupportedLanguageOption[] = [
   { code: LanguageEnum.en, label: "English", defaultVoice: VoiceEnum.af_heart },
-  { code: LanguageEnum.hi, label: "Hindi (Hinglish fallback)", defaultVoice: VoiceEnum.af_nova },
+  { code: LanguageEnum.hi, label: "Hindi (Hinglish fallback)", defaultVoice: VoiceEnum.hi_IN_madhur },
   { code: LanguageEnum.fr, label: "French", defaultVoice: VoiceEnum.bf_emma },
   { code: LanguageEnum.es, label: "Spanish", defaultVoice: VoiceEnum.af_sarah },
 ];

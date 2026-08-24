@@ -55,7 +55,8 @@ const VIRAL_PATTERNS: ViralPattern[] = [
   { format: "Challenge/Trend", avgEngagement: 15.2, frequency: "Weekly", exampleHook: "Trying the viral {niche} challenge", platforms: ["tiktok", "instagram"] },
 ];
 
-interface CompetitorRecord {
+export interface CompetitorRecord {
+  tenantId?: string;
   niche: string;
   platform: string;
   analyzedAt: string;
@@ -97,7 +98,8 @@ export class CompetitorAnalysisEngine {
     return VIRAL_PATTERNS.filter((p) => p.platforms.includes(platformL));
   }
 
-  generateStrategy(niche: string, platform: string): CompetitorStrategy {
+  generateStrategyForTenant(tenantId: string, niche: string, platform: string): CompetitorStrategy {
+    if (!tenantId.trim()) throw new Error("tenantId is required");
     const creators = this.analyzeCompetitor(niche, platform);
     const patterns = this.detectViralPatterns(platform);
 
@@ -138,8 +140,8 @@ export class CompetitorAnalysisEngine {
       ],
     };
 
-    const record: CompetitorRecord = { niche, platform, analyzedAt: new Date().toISOString(), creators, strategy };
-    const idx = this.records.findIndex((r) => r.niche === niche && r.platform === platform);
+    const record: CompetitorRecord = { tenantId, niche, platform, analyzedAt: new Date().toISOString(), creators, strategy };
+    const idx = this.records.findIndex((r) => r.tenantId === tenantId && r.niche === niche && r.platform === platform);
     if (idx >= 0) this.records[idx] = record;
     else this.records.push(record);
     this.save();
@@ -147,7 +149,10 @@ export class CompetitorAnalysisEngine {
     return strategy;
   }
 
-  getHistory(): CompetitorRecord[] { return this.records; }
+  getHistoryForTenant(tenantId: string): CompetitorRecord[] {
+    if (!tenantId.trim()) return [];
+    return this.records.filter((record) => record.tenantId === tenantId);
+  }
   getAllCreators(): CreatorProfile[] { return CREATOR_POOL; }
   getAllPatterns(): ViralPattern[] { return VIRAL_PATTERNS; }
 }

@@ -30,6 +30,7 @@ export class RenderJobStore {
   }
 
   public async create(params: {
+    tenantId: string;
     scriptPlanId: string;
     videoType: VideoType;
     language: string;
@@ -41,8 +42,9 @@ export class RenderJobStore {
     const records = await this.readAll();
     const now = new Date().toISOString();
     const record: RenderJobRecord = {
-      id: cuid(),
       ...params,
+      tenantId: params.tenantId,
+      id: cuid(),
       status: "queued",
       attemptCount: 0,
       outputPath: null,
@@ -59,14 +61,32 @@ export class RenderJobStore {
     return (await this.readAll()).find((r) => r.id === id);
   }
 
+  public async getForTenant(tenantId: string, id: string): Promise<RenderJobRecord | undefined> {
+    if (!tenantId) return undefined;
+    const record = await this.get(id);
+    return record?.tenantId === tenantId ? record : undefined;
+  }
+
   public async list(): Promise<RenderJobRecord[]> {
     return (await this.readAll()).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
   }
 
+  public async listForTenant(tenantId: string): Promise<RenderJobRecord[]> {
+    if (!tenantId) return [];
+    return (await this.readAll()).filter((record) => record.tenantId === tenantId).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }
+
   public async listByStatus(status: RenderJobStatus): Promise<RenderJobRecord[]> {
     return (await this.readAll()).filter((r) => r.status === status);
+  }
+
+  public async listByStatusForTenant(tenantId: string, status: RenderJobStatus): Promise<RenderJobRecord[]> {
+    if (!tenantId) return [];
+    return (await this.readAll()).filter((record) => record.tenantId === tenantId && record.status === status);
   }
 
   public async updateStatus(
@@ -82,6 +102,16 @@ export class RenderJobStore {
     return records[idx];
   }
 
+  public async updateStatusForTenant(
+    tenantId: string,
+    id: string,
+    status: RenderJobStatus,
+    extras: Partial<Pick<RenderJobRecord, "outputPath" | "error" | "attemptCount">> = {},
+  ): Promise<RenderJobRecord | undefined> {
+    if (!(await this.getForTenant(tenantId, id))) return undefined;
+    return this.updateStatus(id, status, extras);
+  }
+
   public async incrementAttempt(id: string): Promise<RenderJobRecord | undefined> {
     const records = await this.readAll();
     const idx = records.findIndex((r) => r.id === id);
@@ -92,9 +122,19 @@ export class RenderJobStore {
     return records[idx];
   }
 
+  public async incrementAttemptForTenant(tenantId: string, id: string): Promise<RenderJobRecord | undefined> {
+    if (!(await this.getForTenant(tenantId, id))) return undefined;
+    return this.incrementAttempt(id);
+  }
+
   /** Find existing job with same idempotency key */
   public async findByNamingKey(namingKey: string): Promise<RenderJobRecord | undefined> {
     return (await this.readAll()).find((r) => r.namingKey === namingKey);
+  }
+
+  public async findByNamingKeyForTenant(tenantId: string, namingKey: string): Promise<RenderJobRecord | undefined> {
+    if (!tenantId) return undefined;
+    return (await this.readAll()).find((record) => record.tenantId === tenantId && record.namingKey === namingKey);
   }
 
   public async getStats(): Promise<Record<RenderJobStatus, number>> {

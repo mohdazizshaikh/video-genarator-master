@@ -23,6 +23,7 @@ import { ImageEngine } from "../../services/ImageEngine";
 import { ContentFreshnessEngine } from "../../services/ContentFreshnessEngine";
 import { BestTimeLearningEngine } from "../../services/BestTimeLearningEngine";
 import type { ShortCreator } from "../../short-creator/ShortCreator";
+import { getAuthenticatedTenantId } from "../auth";
 import { LanguageEnum, VideoTypeEnum, VoiceEnum, MusicVolumeEnum, TextModeEnum, OrientationEnum, MusicMoodEnum, CaptionPositionEnum } from "../../types/shorts";
 
 export class ScheduleRouter {
@@ -69,10 +70,10 @@ export class ScheduleRouter {
   private startRunner(): void {
     this.runnerInterval = setInterval(async () => {
       try {
-        const due = await this.store.getDueSchedules();
+        const due = (await this.store.getDueSchedules()).filter((schedule) => Boolean(schedule.tenantId));
         for (const sched of due) {
           logger.info({ scheduleId: sched.id, name: sched.name }, "Schedule triggered");
-          await this.executeSchedule(sched.id);
+          await this.executeSchedule(sched.id, sched.tenantId);
         }
       } catch (err) {
         logger.error(err, "Schedule runner error");
@@ -85,8 +86,9 @@ export class ScheduleRouter {
     return x - Math.floor(x);
   }
 
-  private async executeSchedule(scheduleId: string): Promise<boolean> {
-    const sched = await this.store.get(scheduleId);
+  private async executeSchedule(scheduleId: string, tenantId?: string): Promise<boolean> {
+    if (!tenantId) return false;
+    const sched = await this.store.getForTenant(tenantId, scheduleId);
     if (!sched || sched.status !== "active") return false;
 
     try {
@@ -104,7 +106,7 @@ export class ScheduleRouter {
           { scheduleId, reason: freshnessResult.reason, waitMs: freshnessResult.waitMs },
           "Schedule: content not fresh — skipping this run",
         );
-        await this.store.recordRun(scheduleId, false);
+        await this.store.recordRunForTenant(tenantId, scheduleId, false);
         return false;
       }
 
@@ -113,7 +115,7 @@ export class ScheduleRouter {
         const variationMs = Math.floor((this.deterministicRandom(Date.now()) * 2 - 1) * 45 * 60 * 1000);
         if (variationMs > 3 * 60 * 1000) {
           logger.info({ scheduleId, variationMinutes: Math.round(variationMs / 60000) }, "Human mimicry: delaying schedule execution");
-          setTimeout(() => void this.executeSchedule(scheduleId), Math.abs(variationMs));
+          setTimeout(() => void this.executeSchedule(scheduleId, tenantId), Math.abs(variationMs));
           return true;
         }
       }
@@ -200,11 +202,11 @@ export class ScheduleRouter {
       // ── Record freshness so this topic isn't repeated too soon ───
       this.freshnessEngine.record(sched.name, category);
 
-      await this.store.recordRun(scheduleId, true);
+      await this.store.recordRunForTenant(tenantId, scheduleId, true);
       return true;
     } catch (err) {
       logger.error(err, "Schedule execution failed");
-      await this.store.recordRun(scheduleId, false);
+      await this.store.recordRunForTenant(tenantId, scheduleId, false);
       return false;
     }
   }
@@ -213,13 +215,14 @@ export class ScheduleRouter {
     try {
       const limit = Math.min(parseInt(String(req.query["limit"] || "50")), 200);
       const offset = parseInt(String(req.query["offset"] || "0"));
+      const tenantId = getAuthenticatedTenantId(req) ?? "";
       const activeOnly = req.query["active"] === "true";
       if (activeOnly) {
-        const schedules = await this.store.listActive(limit, offset);
+        const schedules = await this.store.listActiveForTenant(tenantId, limit, offset);
         res.json({ status: "ok", schedules, total: schedules.length });
         return;
       }
-      const result = await this.store.list(limit, offset);
+      const result = await this.store.listForTenant(tenantId, limit, offset);
       res.json({ status: "ok", ...result });
     } catch (err) {
       logger.error(err, "Schedule: list failed");
@@ -293,7 +296,7 @@ export class ScheduleRouter {
         }
       }
 
-      const record = await this.store.create({
+      const record = await this.store.createForTenant(getAuthenticatedTenantId(req) ?? "", {
         name,
         videoId,
         platforms: Array.isArray(platforms) ? platforms : [],
@@ -333,7 +336,7 @@ export class ScheduleRouter {
 
   private async getSchedule(req: Request, res: Response): Promise<void> {
     try {
-      const sched = await this.store.get(req.params.id);
+      const sched = await this.store.getForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id);
       if (!sched) {
         res.status(404).json({ error: "Schedule not found" });
         return;
@@ -347,7 +350,8 @@ export class ScheduleRouter {
 
   private async updateSchedule(req: Request, res: Response): Promise<void> {
     try {
-      const updated = await this.store.update(req.params.id, req.body);
+      const { tenantId: _ignoredTenantId, ...data } = req.body as Record<string, unknown>;
+      const updated = await this.store.updateForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id, data);
       if (!updated) {
         res.status(404).json({ error: "Schedule not found" });
         return;
@@ -367,7 +371,7 @@ export class ScheduleRouter {
         res.status(400).json({ error: `status must be one of: ${allowed.join(", ")}` });
         return;
       }
-      const updated = await this.store.updateStatus(req.params.id, status as ScheduleRecord["status"]);
+      const updated = await this.store.updateStatusForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id, status as ScheduleRecord["status"]);
       if (!updated) {
         res.status(404).json({ error: "Schedule not found" });
         return;
@@ -381,12 +385,12 @@ export class ScheduleRouter {
 
   private async triggerRun(req: Request, res: Response): Promise<void> {
     try {
-      const sched = await this.store.get(req.params.id);
+      const sched = await this.store.getForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id);
       if (!sched) {
         res.status(404).json({ error: "Schedule not found" });
         return;
       }
-      const success = await this.executeSchedule(req.params.id);
+      const success = await this.executeSchedule(req.params.id, getAuthenticatedTenantId(req) ?? "");
       res.json({ status: "ok", triggered: true, success, scheduleId: req.params.id });
     } catch (err) {
       logger.error(err, "Schedule: triggerRun failed");
@@ -396,7 +400,7 @@ export class ScheduleRouter {
 
   private async deleteSchedule(req: Request, res: Response): Promise<void> {
     try {
-      const deleted = await this.store.delete(req.params.id);
+      const deleted = await this.store.deleteForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id);
       if (!deleted) {
         res.status(404).json({ error: "Schedule not found" });
         return;
@@ -410,7 +414,7 @@ export class ScheduleRouter {
 
   private async getStats(req: Request, res: Response): Promise<void> {
     try {
-      const stats = await this.store.getStats();
+      const stats = await this.store.getStatsForTenant(getAuthenticatedTenantId(req) ?? "");
       res.json({ status: "ok", stats });
     } catch (err) {
       logger.error(err, "Schedule: stats failed");
@@ -420,7 +424,7 @@ export class ScheduleRouter {
 
   private async getDue(req: Request, res: Response): Promise<void> {
     try {
-      const schedules = await this.store.getDueSchedules();
+      const schedules = await this.store.getDueSchedulesForTenant(getAuthenticatedTenantId(req) ?? "");
       res.json({ status: "ok", schedules, count: schedules.length });
     } catch (err) {
       logger.error(err, "Schedule: getDue failed");
@@ -433,7 +437,7 @@ export class ScheduleRouter {
     try {
       const hoursAhead = Math.min(parseInt(String(req.query["hours"] || "24")), 168);
       const cutoff = new Date(Date.now() + hoursAhead * 3600 * 1000).toISOString();
-      const { schedules: all } = await this.store.list(200, 0);
+      const { schedules: all } = await this.store.listForTenant(getAuthenticatedTenantId(req) ?? "", 200, 0);
       const upcoming = all
         .filter((s) => s.status === "active" && s.nextRun && s.nextRun <= cutoff)
         .sort((a, b) => (a.nextRun ?? "").localeCompare(b.nextRun ?? ""));

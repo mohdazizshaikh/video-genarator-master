@@ -7,6 +7,7 @@ import { PipelineOrchestrator } from "../../services/PipelineOrchestrator";
 import { PipelineStore } from "../../db/PipelineStore";
 import { logger } from "../../logger";
 import type { Config } from "../../config";
+import { getAuthenticatedTenantId } from "../auth";
 
 export class PipelineRouter {
   public router: Router;
@@ -54,6 +55,7 @@ export class PipelineRouter {
     try {
       logger.info({ topic, platform, tone, bulkCount }, "POST /pipeline/run");
       const result = await this.orchestrator.run({
+        tenantId: getAuthenticatedTenantId(req) ?? "",
         topic: topic.trim(),
         platform: platform || "tiktok",
         tone: tone || "excited",
@@ -99,6 +101,7 @@ export class PipelineRouter {
 
     try {
       const run = await this.store.createComparison({
+        tenantId: getAuthenticatedTenantId(req) ?? "",
         topic: topic.trim(),
         tone: tone || "excited",
         platforms,
@@ -110,10 +113,11 @@ export class PipelineRouter {
       const runPlatform = async (platform: string) => {
         const start = Date.now();
         try {
-          await this.store.updateComparisonEntry(run.id, platform, { status: "running" });
+          await this.store.updateComparisonEntryForTenant(getAuthenticatedTenantId(req) ?? "", run.id, platform, { status: "running" });
 
-          const result = await this.orchestrator.run({
-            topic: topic.trim(),
+            const result = await this.orchestrator.run({
+              tenantId: getAuthenticatedTenantId(req) ?? "",
+              topic: topic.trim(),
             platform: platform as any,
             tone: tone || "excited",
             bulkCount: 3,
@@ -123,7 +127,7 @@ export class PipelineRouter {
           const best = result.topVariations[0];
           const topJob = result.job;
 
-          await this.store.updateComparisonEntry(run.id, platform, {
+          await this.store.updateComparisonEntryForTenant(getAuthenticatedTenantId(req) ?? "", run.id, platform, {
             status: "done",
             jobId: topJob.id,
             bestScore: best?.aiScores.overallScore,
@@ -141,13 +145,13 @@ export class PipelineRouter {
         } catch (err) {
           const error = err instanceof Error ? err.message : String(err);
           logger.error({ err, platform, runId: run.id }, "Platform comparison failed");
-          await this.store.updateComparisonEntry(run.id, platform, { status: "failed", error });
+          await this.store.updateComparisonEntryForTenant(getAuthenticatedTenantId(req) ?? "", run.id, platform, { status: "failed", error });
         }
       };
 
       // Fire all in parallel, don't await — let the client poll
       Promise.all(platforms.map(runPlatform)).then(async () => {
-        const finalRun = await this.store.getComparison(run.id);
+        const finalRun = await this.store.getComparisonForTenant(getAuthenticatedTenantId(req) ?? "", run.id);
         logger.info({ runId: run.id, winner: finalRun?.winner }, "Comparison complete");
       }).catch((err) => {
         logger.error({ err, runId: run.id }, "Comparison batch error");
@@ -164,7 +168,7 @@ export class PipelineRouter {
   private async listComparisons(req: Request, res: Response): Promise<void> {
     try {
       const limit = Math.min(parseInt(String(req.query.limit || "20")), 100);
-      const data = await this.store.listComparisons(limit);
+      const data = await this.store.listComparisonsForTenant(getAuthenticatedTenantId(req) ?? "", limit);
       res.json({ status: "ok", data, total: data.length });
     } catch (err) {
       logger.error({ err }, "GET /pipeline/comparisons failed");
@@ -174,7 +178,7 @@ export class PipelineRouter {
 
   private async getComparison(req: Request, res: Response): Promise<void> {
     try {
-      const run = await this.store.getComparison(req.params.id);
+      const run = await this.store.getComparisonForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id);
       if (!run) {
         res.status(404).json({ error: "Comparison not found" });
         return;
@@ -189,7 +193,7 @@ export class PipelineRouter {
   private async listJobs(req: Request, res: Response): Promise<void> {
     try {
       const limit = Math.min(parseInt(String(req.query.limit || "50")), 200);
-      const jobs = await this.store.listJobs(limit);
+      const jobs = await this.store.listJobsForTenant(getAuthenticatedTenantId(req) ?? "", limit);
       res.json({ status: "ok", data: jobs, total: jobs.length });
     } catch (err) {
       logger.error({ err }, "GET /pipeline/jobs failed");
@@ -199,12 +203,12 @@ export class PipelineRouter {
 
   private async getJob(req: Request, res: Response): Promise<void> {
     try {
-      const job = await this.store.getJob(req.params.id);
+      const job = await this.store.getJobForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id);
       if (!job) {
         res.status(404).json({ error: "Pipeline job not found" });
         return;
       }
-      const variations = await this.store.getVariationsForJob(req.params.id);
+      const variations = await this.store.getVariationsForJobForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id);
       res.json({ status: "ok", job, variations });
     } catch (err) {
       logger.error({ err }, "GET /pipeline/jobs/:id failed");
@@ -214,7 +218,7 @@ export class PipelineRouter {
 
   private async getStats(req: Request, res: Response): Promise<void> {
     try {
-      const stats = await this.store.getStats();
+      const stats = await this.store.getStatsForTenant(getAuthenticatedTenantId(req) ?? "");
       res.json({ status: "ok", stats });
     } catch (err) {
       logger.error({ err }, "GET /pipeline/stats failed");

@@ -13,17 +13,17 @@ export class AiTrainingService {
     private readonly predictor: AiPredictionService = new AiPredictionService(),
   ) {}
 
-  public async runTrainingNow(): Promise<void> {
-    const events = await this.store.listEvents(1000);
-    const current = await this.store.getModelState();
+  public async runTrainingNow(tenantId: string): Promise<void> {
+    const events = await this.store.listEventsForTenant(tenantId, 1000);
+    const current = await this.store.getModelStateForTenant(tenantId);
     const next = this.predictor.retrain(events, current);
-    await this.store.saveModelState(next);
+    await this.store.saveModelStateForTenant(tenantId, next);
   }
 
-  public start(jobFactory: (fn: () => Promise<void>) => JobHandle): void {
+  public start(tenantId: string, jobFactory: (fn: () => Promise<void>) => JobHandle): void {
     if (this.job) return;
     this.job = jobFactory(async () => {
-      await this.runTrainingNow();
+      await this.runTrainingNow(tenantId);
     });
   }
 }

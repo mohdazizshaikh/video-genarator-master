@@ -70,6 +70,7 @@ COPY tsconfig.build.json /app
 COPY vite.config.ts /app
 COPY .pnpmfile.cjs /app
 COPY src /app/src
+COPY scripts/copy-edge-tts-script.js /app/scripts/copy-edge-tts-script.js
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 RUN pnpm build
 RUN mkdir -p /app/cache /app/cache/puppeteer /app/cache/huggingface

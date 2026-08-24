@@ -147,6 +147,10 @@ export enum VoiceEnum {
   bf_lily = "bf_lily",
   bm_daniel = "bm_daniel",
   bm_fable = "bm_fable",
+  en_IN_prabhat = "en_IN_prabhat",
+  en_IN_neeerja = "en_IN_neeerja",
+  hi_IN_madhur = "hi_IN_madhur",
+  hi_IN_swara = "hi_IN_swara",
 }
 
 export enum OrientationEnum {
@@ -388,6 +392,8 @@ export type PlatformType = "youtube" | "telegram" | "instagram" | "facebook" | "
 
 // ─── Phase 4/5: Render Job DB Record ─────────────────────────────────────────
 export interface RenderJobRecord {
+  /** Auth-derived owner. Legacy records without this field are not tenant-visible. */
+  tenantId?: string;
   id: string;
   scriptPlanId: string;
   videoType: VideoType;
@@ -406,6 +412,8 @@ export interface RenderJobRecord {
 
 // ─── Phase 5: Publish Job DB Record ──────────────────────────────────────────
 export interface PublishJobRecord {
+  /** Auth-derived owner. Legacy records without this field are not tenant-visible. */
+  tenantId?: string;
   id: string;
   renderOutputPath: string;
   platform: PlatformType;
@@ -438,6 +446,8 @@ export interface PublishAttemptRecord {
 }
 
 export interface VideoMetadataRecord {
+  /** Auth-derived owner. Legacy records without this field are not tenant-visible. */
+  tenantId?: string;
   videoId: string;
   signature?: string | null;
   topic: string;

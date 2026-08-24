@@ -57,7 +57,8 @@ import { Config } from "../config";
 import { MusicManager } from "../short-creator/music";
 import { RssFetcher } from "../news-fetcher/RssFetcher";
 import { VoiceEnum } from "../types/shorts";
-import { validateTokenIfPresent, logAdminKeyStatus } from "./auth";
+import { requireAuth, validateTokenIfPresent, logAdminKeyStatus } from "./auth";
+import JobEventsRouter from "./routers/jobevents";
 import { readiness } from "./readiness";
 
 export class Server {
@@ -161,6 +162,7 @@ export class Server {
     const abTestingRouter = new ABTestingRouter(config);
     const approvalRouter = new ApprovalRouter(config);
     const systemEnginesRouter = new SystemEnginesRouter(config);
+    const jobEventsRouter = new JobEventsRouter(config);
     const contentBucketsRouter = new ContentBucketsRouter(config);
     const channelConfigRouter = new ChannelConfigRouter(config);
     const profilesRouter = new ProfilesRouter(config);
@@ -169,45 +171,46 @@ export class Server {
 
     // Always-available routes (no ShortCreator dependency)
     this.app.use("/api/health", healthRouter.router);
-    this.app.use("/api/publish", publishRouter.router);
-    this.app.use("/api/tenants", tenantRouter.router);
-    this.app.use("/api/marketing", marketingRouter.router);
-    this.app.use("/api/ai", aiRouter.router);
-    this.app.use("/api/content", contentRouter.router);
-    this.app.use("/api/trends", trendsRouter.router);
-    this.app.use("/api/hooks", hooksRouter.router);
-    this.app.use("/api/translate", translateRouter.router);
-    this.app.use("/api/image", imageRouter.router);
-    this.app.use("/api/recycle", recycleRouter.router);
-    this.app.use("/api/costs", costsRouter.router);
-    this.app.use("/api/shadowban", shadowbanRouter.router);
-    this.app.use("/api/strategy", strategyRouter.router);
-    this.app.use("/api/webhooks", webhooksRouter.router);
-    this.app.use("/api/branding", brandingRouter.router);
-    this.app.use("/api/humanized", humanizedRouter.router);
-    this.app.use("/api/thumbnail", thumbnailRouter.router);
-    this.app.use("/api/editing", editingRouter.router);
-    this.app.use("/api/visual", visualRouter.router);
-    this.app.use("/api/audio", audioRouter.router);
-    this.app.use("/api/emotional", emotionalRouter.router);
-    this.app.use("/api/attention", attentionRouter.router);
-    this.app.use("/api/quality", qualityRouter.router);
-    this.app.use("/api/engagement", engagementRouter.router);
-    this.app.use("/api/account", accountRouter.router);
-    this.app.use("/api/watermark", watermarkRouter.router);
-    this.app.use("/api/videolibrary", videoLibraryRouter.router);
-    this.app.use("/api/schedule", scheduleRouter.router);
-    this.app.use("/api/pipeline", pipelineRouter.router);
-    this.app.use("/api/competitor", competitorRouter.router);
-    this.app.use("/api/engines", enginesRouter.router);
-    this.app.use("/api/abtesting", abTestingRouter.router);
-    this.app.use("/api/approval", approvalRouter.router);
+    this.app.use("/api/publish", requireAuth, publishRouter.router);
+    this.app.use("/api/tenants", requireAuth, tenantRouter.router);
+    this.app.use("/api/marketing", requireAuth, marketingRouter.router);
+    this.app.use("/api/ai", requireAuth, aiRouter.router);
+    this.app.use("/api/content", requireAuth, contentRouter.router);
+    this.app.use("/api/trends", requireAuth, trendsRouter.router);
+    this.app.use("/api/hooks", requireAuth, hooksRouter.router);
+    this.app.use("/api/translate", requireAuth, translateRouter.router);
+    this.app.use("/api/image", requireAuth, imageRouter.router);
+    this.app.use("/api/recycle", requireAuth, recycleRouter.router);
+    this.app.use("/api/costs", requireAuth, costsRouter.router);
+    this.app.use("/api/shadowban", requireAuth, shadowbanRouter.router);
+    this.app.use("/api/strategy", requireAuth, strategyRouter.router);
+    this.app.use("/api/webhooks", requireAuth, webhooksRouter.router);
+    this.app.use("/api/branding", requireAuth, brandingRouter.router);
+    this.app.use("/api/humanized", requireAuth, humanizedRouter.router);
+    this.app.use("/api/thumbnail", requireAuth, thumbnailRouter.router);
+    this.app.use("/api/editing", requireAuth, editingRouter.router);
+    this.app.use("/api/visual", requireAuth, visualRouter.router);
+    this.app.use("/api/audio", requireAuth, audioRouter.router);
+    this.app.use("/api/emotional", requireAuth, emotionalRouter.router);
+    this.app.use("/api/attention", requireAuth, attentionRouter.router);
+    this.app.use("/api/quality", requireAuth, qualityRouter.router);
+    this.app.use("/api/engagement", requireAuth, engagementRouter.router);
+    this.app.use("/api/account", requireAuth, accountRouter.router);
+    this.app.use("/api/watermark", requireAuth, watermarkRouter.router);
+    this.app.use("/api/videolibrary", requireAuth, videoLibraryRouter.router);
+    this.app.use("/api/schedule", requireAuth, scheduleRouter.router);
+    this.app.use("/api/pipeline", requireAuth, pipelineRouter.router);
+    this.app.use("/api/competitor", requireAuth, competitorRouter.router);
+    this.app.use("/api/engines", requireAuth, enginesRouter.router);
+    this.app.use("/api/abtesting", requireAuth, abTestingRouter.router);
+    this.app.use("/api/approval", requireAuth, approvalRouter.router);
     this.app.use("/api/system", systemEnginesRouter.router);
-    this.app.use("/api/system/content-buckets", contentBucketsRouter.router);
-    this.app.use("/api/channel-configs", channelConfigRouter.router);
-    this.app.use("/api/profiles", profilesRouter.router);
+    this.app.use("/api/job-events", requireAuth, jobEventsRouter.router);
+    this.app.use("/api/system/content-buckets", requireAuth, contentBucketsRouter.router);
+    this.app.use("/api/channel-configs", requireAuth, channelConfigRouter.router);
+    this.app.use("/api/profiles", requireAuth, profilesRouter.router);
     this.app.use("/api/oauth", oauthRouter.router);
-    this.app.use("/api/repurpose", repurposeRouter.router);
+    this.app.use("/api/repurpose", requireAuth, repurposeRouter.router);
 
     // API Documentation (Swagger UI) — always available
     this.app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
@@ -244,9 +247,9 @@ export class Server {
     let mcpHandler: express.Router = express.Router().use(initializingResponse);
     let queueHandler: express.Router = express.Router().use(initializingResponse);
 
-    deferredApiRouter.use((req, res, next) => apiHandler(req, res, next));
-    deferredMcpRouter.use((req, res, next) => mcpHandler(req, res, next));
-    deferredQueueRouter.use((req, res, next) => queueHandler(req, res, next));
+    deferredApiRouter.use(requireAuth, (req, res, next) => apiHandler(req, res, next));
+    deferredMcpRouter.use(requireAuth, (req, res, next) => mcpHandler(req, res, next));
+    deferredQueueRouter.use(requireAuth, (req, res, next) => queueHandler(req, res, next));
 
     this.app.use("/api", deferredApiRouter);
     this.app.use("/mcp", deferredMcpRouter);

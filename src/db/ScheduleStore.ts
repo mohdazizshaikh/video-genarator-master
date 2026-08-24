@@ -3,6 +3,8 @@ import path from "path";
 import cuid from "cuid";
 
 export interface ScheduleRecord {
+  /** Auth-derived owner. Legacy schedules without this field are not tenant-visible. */
+  tenantId?: string;
   id: string;
   name: string;
   videoId: string;
@@ -68,6 +70,11 @@ export class ScheduleStore {
     await fs.writeFile(this.storePath, JSON.stringify(records, null, 2), "utf-8");
   }
 
+  async createForTenant(tenantId: string, data: Omit<ScheduleRecord, "id" | "createdAt" | "updatedAt" | "runCount" | "failureCount" | "tenantId">): Promise<ScheduleRecord> {
+    if (!tenantId) throw new Error("tenantId is required");
+    return this.create({ ...data, tenantId });
+  }
+
   async create(data: Omit<ScheduleRecord, "id" | "createdAt" | "updatedAt" | "runCount" | "failureCount">): Promise<ScheduleRecord> {
     const records = await this.readAll();
     const now = new Date().toISOString();
@@ -84,8 +91,20 @@ export class ScheduleStore {
     return record;
   }
 
+  async getForTenant(tenantId: string, id: string): Promise<ScheduleRecord | undefined> {
+    if (!tenantId) return undefined;
+    return (await this.readAll()).find((record) => record.tenantId === tenantId && record.id === id);
+  }
+
   async get(id: string): Promise<ScheduleRecord | undefined> {
     return (await this.readAll()).find((r) => r.id === id);
+  }
+
+  async listForTenant(tenantId: string, limit = 50, offset = 0): Promise<{ schedules: ScheduleRecord[]; total: number }> {
+    if (!tenantId) return { schedules: [], total: 0 };
+    const all = (await this.readAll()).filter((record) => record.tenantId === tenantId);
+    const sorted = all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return { schedules: sorted.slice(offset, offset + limit), total: sorted.length };
   }
 
   async list(limit = 50, offset = 0): Promise<{ schedules: ScheduleRecord[]; total: number }> {
@@ -95,6 +114,11 @@ export class ScheduleStore {
       schedules: sorted.slice(offset, offset + limit),
       total: sorted.length,
     };
+  }
+
+  async listActiveForTenant(tenantId: string, limit = 50, offset = 0): Promise<ScheduleRecord[]> {
+    if (!tenantId) return [];
+    return (await this.readAll()).filter((record) => record.tenantId === tenantId && record.status === "active").slice(offset, offset + limit);
   }
 
   async listActive(limit = 50, offset = 0): Promise<ScheduleRecord[]> {
@@ -107,6 +131,16 @@ export class ScheduleStore {
     return all.filter((s) => s.videoId === videoId);
   }
 
+  async updateForTenant(tenantId: string, id: string, data: Partial<Omit<ScheduleRecord, "id" | "createdAt" | "tenantId">>): Promise<ScheduleRecord | undefined> {
+    if (!tenantId) return undefined;
+    const records = await this.readAll();
+    const idx = records.findIndex((record) => record.tenantId === tenantId && record.id === id);
+    if (idx < 0) return undefined;
+    records[idx] = { ...records[idx], ...data, tenantId, updatedAt: new Date().toISOString() };
+    await this.writeAll(records);
+    return records[idx];
+  }
+
   async update(id: string, data: Partial<Omit<ScheduleRecord, "id" | "createdAt">>): Promise<ScheduleRecord | undefined> {
     const records = await this.readAll();
     const idx = records.findIndex((r) => r.id === id);
@@ -116,8 +150,23 @@ export class ScheduleStore {
     return records[idx];
   }
 
+  async updateStatusForTenant(tenantId: string, id: string, status: ScheduleRecord["status"]): Promise<ScheduleRecord | undefined> {
+    return this.updateForTenant(tenantId, id, { status });
+  }
+
   async updateStatus(id: string, status: ScheduleRecord["status"]): Promise<ScheduleRecord | undefined> {
     return this.update(id, { status });
+  }
+
+  async recordRunForTenant(tenantId: string, id: string, success: boolean): Promise<ScheduleRecord | undefined> {
+    const record = await this.getForTenant(tenantId, id);
+    if (!record) return undefined;
+    const update: Partial<ScheduleRecord> = { lastRun: new Date().toISOString(), runCount: record.runCount + 1 };
+    if (!success) update.failureCount = record.failureCount + 1;
+    const nextDate = new Date();
+    nextDate.setHours(nextDate.getHours() + 1);
+    update.nextRun = nextDate.toISOString();
+    return this.updateForTenant(tenantId, id, update);
   }
 
   async recordRun(id: string, success: boolean): Promise<ScheduleRecord | undefined> {
@@ -137,6 +186,16 @@ export class ScheduleStore {
     return this.update(id, update);
   }
 
+  async deleteForTenant(tenantId: string, id: string): Promise<boolean> {
+    if (!tenantId) return false;
+    const records = await this.readAll();
+    const idx = records.findIndex((record) => record.tenantId === tenantId && record.id === id);
+    if (idx < 0) return false;
+    records.splice(idx, 1);
+    await this.writeAll(records);
+    return true;
+  }
+
   async delete(id: string): Promise<boolean> {
     const records = await this.readAll();
     const idx = records.findIndex((r) => r.id === id);
@@ -144,6 +203,21 @@ export class ScheduleStore {
     records.splice(idx, 1);
     await this.writeAll(records);
     return true;
+  }
+
+  async getStatsForTenant(tenantId: string): Promise<{
+    total: number; active: number; paused: number; completed: number; failed: number; totalRuns: number; totalFailures: number;
+  }> {
+    const records = tenantId ? (await this.readAll()).filter((record) => record.tenantId === tenantId) : [];
+    return {
+      total: records.length,
+      active: records.filter((s) => s.status === "active").length,
+      paused: records.filter((s) => s.status === "paused").length,
+      completed: records.filter((s) => s.status === "completed").length,
+      failed: records.filter((s) => s.status === "failed").length,
+      totalRuns: records.reduce((sum, s) => sum + s.runCount, 0),
+      totalFailures: records.reduce((sum, s) => sum + s.failureCount, 0),
+    };
   }
 
   async getStats(): Promise<{
@@ -169,6 +243,13 @@ export class ScheduleStore {
 
   async getDueSchedules(): Promise<ScheduleRecord[]> {
     const all = await this.readAll();
+    const now = new Date();
+    return all.filter((record) => Boolean(record.tenantId) && record.status === "active" && new Date(record.publishAt) <= now);
+  }
+
+  async getDueSchedulesForTenant(tenantId: string): Promise<ScheduleRecord[]> {
+    if (!tenantId) return [];
+    const all = (await this.readAll()).filter((record) => record.tenantId === tenantId);
     const now = new Date();
     return all.filter((s) => s.status === "active" && new Date(s.publishAt) <= now);
   }

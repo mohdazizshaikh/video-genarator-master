@@ -33,12 +33,25 @@ export class ProfileStore {
     return this.readAll();
   }
 
+  async listForTenant(tenantId: string): Promise<ProfileRecord[]> {
+    if (!tenantId) return [];
+    const records = await this.readAll();
+    return records.filter((record) => record.tenantId === tenantId);
+  }
+
   async get(id: string): Promise<ProfileRecord | undefined> {
     const records = await this.readAll();
     return records.find((r) => r.id === id);
   }
 
+  async getForTenant(tenantId: string, id: string): Promise<ProfileRecord | undefined> {
+    if (!tenantId) return undefined;
+    const profile = await this.get(id);
+    return profile?.tenantId === tenantId ? profile : undefined;
+  }
+
   async create(data: {
+    tenantId: string;
     name: string;
     description?: string;
     genres?: string[];
@@ -46,6 +59,7 @@ export class ProfileStore {
     const records = await this.readAll();
     const now = new Date().toISOString();
     const record: ProfileRecord = {
+      tenantId: data.tenantId,
       id: `prf_${cuid()}`,
       name: data.name,
       description: data.description,
@@ -57,6 +71,15 @@ export class ProfileStore {
     records.push(record);
     await this.writeAll(records);
     return record;
+  }
+
+  async updateForTenant(
+    tenantId: string,
+    id: string,
+    patch: Partial<Pick<ProfileRecord, "name" | "description" | "genres">>,
+  ): Promise<ProfileRecord | undefined> {
+    if (!(await this.getForTenant(tenantId, id))) return undefined;
+    return this.update(id, patch);
   }
 
   async update(
@@ -93,6 +116,11 @@ export class ProfileStore {
     records[idx].accountIds = records[idx].accountIds.filter((a) => a !== accountId);
     records[idx].updatedAt = new Date().toISOString();
     await this.writeAll(records);
+  }
+
+  async removeForTenant(tenantId: string, id: string): Promise<boolean> {
+    if (!(await this.getForTenant(tenantId, id))) return false;
+    return this.remove(id);
   }
 
   async remove(id: string): Promise<boolean> {

@@ -3,6 +3,8 @@ import type { PlatformType } from "./shorts";
 export type ProfileAccountStatus = "active" | "needs-reauth" | "error";
 
 export interface ProfileRecord {
+  /** Auth-derived owner. Legacy records without this field are not tenant-visible. */
+  tenantId: string;
   id: string;
   name: string;
   description?: string;

@@ -46,6 +46,11 @@ export class AudienceStore {
     return record;
   }
 
+  async listForTenant(tenantId: string): Promise<AudienceTargetRecord[]> {
+    if (!tenantId) return [];
+    return (await this.readAll()).filter((record) => record.tenantId === tenantId).sort((a, b) => b.score - a.score);
+  }
+
   async list(): Promise<AudienceTargetRecord[]> {
     return (await this.readAll()).sort((a, b) => b.score - a.score);
   }

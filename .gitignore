@@ -28,3 +28,9 @@ renderJobs.json
 *.mkv
 *.avi
 *.wav
+
+# Local virtual environments and generated analysis/runtime data
+tts-env/
+voice-analysis/
+*.log
+

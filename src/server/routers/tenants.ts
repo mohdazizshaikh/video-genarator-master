@@ -6,7 +6,7 @@ import { TenantUsageStore } from "../../db/TenantUsageStore";
 import { CryptoService } from "../../services/CryptoService";
 import { TenantQuotaService } from "../../services/TenantQuotaService";
 import { TenantLoggerService } from "../../services/TenantLoggerService";
-import { requireAdminKey } from "../auth";
+import { getAuthenticatedTenantId, isAdminRequest, requireAdminKey } from "../auth";
 
 const INSECURE_SECRETS = new Set(["tenant-dev-secret", "change-me-in-production", "change_me", "secret", "password"]);
 
@@ -46,7 +46,7 @@ export class TenantRouter {
 
   private registerRoutes(): void {
     this.router.get("/", (req: Request, res: Response) => this.list(req, res));
-    this.router.post("/", (req: Request, res: Response) => this.create(req, res));
+    this.router.post("/", requireAdminKey, (req: Request, res: Response) => this.create(req, res));
     this.router.get("/:tenantId", (req: Request, res: Response) => this.get(req, res));
     // API-key read/rotation is admin-only.
     this.router.post("/:tenantId/keys", requireAdminKey, (req: Request, res: Response) => this.updateKeys(req, res));
@@ -71,13 +71,27 @@ export class TenantRouter {
     res.status(201).json(sanitizeTenant(tenant));
   }
 
-  private async list(_req: Request, res: Response): Promise<void> {
-    const tenants = await this.tenantStore.list();
+  private async list(req: Request, res: Response): Promise<void> {
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId && !isAdminRequest(req)) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const tenants = isAdminRequest(req)
+      ? await this.tenantStore.list()
+      : await this.tenantStore.listForTenant(authTenantId ?? "");
     res.json(tenants.map(sanitizeTenant));
   }
 
   private async get(req: Request, res: Response): Promise<void> {
-    const tenant = await this.tenantStore.get(req.params.tenantId);
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId && !isAdminRequest(req)) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const tenant = isAdminRequest(req)
+      ? await this.tenantStore.get(req.params.tenantId)
+      : await this.tenantStore.getForTenant(authTenantId ?? "", req.params.tenantId);
     if (!tenant) {
       res.status(404).json({ error: "Tenant not found" });
       return;
@@ -91,7 +105,14 @@ export class TenantRouter {
       Object.entries(apiKeys).map(([k, v]) => [k, this.crypto.encrypt(String(v))]),
     );
 
-    const updated = await this.tenantStore.updateEncryptedKeys(req.params.tenantId, encrypted);
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId && !isAdminRequest(req)) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const updated = isAdminRequest(req)
+      ? await this.tenantStore.updateEncryptedKeys(req.params.tenantId, encrypted)
+      : await this.tenantStore.updateEncryptedKeysForTenant(authTenantId ?? "", req.params.tenantId, encrypted);
     if (!updated) {
       res.status(404).json({ error: "Tenant not found" });
       return;
@@ -100,7 +121,14 @@ export class TenantRouter {
   }
 
   private async updateEngines(req: Request, res: Response): Promise<void> {
-    const updated = await this.tenantStore.updateEngineConfig(req.params.tenantId, req.body.engineConfig || {});
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId && !isAdminRequest(req)) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const updated = isAdminRequest(req)
+      ? await this.tenantStore.updateEngineConfig(req.params.tenantId, req.body.engineConfig || {})
+      : await this.tenantStore.updateEngineConfigForTenant(authTenantId ?? "", req.params.tenantId, req.body.engineConfig || {});
     if (!updated) {
       res.status(404).json({ error: "Tenant not found" });
       return;
@@ -109,7 +137,14 @@ export class TenantRouter {
   }
 
   private async updateQuotas(req: Request, res: Response): Promise<void> {
-    const updated = await this.tenantStore.updateQuotas(req.params.tenantId, req.body.quotas || {});
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId && !isAdminRequest(req)) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const updated = isAdminRequest(req)
+      ? await this.tenantStore.updateQuotas(req.params.tenantId, req.body.quotas || {})
+      : await this.tenantStore.updateQuotasForTenant(authTenantId ?? "", req.params.tenantId, req.body.quotas || {});
     if (!updated) {
       res.status(404).json({ error: "Tenant not found" });
       return;
@@ -118,7 +153,14 @@ export class TenantRouter {
   }
 
   private async getBilling(req: Request, res: Response): Promise<void> {
-    const tenant = await this.tenantStore.get(req.params.tenantId);
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId && !isAdminRequest(req)) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const tenant = isAdminRequest(req)
+      ? await this.tenantStore.get(req.params.tenantId)
+      : await this.tenantStore.getForTenant(authTenantId ?? "", req.params.tenantId);
     if (!tenant) {
       res.status(404).json({ error: "Tenant not found" });
       return;
@@ -138,8 +180,17 @@ export class TenantRouter {
 
   private async writeEngineLog(req: Request, res: Response): Promise<void> {
     const { tenantId, engine } = req.params;
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId && !isAdminRequest(req)) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    if (!isAdminRequest(req) && authTenantId !== tenantId) {
+      res.status(404).json({ error: "Tenant not found" });
+      return;
+    }
     const { level = "info", message = "", payload } = req.body || {};
-    await this.tenantLogger.log(tenantId, engine, level, message, payload);
+    await this.tenantLogger.log(authTenantId ?? tenantId, engine, level, message, payload);
     res.status(201).json({ ok: true });
   }
 }

@@ -8,6 +8,9 @@ import { Worker, Job } from "bullmq";
 import { Config } from "../config";
 import { PublishJobStore } from "../db/PublishJobStore";
 import { RenderJobStore } from "../db/RenderJobStore";
+import { JobEventStore } from "../db/JobEventStore";
+import { JobEventOutboxStore } from "../db/JobEventOutboxStore";
+import { JobLifecycleEventService } from "../services/JobLifecycleEventService";
 import { logger } from "../logger";
 import { AlertingService } from "../services/AlertingService";
 import { getRedisConnection, QUEUE_NAMES } from "./QueueManager";
@@ -26,11 +29,13 @@ export class DeadLetterWorker {
   private publishJobStore: PublishJobStore;
   private renderJobStore: RenderJobStore;
   private alertingService: AlertingService;
+  private lifecycleEvents: JobLifecycleEventService;
 
   constructor(private config: Config) {
     this.publishJobStore = new PublishJobStore(config.dataDirPath);
     this.renderJobStore = new RenderJobStore(config.dataDirPath);
     this.alertingService = new AlertingService(config);
+    this.lifecycleEvents = new JobLifecycleEventService(new JobEventStore(config.dataDirPath), new JobEventOutboxStore(config.dataDirPath));
 
     this.worker = new Worker(
       QUEUE_NAMES.DEADLETTER,
@@ -54,6 +59,12 @@ export class DeadLetterWorker {
 
   private async processJob(job: Job<DeadLetterPayload>): Promise<void> {
     const { type, jobId, failReason, attemptsMade, originalJobData } = job.data;
+    const tenantId = typeof originalJobData.tenantId === "string" ? originalJobData.tenantId : undefined;
+    if (!tenantId) {
+      logger.error({ deadLetterJobId: job.id, jobId }, "Rejecting unowned dead-letter job");
+      return;
+    }
+    this.lifecycleEvents.emit({ tenantId, jobId, type: "dead_letter", attempt: attemptsMade, payload: { originalQueue: job.data.originalQueue, reason: failReason } });
 
     logger.error(
       { type, jobId, failReason, attemptsMade, originalJobData },
@@ -61,12 +72,12 @@ export class DeadLetterWorker {
     );
 
     if (type === "render") {
-      await this.renderJobStore.updateStatus(jobId, "skipped", {
+      await this.renderJobStore.updateStatusForTenant(tenantId, jobId, "skipped", {
         error: `DEAD LETTER after ${attemptsMade} attempts: ${failReason}`,
         attemptCount: attemptsMade,
       });
     } else if (type === "publish") {
-      await this.publishJobStore.updateJobStatus(jobId, "failed", {
+      await this.publishJobStore.updateJobStatusForTenant(tenantId, jobId, "failed", {
         error: `DEAD LETTER after ${attemptsMade} attempts: ${failReason}`,
         attemptCount: attemptsMade,
       });

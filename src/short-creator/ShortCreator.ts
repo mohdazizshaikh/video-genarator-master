@@ -333,6 +333,7 @@ export class ShortCreator {
     config: RenderConfig,
     videoType: "short" | "long" = "short",
     subtitleLanguage?: string,
+    tenantId?: string,
   ): string {
     const signature = this.buildVideoSignature(sceneInput, config, videoType, subtitleLanguage);
     const queuedMatch = this.queue.find((item) =>
@@ -341,13 +342,14 @@ export class ShortCreator {
       return queuedMatch.id;
     }
 
-    const existingRecord = this.videoMetadataStore.findBySignatureSync(signature);
+    const existingRecord = this.videoMetadataStore.findBySignatureSync(signature, tenantId);
     if (existingRecord && fs.existsSync(this.getVideoPath(existingRecord.videoId))) {
       return existingRecord.videoId;
     }
 
     const id = cuid();
     this.videoMetadataStore.upsertFromScenesSync({
+      tenantId,
       videoId: id,
       scenes: sceneInput,
       signature,
@@ -447,7 +449,7 @@ export class ShortCreator {
     for (const scene of inputScenes) {
       const sceneNum = index + 1;
       console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Generating audio...`);
-      const sourceScriptLanguage = scene.sourceLanguage || config.scriptLanguage || scene.language;
+      const sourceScriptLanguage = scene.sourceLanguage || config.scriptLanguage || scene.language || LanguageEnum.en;
       const audio = await this.ttsAdapter.synthesize(scene, config.voice, sourceScriptLanguage);
       let { audioLength } = audio;
       const { audio: audioStream } = audio;

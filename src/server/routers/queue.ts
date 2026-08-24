@@ -5,6 +5,7 @@ import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import type { ShortCreator } from "../../short-creator/ShortCreator";
 import { SchedulerService } from "../../services/SchedulerService";
+import { getAuthenticatedTenantId } from "../auth";
 
 export class QueueRouter {
   public router: Router;
@@ -29,7 +30,9 @@ export class QueueRouter {
     }
 
     try {
+      const tenantId = getAuthenticatedTenantId(req) ?? "";
       const renderJobId = await this.scheduler.enqueueRenderJob({
+        tenantId,
         sceneInput,
         orientation,
         category,

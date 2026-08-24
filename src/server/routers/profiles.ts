@@ -5,9 +5,11 @@ import type { Config } from "../../config";
 import { ProfileService } from "../../services/ProfileService";
 import { buildAuthorizationUrl, defaultCallbackUrl, exchangeOAuthCode, oauthProviderInfo } from "../../services/OAuthProvider";
 import { logger } from "../../logger";
+import { getAuthenticatedTenantId } from "../auth";
 import type { PlatformType } from "../../types/shorts";
 
 interface PendingOAuth {
+  tenantId: string;
   profileId: string;
   provider: PlatformType;
   redirectUri: string;
@@ -37,9 +39,10 @@ export class ProfilesRouter {
   }
 
   private registerRoutes(): void {
-    this.router.get("/", async (_req: Request, res: Response) => {
+    this.router.get("/", async (req: Request, res: Response) => {
       try {
-        const profiles = await this.getService().listProfiles();
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const profiles = await this.getService().listProfiles(tenantId);
         res.json({ status: "ok", data: profiles });
       } catch (error: unknown) {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list profiles" });
@@ -57,7 +60,8 @@ export class ProfilesRouter {
           res.status(400).json({ error: "name is required" });
           return;
         }
-        const profile = await this.getService().createProfile({
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const profile = await this.getService().createProfile(tenantId, {
           name: String(name).trim(),
           description: description ? String(description) : undefined,
           genres: Array.isArray(genres) ? genres.map(String) : [],
@@ -75,7 +79,8 @@ export class ProfilesRouter {
           res.status(400).json({ error: "category and platform are required" });
           return;
         }
-        const accounts = await this.getService().resolveAccountsFor(String(category), platform);
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const accounts = await this.getService().resolveAccountsFor(tenantId, String(category), platform);
         res.json({ status: "ok", data: accounts });
       } catch (error: unknown) {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to resolve accounts" });
@@ -84,7 +89,8 @@ export class ProfilesRouter {
 
     this.router.get("/:id", async (req: Request, res: Response) => {
       try {
-        const profile = await this.getService().getProfile(req.params.id);
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const profile = await this.getService().getProfile(tenantId, req.params.id);
         if (!profile) {
           res.status(404).json({ error: "Profile not found" });
           return;
@@ -106,7 +112,8 @@ export class ProfilesRouter {
         if (name !== undefined) patch.name = String(name);
         if (description !== undefined) patch.description = String(description);
         if (genres !== undefined) patch.genres = genres.map(String);
-        const profile = await this.getService().updateProfile(req.params.id, patch);
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const profile = await this.getService().updateProfile(tenantId, req.params.id, patch);
         if (!profile) {
           res.status(404).json({ error: "Profile not found" });
           return;
@@ -119,7 +126,8 @@ export class ProfilesRouter {
 
     this.router.delete("/:id", async (req: Request, res: Response) => {
       try {
-        const removed = await this.getService().removeProfile(req.params.id);
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const removed = await this.getService().removeProfile(tenantId, req.params.id);
         if (!removed) {
           res.status(404).json({ error: "Profile not found" });
           return;
@@ -133,7 +141,8 @@ export class ProfilesRouter {
     // Accounts
     this.router.get("/:id/accounts", async (req: Request, res: Response) => {
       try {
-        const profile = await this.getService().getProfile(req.params.id);
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const profile = await this.getService().getProfile(tenantId, req.params.id);
         if (!profile) {
           res.status(404).json({ error: "Profile not found" });
           return;
@@ -166,7 +175,8 @@ export class ProfilesRouter {
           res.status(400).json({ error: "credentials are required (e.g. botToken+channelId, refreshToken, accessToken)" });
           return;
         }
-        const account = await this.getService().addAccount({
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const account = await this.getService().addAccount(tenantId, {
           profileId: req.params.id,
           provider,
           label: String(label).trim(),
@@ -187,7 +197,8 @@ export class ProfilesRouter {
 
     this.router.delete("/:id/accounts/:accountId", async (req: Request, res: Response) => {
       try {
-        const removed = await this.getService().removeAccount(req.params.id, req.params.accountId);
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const removed = await this.getService().removeAccount(tenantId, req.params.id, req.params.accountId);
         if (!removed) {
           res.status(404).json({ error: "Account not found for this profile" });
           return;
@@ -200,7 +211,8 @@ export class ProfilesRouter {
 
     this.router.post("/:id/accounts/:accountId/refresh", async (req: Request, res: Response) => {
       try {
-        const account = await this.getService().getAccount(req.params.accountId);
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const account = await this.getService().getAccount(tenantId, req.params.accountId);
         if (!account) {
           res.status(404).json({ error: "Account not found" });
           return;
@@ -264,7 +276,8 @@ export class OAuthRouter {
           res.status(400).json({ error: "profileId is required" });
           return;
         }
-        const profile = await this.getService().getProfileRecord(profileId);
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const profile = await this.getService().getProfileRecord(tenantId, profileId);
         if (!profile) {
           res.status(404).json({ error: "Profile not found" });
           return;
@@ -272,6 +285,7 @@ export class OAuthRouter {
         const state = crypto.randomBytes(24).toString("base64url");
         const callbackUri = defaultCallbackUrl({ redirectUri }, provider as PlatformType);
         this.pending.set(state, {
+          tenantId,
           profileId,
           provider: provider as PlatformType,
           redirectUri: callbackUri,
@@ -324,7 +338,7 @@ export class OAuthRouter {
           entry.redirectUri,
           process.env.YOUTUBE_CLIENT_SECRET || "",
         );
-        const account = await this.getService().addAccount({
+        const account = await this.getService().addAccount(entry.tenantId, {
           profileId: entry.profileId,
           provider: entry.provider,
           label: `${entry.provider} account ${result.displayName ? `(${result.displayName})` : ""}`.trim(),

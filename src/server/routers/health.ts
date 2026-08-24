@@ -18,6 +18,7 @@ import { RenderJobStore } from "../../db/RenderJobStore";
 import { PublishJobStore } from "../../db/PublishJobStore";
 import { AiLearningStore, type LearningEvent } from "../../db/AiLearningStore";
 import { readiness } from "../readiness";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 export class HealthRouter {
   public router: Router;
@@ -38,7 +39,7 @@ export class HealthRouter {
     this.router.get("/", (req: Request, res: Response) => this.getHealth(req, res));
     this.router.get("/queue", (req: Request, res: Response) => this.getQueueStats(req, res));
     this.router.get("/queue/states", (req: Request, res: Response) => this.getQueueStates(req, res));
-    this.router.get("/dashboard", (req: Request, res: Response) => this.getDashboard(req, res));
+    this.router.get("/dashboard", requireAuth, (req: Request, res: Response) => this.getDashboard(req, res));
     this.router.get("/metrics", (req: Request, res: Response) => this.getMetrics(req, res));
   }
 
@@ -123,7 +124,9 @@ export class HealthRouter {
     }
   }
 
-  private async getDashboard(_req: Request, res: Response): Promise<void> {
+  private async getDashboard(req: Request, res: Response): Promise<void> {
+    const tenantId = getAuthenticatedTenantId(req);
+    if (!tenantId) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
     try {
       const redisOk = this.config.redisEnabled
         ? await testRedisConnection(this.config).catch(() => false)
@@ -132,10 +135,10 @@ export class HealthRouter {
       const [queueStats, queueStates, database, redis, system, events] = await Promise.all([
         this.buildQueueStats(redisOk),
         this.buildQueueStates(),
-        this.buildDatabaseHealth(),
+        this.buildDatabaseHealth(tenantId),
         this.buildRedisHealth(redisOk),
         this.buildSystemHealth(),
-        this.aiLearningStore.listEvents(500),
+        this.aiLearningStore.listEventsForTenant(tenantId, 500),
       ]);
 
       const errors = this.buildErrorSummary(events);
@@ -256,12 +259,12 @@ export class HealthRouter {
     };
   }
 
-  private async buildDatabaseHealth() {
+  private async buildDatabaseHealth(tenantId: string) {
     const startedAt = Date.now();
     await Promise.all([
       this.renderJobStore.list(),
       this.publishJobStore.listJobs(),
-      this.aiLearningStore.listEvents(50),
+      this.aiLearningStore.listEventsForTenant(tenantId, 50),
     ]);
     const latencyMs = Math.max(1, Date.now() - startedAt);
     const sizeBytes = await this.getDirectorySize(this.config.dataDirPath);

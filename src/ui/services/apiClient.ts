@@ -4,6 +4,7 @@
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from "axios";
+import useAuthStore from "../store/authStore";
 
 /**
  * API Response wrapper type
@@ -92,6 +93,22 @@ class ApiClientService {
       headers: {
         "Content-Type": "application/json",
       },
+    });
+
+    // Request interceptor: use the single persisted auth source for same-origin API calls.
+    // Never forward application credentials to absolute third-party URLs.
+    this.axiosInstance.interceptors.request.use((config) => {
+      const token = useAuthStore.getState().token;
+      const requestUrl = config.url || "";
+      const isAbsoluteExternalUrl = /^https?:\/\//i.test(requestUrl) && !requestUrl.startsWith(baseURL);
+      if (token && !isAbsoluteExternalUrl) {
+        if (config.headers && typeof (config.headers as { set?: unknown }).set === "function") {
+          (config.headers as { set: (name: string, value: string) => void }).set("Authorization", `Bearer ${token}`);
+        } else {
+          config.headers = { ...config.headers, Authorization: `Bearer ${token}` } as typeof config.headers;
+        }
+      }
+      return config;
     });
 
     // Response interceptor for error handling

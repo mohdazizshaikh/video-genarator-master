@@ -18,6 +18,7 @@ import type { PlatformType } from "../../types/shorts";
 import type { PublishJobPayload } from "../../workers/PublishWorker";
 import { validatePublishPayload } from "../../publishers/PlatformLimits";
 import { MetadataGenerator } from "../../services/MetadataGenerator";
+import { getAuthenticatedTenantId } from "../auth";
 
 const ALLOWED_PLATFORMS: PlatformType[] = ["youtube", "telegram", "instagram", "facebook", "linkedin", "x"];
 
@@ -59,7 +60,7 @@ export class PublishRouter {
       return;
     }
 
-    const record = await this.videoMetadataStore.get(videoId);
+    const record = await this.videoMetadataStore.get(videoId, getAuthenticatedTenantId(req) ?? undefined);
     if (!record) {
       res.status(404).json({ error: "Video metadata not found" });
       return;
@@ -124,14 +125,16 @@ export class PublishRouter {
       return;
     }
 
-    // Idempotency: check for duplicate
-    const duplicate = await this.publishJobStore.findDuplicate(renderOutputPath, platform as PlatformType);
+    const tenantId = getAuthenticatedTenantId(req) ?? "";
+    // Idempotency is tenant-scoped; one tenant must not suppress another tenant's job.
+    const duplicate = await this.publishJobStore.findDuplicateForTenant(tenantId, renderOutputPath, platform as PlatformType);
     if (duplicate && duplicate.status === "published") {
       res.status(409).json({ error: "Video already published to this platform", jobId: duplicate.id });
       return;
     }
 
     const job = await this.publishJobStore.createJob({
+      tenantId,
       renderOutputPath,
       platform: platform as PlatformType,
       channelId,
@@ -166,6 +169,7 @@ export class PublishRouter {
 
       const publishQueue = createPublishQueue(this.config);
       const payload: PublishJobPayload = {
+        tenantId: getAuthenticatedTenantId(req),
         publishJobId: job.id,
         renderOutputPath,
         platform: platform as PlatformType,
@@ -190,20 +194,22 @@ export class PublishRouter {
 
   private async listPublishJobs(req: Request, res: Response): Promise<void> {
     const status = req.query["status"] as string | undefined;
+    const tenantId = getAuthenticatedTenantId(req) ?? "";
     const jobs = status
-      ? await this.publishJobStore.listJobsByStatus(status as any)
-      : await this.publishJobStore.listJobs();
+      ? await this.publishJobStore.listJobsByStatusForTenant(tenantId, status as any)
+      : await this.publishJobStore.listJobsForTenant(tenantId);
     res.json(jobs);
   }
 
   private async getPublishJob(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
-    const job = await this.publishJobStore.getJob(id);
+    const tenantId = getAuthenticatedTenantId(req) ?? "";
+    const job = await this.publishJobStore.getJobForTenant(tenantId, id);
     if (!job) {
       res.status(404).json({ error: "Publish job not found" });
       return;
     }
-    const attempts = await this.publishJobStore.getAttempts(id);
+    const attempts = await this.publishJobStore.getAttemptsForTenant(tenantId, id);
     res.json({ ...job, attempts });
   }
 }

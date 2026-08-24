@@ -3,6 +3,8 @@ import path from "path";
 import cuid from "cuid";
 
 export interface ChannelConfigRecord {
+  /** Auth-derived owner. Legacy records without this field are not tenant-visible. */
+  tenantId?: string;
   id: string;
   category: string;
   platform: string;
@@ -40,20 +42,37 @@ export class ChannelConfigStore {
     return this.readAll();
   }
 
+  async listForTenant(tenantId: string): Promise<ChannelConfigRecord[]> {
+    if (!tenantId) return [];
+    return (await this.readAll()).filter((record) => record.tenantId === tenantId);
+  }
+
   async create(data: {
+    tenantId: string;
     category: string;
     platform: string;
     channelId: string;
   }): Promise<ChannelConfigRecord> {
     const records = await this.readAll();
     const record: ChannelConfigRecord = {
-      id: `cc_${cuid()}`,
       ...data,
+      tenantId: data.tenantId,
+      id: `cc_${cuid()}`,
       createdAt: new Date().toISOString(),
     };
     records.push(record);
     await this.writeAll(records);
     return record;
+  }
+
+  async deleteForTenant(tenantId: string, id: string): Promise<boolean> {
+    if (!tenantId) return false;
+    const records = await this.readAll();
+    const idx = records.findIndex((record) => record.id === id && record.tenantId === tenantId);
+    if (idx < 0) return false;
+    records.splice(idx, 1);
+    await this.writeAll(records);
+    return true;
   }
 
   async delete(id: string): Promise<boolean> {

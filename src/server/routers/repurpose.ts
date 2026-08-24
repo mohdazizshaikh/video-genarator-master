@@ -5,6 +5,8 @@ import fs from "fs-extra";
 import { logger } from "../../logger";
 import { Config } from "../../config";
 import { RepurposeEngine } from "../../services/RepurposeEngine";
+import { getAuthenticatedTenantId } from "../auth";
+import { ArtifactManifestStore } from "../../db/ArtifactManifestStore";
 
 /**
  * RepurposeRouter – long-form video → short clips (OpusClip-style, OSS).
@@ -20,9 +22,11 @@ export class RepurposeRouter {
   private config: Config;
   private engine: RepurposeEngine | null = null;
   private enginePromise: Promise<RepurposeEngine> | null = null;
+  private manifests: ArtifactManifestStore;
 
   constructor(config: Config) {
     this.config = config;
+    this.manifests = new ArtifactManifestStore(config.dataDirPath);
     this.router = express.Router();
     this.router.use(express.json());
     this.setupRoutes();
@@ -58,6 +62,11 @@ export class RepurposeRouter {
 
   private setupRoutes(): void {
     this.router.post("/", async (req: ExpressRequest, res: ExpressResponse) => {
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) {
+        res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+        return;
+      }
       const { videoPath, clipSeconds, maxClips } = req.body as {
         videoPath?: string;
         clipSeconds?: number;
@@ -80,9 +89,13 @@ export class RepurposeRouter {
       try {
         const engine = await this.getEngine();
         const clips = await engine.repurpose(resolved, {
+          tenantId,
           clipSeconds: clipSeconds || undefined,
           maxClips: maxClips || undefined,
         });
+        for (const clip of clips) {
+          await this.manifests.register({ tenantId, kind: "repurposed-video", localPath: clip.outputPath, mimeType: "video/mp4", lifecycle: "active" });
+        }
         res.json({
           status: "ok",
           source: resolved,
@@ -99,6 +112,12 @@ export class RepurposeRouter {
     });
 
     this.router.get("/", (req: ExpressRequest, res: ExpressResponse) => {
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId) {
+        res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+        return;
+      }
+      const ownerPrefix = `${tenantId.replace(/[^a-zA-Z0-9_-]/g, "-")}__`;
       const videoPath = String(req.query["videoPath"] || "");
       if (!videoPath) {
         res.status(400).json({ error: "videoPath query param is required" });
@@ -115,7 +134,7 @@ export class RepurposeRouter {
       if (fs.existsSync(dir)) {
         clips = fs
           .readdirSync(dir)
-          .filter((f) => f.endsWith(".mp4") && !f.endsWith(".wav"))
+          .filter((f) => f.startsWith(ownerPrefix) && f.endsWith(".mp4") && !f.endsWith(".wav"))
           .map((f) => ({
             fileName: f,
             sizeBytes: fs.statSync(path.join(dir, f)).size,

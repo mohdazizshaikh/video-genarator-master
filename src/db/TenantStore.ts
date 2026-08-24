@@ -82,6 +82,23 @@ export class TenantStore {
     return (await this.readAll()).find((t) => t.id === id);
   }
 
+  /** Return a tenant only when the requested resource belongs to the auth tenant. */
+  async getForTenant(authTenantId: string, requestedTenantId: string): Promise<TenantRecord | undefined> {
+    if (!authTenantId || authTenantId !== requestedTenantId) return undefined;
+    return this.get(requestedTenantId);
+  }
+
+  async listForTenant(authTenantId: string): Promise<TenantRecord[]> {
+    if (!authTenantId) return [];
+    const tenant = await this.get(authTenantId);
+    return tenant ? [tenant] : [];
+  }
+
+  async updateKeysForTenant(authTenantId: string, requestedTenantId: string, apiKeys: Record<string, string>): Promise<TenantRecord | undefined> {
+    if (!authTenantId || authTenantId !== requestedTenantId) return undefined;
+    return this.updateKeys(requestedTenantId, apiKeys);
+  }
+
   async updateKeys(id: string, apiKeys: Record<string, string>): Promise<TenantRecord | undefined> {
     const current = await this.readAll();
     const idx = current.findIndex((t) => t.id === id);
@@ -93,6 +110,15 @@ export class TenantStore {
     };
     await this.writeAll(current);
     return current[idx];
+  }
+
+  async updateEngineConfigForTenant(
+    authTenantId: string,
+    requestedTenantId: string,
+    engineConfig: TenantRecord["engineConfig"],
+  ): Promise<TenantRecord | undefined> {
+    if (!authTenantId || authTenantId !== requestedTenantId) return undefined;
+    return this.updateEngineConfig(requestedTenantId, engineConfig);
   }
 
   async updateEngineConfig(
@@ -114,6 +140,11 @@ export class TenantStore {
     return current[idx];
   }
 
+  async updateEncryptedKeysForTenant(authTenantId: string, requestedTenantId: string, encryptedApiKeys: Record<string, string>): Promise<TenantRecord | undefined> {
+    if (!authTenantId || authTenantId !== requestedTenantId) return undefined;
+    return this.updateEncryptedKeys(requestedTenantId, encryptedApiKeys);
+  }
+
   async updateEncryptedKeys(id: string, encryptedApiKeys: Record<string, string>): Promise<TenantRecord | undefined> {
     const current = await this.readAll();
     const idx = current.findIndex((t) => t.id === id);
@@ -128,6 +159,15 @@ export class TenantStore {
     };
     await this.writeAll(current);
     return current[idx];
+  }
+
+  async updateQuotasForTenant(
+    authTenantId: string,
+    requestedTenantId: string,
+    quotas: NonNullable<TenantRecord["quotas"]>,
+  ): Promise<TenantRecord | undefined> {
+    if (!authTenantId || authTenantId !== requestedTenantId) return undefined;
+    return this.updateQuotas(requestedTenantId, quotas);
   }
 
   async updateQuotas(

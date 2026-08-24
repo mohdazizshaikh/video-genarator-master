@@ -14,6 +14,7 @@ export class VideoMetadataStore {
   }
 
   private buildRecord(params: {
+    tenantId?: string;
     videoId: string;
     scenes: SceneInput[];
     category?: string;
@@ -21,7 +22,7 @@ export class VideoMetadataStore {
     existing?: VideoMetadataRecord;
   }): VideoMetadataRecord {
     const now = new Date().toISOString();
-    const { videoId, scenes, category, signature, existing } = params;
+    const { tenantId, videoId, scenes, category, signature, existing } = params;
 
     const headlines = scenes
       .map((scene) => scene.headline?.trim())
@@ -43,6 +44,7 @@ export class VideoMetadataStore {
     const subcategory = scenes.find((scene) => scene.subcategory?.trim())?.subcategory?.trim() || null;
 
     return {
+      tenantId,
       videoId,
       signature: signature ?? existing?.signature ?? null,
       topic,
@@ -80,13 +82,14 @@ export class VideoMetadataStore {
   }
 
   public upsertFromScenesSync(params: {
+    tenantId?: string;
     videoId: string;
     scenes: SceneInput[];
     category?: string;
     signature?: string | null;
   }): VideoMetadataRecord {
     const records = this.readAllSync();
-    const existingIndex = records.findIndex((item) => item.videoId === params.videoId);
+    const existingIndex = records.findIndex((item) => item.videoId === params.videoId && item.tenantId === params.tenantId);
     const existing = existingIndex >= 0 ? records[existingIndex] : undefined;
     const record = this.buildRecord({ ...params, existing });
 
@@ -101,13 +104,14 @@ export class VideoMetadataStore {
   }
 
   public async upsertFromScenes(params: {
+    tenantId?: string;
     videoId: string;
     scenes: SceneInput[];
     category?: string;
     signature?: string | null;
   }): Promise<VideoMetadataRecord> {
     const records = await this.readAll();
-    const existingIndex = records.findIndex((item) => item.videoId === params.videoId);
+    const existingIndex = records.findIndex((item) => item.videoId === params.videoId && item.tenantId === params.tenantId);
     const existing = existingIndex >= 0 ? records[existingIndex] : undefined;
     const record = this.buildRecord({ ...params, existing });
 
@@ -121,11 +125,16 @@ export class VideoMetadataStore {
     return record;
   }
 
-  public findBySignatureSync(signature: string): VideoMetadataRecord | undefined {
-    return this.readAllSync().find((record) => record.signature === signature);
+  public findBySignatureSync(signature: string, tenantId?: string): VideoMetadataRecord | undefined {
+    return this.readAllSync().find((record) => record.signature === signature && record.tenantId === tenantId);
   }
 
-  public async get(videoId: string): Promise<VideoMetadataRecord | undefined> {
-    return (await this.readAll()).find((record) => record.videoId === videoId);
+  public async get(videoId: string, tenantId?: string): Promise<VideoMetadataRecord | undefined> {
+    return (await this.readAll()).find((record) => record.videoId === videoId && record.tenantId === tenantId);
+  }
+
+  public async listForTenant(tenantId: string): Promise<VideoMetadataRecord[]> {
+    if (!tenantId) return [];
+    return (await this.readAll()).filter((record) => record.tenantId === tenantId);
   }
 }

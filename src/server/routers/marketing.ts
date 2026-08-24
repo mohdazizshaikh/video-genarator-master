@@ -6,6 +6,7 @@ import { ABVariantStore } from "../../db/ABVariantStore";
 import { AnalyticsStore } from "../../db/AnalyticsStore";
 import { SeoOptimizerService } from "../../services/SeoOptimizerService";
 import { ViralStrategyService } from "../../services/ViralStrategyService";
+import { getAuthenticatedTenantId } from "../auth";
 
 export class MarketingRouter {
   public router: Router;
@@ -43,7 +44,8 @@ export class MarketingRouter {
   }
 
   private async createAudienceTarget(req: Request, res: Response): Promise<void> {
-    const { tenantId, category, location, ageGroup, interests = [], score = 0 } = req.body;
+    const { category, location, ageGroup, interests = [], score = 0 } = req.body;
+    const tenantId = getAuthenticatedTenantId(req) ?? "";
     if (!category || !location || !ageGroup) {
       res.status(400).json({ error: "category, location, ageGroup are required" });
       return;
@@ -52,8 +54,8 @@ export class MarketingRouter {
     res.status(201).json(record);
   }
 
-  private async listAudienceTargets(_req: Request, res: Response): Promise<void> {
-    res.json(await this.audienceStore.list());
+  private async listAudienceTargets(req: Request, res: Response): Promise<void> {
+    res.json(await this.audienceStore.listForTenant(getAuthenticatedTenantId(req) ?? ""));
   }
 
   private optimizeSeo(req: Request, res: Response): void {
@@ -85,12 +87,13 @@ export class MarketingRouter {
   }
 
   private async upsertAnalytics(req: Request, res: Response): Promise<void> {
-    const saved = await this.analyticsStore.upsert(req.body);
+    const { tenantId: _ignoredTenantId, ...analytics } = req.body;
+    const saved = await this.analyticsStore.upsertForTenant(getAuthenticatedTenantId(req) ?? "", analytics);
     res.status(201).json(saved);
   }
 
   private async getAnalyticsByVideo(req: Request, res: Response): Promise<void> {
-    const records = await this.analyticsStore.getByVideo(req.params.videoId);
+    const records = await this.analyticsStore.getByVideoForTenant(getAuthenticatedTenantId(req) ?? "", req.params.videoId);
     const totals = records.reduce(
       (acc, r) => {
         acc.views += r.views;
@@ -104,9 +107,10 @@ export class MarketingRouter {
     res.json({ records, totals, viral: this.viralService.score(totals) });
   }
 
-  private async getDashboard(_req: Request, res: Response): Promise<void> {
-    const analytics = await this.analyticsStore.list();
-    const audience = await this.audienceStore.list();
+  private async getDashboard(req: Request, res: Response): Promise<void> {
+    const tenantId = getAuthenticatedTenantId(req) ?? "";
+    const analytics = await this.analyticsStore.listForTenant(tenantId);
+    const audience = await this.audienceStore.listForTenant(tenantId);
     const totalViews = analytics.reduce((sum, a) => sum + a.views, 0);
     const totalLikes = analytics.reduce((sum, a) => sum + a.likes, 0);
 

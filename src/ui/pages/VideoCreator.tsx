@@ -68,6 +68,7 @@ const VideoCreator: React.FC = () => {
     useAiImages: false,
     videoType: VideoTypeEnum.short,
     durationLimit: 60,
+    category: "World",
   });
   const [category, setCategory] = useState("World");
   const [platformPsychology, setPlatformPsychology] = useState("");

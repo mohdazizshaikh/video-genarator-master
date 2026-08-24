@@ -7,6 +7,8 @@ import { logger } from "../../logger";
 import { Config } from "../../config";
 import { ImageFiltersEngine } from "../../services/ImageFiltersEngine";
 import type { FilterType, FilterOptions } from "../../services/ImageFiltersEngine";
+import { getAuthenticatedTenantId } from "../auth";
+import { ArtifactManifestStore } from "../../db/ArtifactManifestStore";
 
 function safePathInDir(dirPath: string, fileName: string): string | null {
   const base = path.resolve(dirPath);
@@ -22,11 +24,13 @@ export class ImageRouter {
   private config: Config;
   private engine: any;
   private filtersEngine: ImageFiltersEngine;
+  private manifests: ArtifactManifestStore;
 
   constructor(config: Config) {
     this.router = express.Router();
     this.config = config;
     this.filtersEngine = new ImageFiltersEngine(config.dataDirPath);
+    this.manifests = new ArtifactManifestStore(config.dataDirPath);
     this.router.use(express.json());
     this.setupRoutes();
     this.initEngine();
@@ -42,11 +46,23 @@ export class ImageRouter {
   }
 
   private setupRoutes() {
+    const tenantPrefix = (req: ExpressRequest): string | null => {
+      const tenantId = getAuthenticatedTenantId(req);
+      return tenantId ? `${tenantId.replace(/[^a-zA-Z0-9_-]/g, "-")}__` : null;
+    };
+    const ownerFileName = (req: ExpressRequest, fileName: string): string | null => {
+      const prefix = tenantPrefix(req);
+      return prefix && fileName.startsWith(prefix) ? fileName : null;
+    };
+
     // ---- Image Generation ----
     this.router.post("/generate", async (req: ExpressRequest, res: ExpressResponse) => {
       if (!this.engine) return res.status(503).json({ error: "Image engine not available — install canvas package" });
       try {
-        const result = await this.engine.generate(req.body);
+        const tenantId = getAuthenticatedTenantId(req);
+        if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+        const result = await this.engine.generate({ ...req.body, tenantId });
+        await this.manifests.register({ tenantId, kind: "generated-image", localPath: result.filePath, mimeType: result.filePath.endsWith(".svg") ? "image/svg+xml" : "image/png", lifecycle: "active" });
         res.json({ status: "ok", data: { ...result, filePath: undefined, fileName: path.basename(result.filePath) } });
       } catch (err) {
         logger.error(err, "Image generation error");
@@ -59,7 +75,10 @@ export class ImageRouter {
       const { quote, author, category } = req.body;
       if (!quote) return res.status(400).json({ error: "quote required" });
       try {
-        const result = await this.engine.generateQuoteCard(quote, author, category);
+        const tenantId = getAuthenticatedTenantId(req);
+        if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+        const result = await this.engine.generateQuoteCard(quote, author, category, tenantId);
+        await this.manifests.register({ tenantId, kind: "generated-image", localPath: result.filePath, mimeType: result.filePath.endsWith(".svg") ? "image/svg+xml" : "image/png", lifecycle: "active" });
         res.json({ status: "ok", data: { ...result, fileName: path.basename(result.filePath) } });
       } catch (err) {
         res.status(500).json({ error: (err as Error).message });
@@ -71,7 +90,10 @@ export class ImageRouter {
       const { title, category } = req.body;
       if (!title) return res.status(400).json({ error: "title required" });
       try {
-        const result = await this.engine.generateThumbnail(title, category);
+        const tenantId = getAuthenticatedTenantId(req);
+        if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+        const result = await this.engine.generateThumbnail(title, category, tenantId);
+        await this.manifests.register({ tenantId, kind: "generated-image", localPath: result.filePath, mimeType: result.filePath.endsWith(".svg") ? "image/svg+xml" : "image/png", lifecycle: "active" });
         res.json({ status: "ok", data: { ...result, fileName: path.basename(result.filePath) } });
       } catch (err) {
         res.status(500).json({ error: (err as Error).message });
@@ -83,7 +105,10 @@ export class ImageRouter {
       const { title, subtitle, platform } = req.body;
       if (!title) return res.status(400).json({ error: "title required" });
       try {
-        const result = await this.engine.generateAnnouncement(title, subtitle, platform);
+        const tenantId = getAuthenticatedTenantId(req);
+        if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+        const result = await this.engine.generateAnnouncement(title, subtitle, platform, tenantId);
+        await this.manifests.register({ tenantId, kind: "generated-image", localPath: result.filePath, mimeType: result.filePath.endsWith(".svg") ? "image/svg+xml" : "image/png", lifecycle: "active" });
         res.json({ status: "ok", data: { ...result, fileName: path.basename(result.filePath) } });
       } catch (err) {
         res.status(500).json({ error: (err as Error).message });
@@ -91,8 +116,9 @@ export class ImageRouter {
     });
 
     this.router.get("/file/:fileName", async (req: ExpressRequest, res: ExpressResponse) => {
-      const filePath = safePathInDir(path.join(this.config.dataDirPath, "generated-images"), req.params.fileName);
-      if (!filePath) return res.status(400).json({ error: "Invalid file name" });
+      const fileName = ownerFileName(req, req.params.fileName);
+      const filePath = fileName ? safePathInDir(path.join(this.config.dataDirPath, "generated-images"), fileName) : null;
+      if (!filePath) return res.status(404).json({ error: "File not found" });
       res.sendFile(filePath, (err) => {
         if (err) res.status(404).json({ error: "File not found" });
       });
@@ -153,13 +179,16 @@ export class ImageRouter {
       try {
         const { filter, title, intensity = 100, width = 400, height = 300 } = req.body as any;
         if (!filter) return res.status(400).json({ error: "filter is required" });
-        const options: FilterOptions = { filter, intensity };
+        const tenantId = getAuthenticatedTenantId(req);
+        if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+        const options: FilterOptions = { filter, intensity, tenantId };
         const filePath = await this.filtersEngine.generateFilterPreview(
           title || filter,
           options,
           width,
           height,
         );
+        await this.manifests.register({ tenantId, kind: "filtered-image", localPath: filePath, mimeType: "image/svg+xml", lifecycle: "active" });
         res.json({
           status: "ok",
           preview: { filePath: undefined, fileName: path.basename(filePath), filter },
@@ -175,8 +204,9 @@ export class ImageRouter {
      * Serve generated filter preview file
      */
     this.router.get("/filters/preview/file/:fileName", (req: ExpressRequest, res: ExpressResponse) => {
-      const filePath = safePathInDir(path.join(this.config.dataDirPath, "filtered-images"), req.params.fileName);
-      if (!filePath) return res.status(400).json({ error: "Invalid file name" });
+      const fileName = ownerFileName(req, req.params.fileName);
+      const filePath = fileName ? safePathInDir(path.join(this.config.dataDirPath, "filtered-images"), fileName) : null;
+      if (!filePath) return res.status(404).json({ error: "File not found" });
       res.sendFile(filePath, (err) => {
         if (err) res.status(404).json({ error: "Filter preview file not found" });
       });
@@ -193,14 +223,18 @@ export class ImageRouter {
         if (!fileName) return res.status(400).json({ error: "fileName is required" });
         if (!filter) return res.status(400).json({ error: "filter is required" });
 
-        const inputPath = safePathInDir(path.join(this.config.dataDirPath, "generated-images"), fileName);
-        if (!inputPath) return res.status(400).json({ error: "Invalid file name" });
-        const options: FilterOptions = { filter, ...rest };
+        const ownedInput = ownerFileName(req, fileName);
+        const inputPath = ownedInput ? safePathInDir(path.join(this.config.dataDirPath, "generated-images"), ownedInput) : null;
+        if (!inputPath) return res.status(404).json({ error: "File not found" });
+        const tenantId = getAuthenticatedTenantId(req);
+        if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+        const options: FilterOptions = { filter, ...rest, tenantId };
 
         const ext = path.extname(fileName).toLowerCase();
         const outputPath = ext === ".svg"
           ? await this.filtersEngine.applyFilterToSvg(inputPath, options)
           : await this.filtersEngine.applyFilterToCanvas(inputPath, options);
+        await this.manifests.register({ tenantId, kind: "filtered-image", localPath: outputPath, mimeType: outputPath.endsWith(".svg") ? "image/svg+xml" : "image/png", lifecycle: "active" });
 
         res.json({
           status: "ok",
@@ -231,14 +265,20 @@ export class ImageRouter {
         if (fileNames.length > 20) return res.status(400).json({ error: "Max 20 files per batch" });
 
         const inputPaths = fileNames.map((f: string) => {
-          const safe = safePathInDir(path.join(this.config.dataDirPath, "generated-images"), f);
+          const owned = ownerFileName(req, f);
+          const safe = owned ? safePathInDir(path.join(this.config.dataDirPath, "generated-images"), owned) : null;
           return safe;
         });
         if (inputPaths.some((p) => p === null)) {
           return res.status(400).json({ error: "Invalid file name in fileNames" });
         }
-        const options: FilterOptions = { filter, ...rest };
+        const tenantId = getAuthenticatedTenantId(req);
+        if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+        const options: FilterOptions = { filter, ...rest, tenantId };
         const results = await this.filtersEngine.batchApplyFilter(inputPaths as string[], options);
+        for (const result of results) {
+          if (result.success) await this.manifests.register({ tenantId, kind: "filtered-image", localPath: result.output, mimeType: result.output.endsWith(".svg") ? "image/svg+xml" : "image/png", lifecycle: "active" });
+        }
 
         res.json({
           status: "ok",
@@ -261,8 +301,9 @@ export class ImageRouter {
      * Serve filtered image files
      */
     this.router.get("/filtered/:fileName", (req: ExpressRequest, res: ExpressResponse) => {
-      const filePath = safePathInDir(path.join(this.config.dataDirPath, "filtered-images"), req.params.fileName);
-      if (!filePath) return res.status(400).json({ error: "Invalid file name" });
+      const fileName = ownerFileName(req, req.params.fileName);
+      const filePath = fileName ? safePathInDir(path.join(this.config.dataDirPath, "filtered-images"), fileName) : null;
+      if (!filePath) return res.status(404).json({ error: "File not found" });
       res.sendFile(filePath, (err) => {
         if (err) res.status(404).json({ error: "Filtered image not found" });
       });

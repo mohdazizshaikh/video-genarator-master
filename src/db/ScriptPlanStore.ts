@@ -2,6 +2,8 @@ import fs from "fs-extra";
 import path from "path";
 
 export interface ScriptPlanItem {
+  /** Auth-derived owner. Legacy plans without this field are not tenant-visible. */
+  tenantId?: string;
   id: string;
   category: string;
   createdAt: string;
@@ -41,8 +43,21 @@ export class ScriptPlanStore {
     return plan;
   }
 
+  public async listForTenant(tenantId: string): Promise<ScriptPlanItem[]> {
+    if (!tenantId) return [];
+    return (await this.readAll())
+      .filter((plan) => plan.tenantId === tenantId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
   public async list(): Promise<ScriptPlanItem[]> {
     return (await this.readAll()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public async getForTenant(tenantId: string, planId: string): Promise<ScriptPlanItem | undefined> {
+    if (!tenantId) return undefined;
+    const plan = await this.get(planId);
+    return plan?.tenantId === tenantId ? plan : undefined;
   }
 
   public async get(planId: string): Promise<ScriptPlanItem | undefined> {
