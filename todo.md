@@ -218,6 +218,13 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Run typecheck, full tests, build, Docker/runtime checks, update evidence, and push the verified commit.
 ## Phase 3 — Safe Reconciliation Remediation
 
+## Next Remaining Migration Slice
+- [x] Re-baseline the latest readiness output, data counts, manifest state, and current owner-dependent blockers.
+- [x] Add a signed/validated reconciliation decision manifest format for explicit tenant mapping or quarantine; never apply it automatically.
+- [x] Add rollback/read-verify evidence validation and prevent cutover when evidence is incomplete.
+- [x] Run focused and full regression, typecheck, build, Docker, and fail-closed migration checks.
+- [x] Update status, matrix, runbook, and checklist with the verified result.
+
 ## Remaining Migration Implementation Slice
 - [x] Re-baseline the current readiness report and identify gaps left after the gated tooling increment.
 - [x] Implement deterministic dual-write/read-verify comparison contracts without changing file-backed authority.
