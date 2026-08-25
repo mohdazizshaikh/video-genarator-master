@@ -64,7 +64,7 @@ export class ArtifactManifestStore {
     this.load();
     const tenantId = requireTenantId(input.tenantId);
     const stat = await fs.stat(input.localPath);
-    if (!stat.isFile()) throw new Error("Artifact lo    if (!stat.isFile()) thile");
+    if (!stat.isFile()) throw new Error("Artifact localPath must point to a file");
     const checksumSha256 = crypto.createHash("sha256").update(await fs.readFile(input.localPath)).digest("hex");
     const now = new Date().toISOString();
     const manifest: ArtifactManifest = {

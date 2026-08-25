@@ -129,3 +129,9 @@ Focused checkpoint tests (2/2), backend typecheck, production build, `git diff -
 `npm run db:migration:preflight` now performs a dry-run-only safety check. It computes migration checksums, compares local checkpoint state, detects checksum drift, reports an active migration lock, inventories local JSON-backed stores for reconciliation planning, and explicitly reports whether `DATABASE_URL` and primary-read cutover are available. It never applies SQL. Without `DATABASE_URL`, it exits with code `2` and preserves file-backed authority.
 
 Full regression passed with 58 files and 134 tests. Backend typecheck, production build, `git diff --check`, Docker rebuild, `/api/health` (`200`), and unauthenticated job-event metrics (`401`) passed. PostgreSQL execution, transactional authority, backup sign-off, reconciliation approval, and cutover remain gated.
+
+## Phase 3 non-destructive reconciliation report — 2026-08-25
+
+`npm run db:migration:reconcile` now produces a deterministic, read-only inventory of local JSON stores, byte sizes, SHA-256 checksums, record counts, tenant-key distributions, and artifact-manifest presence. It never mutates source files. The current checkout reports 27 JSON stores, 2 malformed JSON stores (`reports.json` and `scriptPlans.json`), 79 unowned array records requiring explicit mapping or quarantine, and no durable artifact-manifest file in the current data directory. These are migration blockers, not data to delete automatically.
+
+Focused manifest/checkpoint tests (4/4), full regression (58 files / 134 tests), typecheck, production build, `git diff --check`, Docker rebuild, `/api/health` (`200`), and unauthenticated event metrics (`401`) passed. PostgreSQL/MinIO authority remains disabled.

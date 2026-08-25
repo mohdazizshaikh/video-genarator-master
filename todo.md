@@ -209,3 +209,10 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Implement gated migration preflight and a local reconciliation report.
 - [x] Add regression tests for unavailable database, lock, checksum drift, and rollback safety.
 - [x] Run typecheck, full tests, production build, Docker/runtime checks, update evidence, and push the verified commit.
+
+## Phase 3 — Non-Destructive Reconciliation
+- [x] Audit current local store inventory and migration preflight output.
+- [x] Define non-destructive reconciliation, ownership, and legacy-quarantine rules.
+- [x] Implement reconciliation report and artifact-manifest inventory without mutating source data.
+- [x] Add regression coverage for malformed stores, ownership mismatches, and report determinism.
+- [x] Run typecheck, full tests, build, Docker/runtime checks, update evidence, and push the verified commit.
