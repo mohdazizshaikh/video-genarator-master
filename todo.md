@@ -202,3 +202,10 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Implement the migration-ready boundary while keeping file-backed authority and `RELEASE_CONTROL_PRIMARY_READS=false`.
 - [x] Add regression coverage and run typecheck, full tests, build, Docker, and runtime gates.
 - [x] Update checklist, status, migration evidence, and push the verified follow-up commit.
+
+## Phase 3 — Migration Preflight and Reconciliation Safety
+- [x] Verify canonical checkout and current migration checklist state.
+- [x] Define preflight, lock, reconciliation, and no-cutover invariants.
+- [x] Implement gated migration preflight and a local reconciliation report.
+- [x] Add regression tests for unavailable database, lock, checksum drift, and rollback safety.
+- [x] Run typecheck, full tests, production build, Docker/runtime checks, update evidence, and push the verified commit.

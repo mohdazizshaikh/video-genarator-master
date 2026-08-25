@@ -28,7 +28,8 @@
     "ui:dev": "vite",
     "ui:build": "vite build",
     "ui:preview": "vite preview",
-    "db:migration:status": "node scripts/migrations/status.mjs"
+    "db:migration:status": "node scripts/migrations/status.mjs",
+    "db:migration:preflight": "node scripts/migrations/preflight.mjs"
   },
   "bin": {
     "short-video-maker": "dist/index.js"

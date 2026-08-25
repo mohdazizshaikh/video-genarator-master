@@ -123,3 +123,9 @@ Typecheck, full regression, production build, `git diff --check`, Docker rebuild
 `MigrationCheckpointStore` now provides a non-authoritative local checkpoint ledger with deterministic SQL SHA-256 checksums, pending/applied/drift verification, immutable checksum protection, idempotent recording, atomic persistence, and fail-safe behavior for malformed or absent state. It does not apply SQL and does not replace the file-backed authority.
 
 Focused checkpoint tests (2/2), backend typecheck, production build, `git diff --check`, Docker rebuild, `/api/health` (`200`), and unauthenticated `/api/job-events/outbox/metrics` (`401`) passed. Actual PostgreSQL execution, transactional authority, backup/reconciliation, and cutover remain explicitly gated.
+
+## Phase 3 gated migration preflight — 2026-08-25
+
+`npm run db:migration:preflight` now performs a dry-run-only safety check. It computes migration checksums, compares local checkpoint state, detects checksum drift, reports an active migration lock, inventories local JSON-backed stores for reconciliation planning, and explicitly reports whether `DATABASE_URL` and primary-read cutover are available. It never applies SQL. Without `DATABASE_URL`, it exits with code `2` and preserves file-backed authority.
+
+Full regression passed with 58 files and 134 tests. Backend typecheck, production build, `git diff --check`, Docker rebuild, `/api/health` (`200`), and unauthenticated job-event metrics (`401`) passed. PostgreSQL execution, transactional authority, backup sign-off, reconciliation approval, and cutover remain gated.
