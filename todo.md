@@ -217,6 +217,12 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Add regression coverage for malformed stores, ownership mismatches, and report determinism.
 - [x] Run typecheck, full tests, build, Docker/runtime checks, update evidence, and push the verified commit.
 ## Phase 3 — Safe Reconciliation Remediation
+
+## Local Testing Authentication Override
+- [x] Inspect the existing local authentication/password configuration and Docker env loading; the system uses tenant API keys rather than user passwords.
+- [x] Set a temporary local-only testing credential without committing the generated API key or changing production configuration.
+- [x] Validate API-key authentication, token verification, invalid-credential rejection, and a protected route locally.
+- [x] Document the exact rotation/removal steps in `docs/LOCAL_TEST_AUTH.md`; keep the credential out of GitHub.
 - [x] Add a dry-run-only quarantine/report command for malformed JSON stores; never overwrite source data.
 - [x] Add a dry-run-only quarantine/report command for unowned records; require an explicit tenant mapping manifest before any move.
 - [x] Add fixture validation proving source files remain unchanged and tenant mappings are fail-closed.
