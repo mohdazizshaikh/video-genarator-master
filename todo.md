@@ -195,3 +195,10 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Commit the current canonical implementation with a descriptive message.
 - [x] Push the commit to the main branch.
 - [x] Verify the remote repository and commit without exposing secrets.
+
+## Phase 3 Continuation After GitHub Delivery
+- [x] Verify post-push checkout, clean tree, current remotes, and remaining P0 checklist.
+- [x] Select the next safe PostgreSQL/MinIO or event-delivery boundary without enabling unavailable infrastructure.
+- [x] Implement the migration-ready boundary while keeping file-backed authority and `RELEASE_CONTROL_PRIMARY_READS=false`.
+- [x] Add regression coverage and run typecheck, full tests, build, Docker, and runtime gates.
+- [x] Update checklist, status, migration evidence, and push the verified follow-up commit.

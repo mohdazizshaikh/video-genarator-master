@@ -117,3 +117,9 @@ Focused outbox tests passed, typecheck passed, full regression passed, productio
 The `/api/job-events` router now exposes tenant-scoped event history, tenant-scoped outbox inspection, bounded event metrics, and an admin-key-protected outbox requeue operation. Tenant routes derive ownership only from the authenticated claim; client-supplied tenant IDs are not accepted for reads. Requeue remains an operational action requiring `X-Admin-Key` and returns not-found for unknown or cross-tenant rows. This is local outbox visibility, not a claim of external delivery or PostgreSQL authority.
 
 Typecheck, full regression, production build, `git diff --check`, Docker rebuild, health (`200`), unauthenticated event/outbox inspection (`401`), and unauthenticated requeue (`401`) passed. Durable delivery acknowledgements, PostgreSQL transaction/outbox authority, and full replay UI remain open.
+
+## Phase 3 migration checkpoint foundation — 2026-08-25
+
+`MigrationCheckpointStore` now provides a non-authoritative local checkpoint ledger with deterministic SQL SHA-256 checksums, pending/applied/drift verification, immutable checksum protection, idempotent recording, atomic persistence, and fail-safe behavior for malformed or absent state. It does not apply SQL and does not replace the file-backed authority.
+
+Focused checkpoint tests (2/2), backend typecheck, production build, `git diff --check`, Docker rebuild, `/api/health` (`200`), and unauthenticated `/api/job-events/outbox/metrics` (`401`) passed. Actual PostgreSQL execution, transactional authority, backup/reconciliation, and cutover remain explicitly gated.
