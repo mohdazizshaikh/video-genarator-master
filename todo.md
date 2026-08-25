@@ -218,6 +218,14 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Run typecheck, full tests, build, Docker/runtime checks, update evidence, and push the verified commit.
 ## Phase 3 — Safe Reconciliation Remediation
 
+## Remaining Migration Implementation Slice
+- [x] Re-baseline the current readiness report and identify gaps left after the gated tooling increment.
+- [x] Implement deterministic dual-write/read-verify comparison contracts without changing file-backed authority.
+- [x] Add an authenticated two-tenant acceptance harness that requires owner-provided credentials and fails closed when absent.
+- [x] Add backup/rollback evidence checks and update the migration runbook and matrix.
+- [x] Run the full regression, typecheck, build, Docker, and fail-closed migration checks.
+- [x] Update all status documents and push the verified implementation.
+
 ## Full Migration Readiness Workstream
 - [x] Re-baseline migration blockers, available infrastructure, credentials, and current authority without exposing secrets.
 - [x] Implement gated PostgreSQL migration execution, checksum checkpoints, transactional locking, rollback-on-error, and cutover safety contracts; dual-write/read-verify remains owner/infrastructure gated.

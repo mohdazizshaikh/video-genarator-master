@@ -36,7 +36,8 @@
     "db:migration:apply": "node scripts/migrations/apply.mjs",
     "storage:migration:apply": "node scripts/migrations/artifacts.mjs",
     "db:backup:create": "node scripts/migrations/backup.mjs",
-    "db:backup:verify": "node scripts/migrations/backup.mjs --verify"
+    "db:backup:verify": "node scripts/migrations/backup.mjs --verify",
+    "qa:two-tenant-acceptance": "node scripts/qa/two-tenant-acceptance.mjs"
   },
   "bin": {
     "short-video-maker": "dist/index.js"
