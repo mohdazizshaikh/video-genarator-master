@@ -218,6 +218,15 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Run typecheck, full tests, build, Docker/runtime checks, update evidence, and push the verified commit.
 ## Phase 3 — Safe Reconciliation Remediation
 
+## Full Migration Readiness Workstream
+- [x] Re-baseline migration blockers, available infrastructure, credentials, and current authority without exposing secrets.
+- [x] Implement gated PostgreSQL migration execution, checksum checkpoints, transactional locking, rollback-on-error, and cutover safety contracts; dual-write/read-verify remains owner/infrastructure gated.
+- [x] Implement gated MinIO/S3 artifact copy, path/tenant-prefix validation, checksum/size verification, and local-source rollback safety; signed-access/lifecycle authority remains gated.
+- [ ] Complete malformed-store recovery and unowned-record reconciliation only through owner-approved mapping/quarantine manifests.
+- [~] Add metadata backup/restore verification; authenticated two-tenant acceptance tests remain pending until two owner-approved tenant credentials are available.
+- [x] Run full regression, typecheck, build, Docker/runtime, migration preflight, and storage readiness validation; expected blockers remain fail-closed.
+- [x] Update evidence with a truthful migration-readiness verdict; keep file-backed authority until every gate passes.
+
 ## Local Testing Authentication Override
 - [x] Inspect the existing local authentication/password configuration and Docker env loading; the system uses tenant API keys rather than user passwords.
 - [x] Set a temporary local-only testing credential without committing the generated API key or changing production configuration.

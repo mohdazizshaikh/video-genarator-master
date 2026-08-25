@@ -2,12 +2,12 @@
 
 **Repository:** `/Users/admin/Documents/short-video-creator-master`  
 **Author:** **Manus AI**  
-**Status:** Phase 2 handoff; implementation has not started  
+**Status:** Migration tooling implemented; owner/infrastructure gates remain open
 **Release flag:** `RELEASE_CONTROL_PRIMARY_READS=false`
 
 ## Purpose
 
-This matrix converts the current file-backed ownership decisions into a durable storage plan. It is a design handoff, not evidence that PostgreSQL, MinIO, release control, or durable job events already exist in the promoted checkout.
+This matrix converts the current file-backed ownership decisions into a durable storage plan. The repository now contains gated migration, artifact, readiness, and backup tooling, but this is not evidence that PostgreSQL, MinIO, release control, or durable job events are active in the current deployment.
 
 ## Domain mapping
 
@@ -55,6 +55,6 @@ The first implementation slice should cover tenant/profile/account metadata, sch
 
 ## Current prerequisite audit — 2026-08-24
 
-The promoted Docker Compose stack currently contains only the application and Redis services. No PostgreSQL or MinIO service, client dependency, migration runner, object-store endpoint, bucket configuration, or owner-provided database/object-store credentials are present in the canonical checkout. The application remains file-backed under `DATA_DIR_PATH`, while Redis is configured for BullMQ with append-only persistence and `noeviction`.
+The promoted Docker Compose stack currently contains only the application and Redis services. PostgreSQL and MinIO services, endpoints, buckets, and owner-provided database/object-store credentials are absent from the current deployment. PostgreSQL and S3-compatible client dependencies plus gated migration runners are present in the canonical checkout, but no connection is made unless explicit execution intent and owner approvals are supplied. The application remains file-backed under `DATA_DIR_PATH`, while Redis is configured for BullMQ with append-only persistence and `noeviction`.
 
-Accordingly, this increment does not enable PostgreSQL, MinIO, dual-write, primary reads, signed URLs, or cutover flags. The safe next implementation gate is to add owner-approved service endpoints and secrets through the deployment environment, add the selected client/migration dependencies, then introduce schema and artifact-manifest migrations behind `RELEASE_CONTROL_PRIMARY_READS=false`. Existing local files must remain authoritative until reconciliation and rollback drills pass.
+Accordingly, the current deployment still does not enable PostgreSQL, MinIO, dual-write, primary reads, signed URLs, or cutover flags. The implemented next gate is to provide owner-approved service endpoints and secrets through the deployment environment, resolve reconciliation blockers, run the backup and restore drill, and execute the reviewed schema/object migration behind `RELEASE_CONTROL_PRIMARY_READS=false`. Existing local files remain authoritative until reconciliation and rollback drills pass.

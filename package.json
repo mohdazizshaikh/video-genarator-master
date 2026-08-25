@@ -31,7 +31,12 @@
     "db:migration:status": "node scripts/migrations/status.mjs",
     "db:migration:preflight": "node scripts/migrations/preflight.mjs",
     "db:migration:reconcile": "node scripts/migrations/reconcile.mjs",
-    "db:migration:remediation-plan": "node scripts/migrations/remediation-plan.mjs"
+    "db:migration:remediation-plan": "node scripts/migrations/remediation-plan.mjs",
+    "db:migration:readiness": "node scripts/migrations/readiness.mjs",
+    "db:migration:apply": "node scripts/migrations/apply.mjs",
+    "storage:migration:apply": "node scripts/migrations/artifacts.mjs",
+    "db:backup:create": "node scripts/migrations/backup.mjs",
+    "db:backup:verify": "node scripts/migrations/backup.mjs --verify"
   },
   "bin": {
     "short-video-maker": "dist/index.js"
@@ -59,6 +64,7 @@
   "author": "David Gyori",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.859.0",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -91,6 +97,7 @@
     "kokoro-js": "^1.2.0",
     "nock": "^14.0.3",
     "node-cron": "^4.2.1",
+    "pg": "^8.16.3",
     "pino": "^9.6.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -112,6 +119,7 @@
     "@types/fs-extra": "^11.0.4",
     "@types/nock": "^11.1.0",
     "@types/node": "^22.14.0",
+    "@types/pg": "^8.15.5",
     "@types/react": "^19.1.0",
     "@types/swagger-ui-express": "^4.1.8",
     "@vitejs/plugin-react": "^4.4.1",
