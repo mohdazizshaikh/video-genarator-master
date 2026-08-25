@@ -135,3 +135,15 @@ Full regression passed with 58 files and 134 tests. Backend typecheck, productio
 `npm run db:migration:reconcile` now produces a deterministic, read-only inventory of local JSON stores, byte sizes, SHA-256 checksums, record counts, tenant-key distributions, and artifact-manifest presence. It never mutates source files. The current checkout reports 27 JSON stores, 2 malformed JSON stores (`reports.json` and `scriptPlans.json`), 79 unowned array records requiring explicit mapping or quarantine, and no durable artifact-manifest file in the current data directory. These are migration blockers, not data to delete automatically.
 
 Focused manifest/checkpoint tests (4/4), full regression (58 files / 134 tests), typecheck, production build, `git diff --check`, Docker rebuild, `/api/health` (`200`), and unauthenticated event metrics (`401`) passed. PostgreSQL/MinIO authority remains disabled.
+
+## Phase 3 safe remediation planner — 2026-08-25
+
+The new `npm run db:migration:remediation-plan` command is intentionally dry-run-only. It inventories malformed JSON stores and array records without `tenantId`, validates an optional explicit mapping manifest, reports proposed actions, and always exits non-zero while blockers remain. It never writes, overwrites, deletes, infers tenant ownership, or applies mappings. Fixture validation confirmed malformed-store and missing-mapping blockers, invalid mapping rejection, explicit mapping recognition, and no source-data mutation.
+
+The current real data remains blocked by the previously identified malformed stores and unowned records. No quarantine or tenant assignment was performed because owner approval and an authoritative mapping are not available. PostgreSQL, MinIO, and primary-read cutover remain disabled.
+
+## Phase 3 remediation validation — 2026-08-25
+
+The dry-run remediation planner is installed as `npm run db:migration:remediation-plan`. Real-data execution remains intentionally blocked by malformed JSON and unowned records. Isolated fixtures confirmed exit code `2` for unresolved blockers, rejection of an unreadable mapping manifest, recognition of an explicit mapping without applying it, and unchanged source-file hashes. No source record was moved, rewritten, deleted, or assigned to a tenant.
+
+Final validation passed with 58 test files and 134 tests, typecheck, production build, `git diff --check`, Docker rebuild, `/api/health` HTTP 200, and protected job-event metrics HTTP 401 without authentication. Migration preflight correctly remains blocked because `DATABASE_URL` is absent and primary-read cutover is disabled; SQL was not applied.

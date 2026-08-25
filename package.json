@@ -30,7 +30,8 @@
     "ui:preview": "vite preview",
     "db:migration:status": "node scripts/migrations/status.mjs",
     "db:migration:preflight": "node scripts/migrations/preflight.mjs",
-    "db:migration:reconcile": "node scripts/migrations/reconcile.mjs"
+    "db:migration:reconcile": "node scripts/migrations/reconcile.mjs",
+    "db:migration:remediation-plan": "node scripts/migrations/remediation-plan.mjs"
   },
   "bin": {
     "short-video-maker": "dist/index.js"

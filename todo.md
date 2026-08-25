@@ -216,3 +216,9 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Implement reconciliation report and artifact-manifest inventory without mutating source data.
 - [x] Add regression coverage for malformed stores, ownership mismatches, and report determinism.
 - [x] Run typecheck, full tests, build, Docker/runtime checks, update evidence, and push the verified commit.
+## Phase 3 — Safe Reconciliation Remediation
+- [x] Add a dry-run-only quarantine/report command for malformed JSON stores; never overwrite source data.
+- [x] Add a dry-run-only quarantine/report command for unowned records; require an explicit tenant mapping manifest before any move.
+- [x] Add fixture validation proving source files remain unchanged and tenant mappings are fail-closed.
+- [x] Re-run the full regression suite, typecheck, build, Docker smoke tests, and migration preflight.
+- [x] Record remediation results and remaining owner-approved blockers in the current status document.
