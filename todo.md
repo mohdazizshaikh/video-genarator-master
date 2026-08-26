@@ -218,6 +218,13 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Run typecheck, full tests, build, Docker/runtime checks, update evidence, and push the verified commit.
 ## Phase 3 — Safe Reconciliation Remediation
 
+## User .env Verification and Local Stack Run
+- [x] Verify required local database, MinIO, auth, and migration variables without printing values.
+- [x] Restart the unified Compose stack from the user-populated `.env`.
+- [x] Validate PostgreSQL, MinIO bucket, Redis, app health, and protected-route authentication.
+- [x] Run migration preflight/readiness and confirm no cutover or destructive migration occurs.
+- [x] Record the result in the status documentation.
+
 ## Local Environment Configuration Guide
 - [x] Verify Docker Compose service names, internal hostnames, ports, and environment variable names.
 - [x] Confirm `.env` remains local-only and secrets are excluded from Git/GitHub.

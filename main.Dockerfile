@@ -73,6 +73,7 @@ COPY src /app/src
 COPY scripts/copy-edge-tts-script.js /app/scripts/copy-edge-tts-script.js
 COPY scripts/migrations /app/scripts/migrations
 COPY scripts/qa/two-tenant-acceptance.mjs /app/scripts/qa/two-tenant-acceptance.mjs
+COPY migrations /app/migrations
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 RUN pnpm build
 RUN mkdir -p /app/cache /app/cache/puppeteer /app/cache/huggingface
@@ -90,6 +91,7 @@ COPY --from=prod-deps /app/node_modules /app/node_modules
 COPY --from=build /app/dist /app/dist
 COPY --from=build /app/scripts/migrations /app/scripts/migrations
 COPY --from=build /app/scripts/qa/two-tenant-acceptance.mjs /app/scripts/qa/two-tenant-acceptance.mjs
+COPY --from=build /app/migrations /app/migrations
 COPY --from=build /app/cache /app/cache
 COPY --from=build /app/cache /app/cache-seed
 COPY package.json /app/
