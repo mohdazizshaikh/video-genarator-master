@@ -218,6 +218,12 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Run typecheck, full tests, build, Docker/runtime checks, update evidence, and push the verified commit.
 ## Phase 3 — Safe Reconciliation Remediation
 
+## Local Environment Configuration Guide
+- [x] Verify Docker Compose service names, internal hostnames, ports, and environment variable names.
+- [x] Confirm `.env` remains local-only and secrets are excluded from Git/GitHub.
+- [x] Provide exact PostgreSQL, MinIO, and temporary-auth setup steps with restart and validation commands.
+- [x] Document local-only endpoint behavior and safe secret rotation.
+
 ## Next Remaining Migration Slice
 - [x] Re-baseline the latest readiness output, data counts, manifest state, and current owner-dependent blockers.
 - [x] Add a signed/validated reconciliation decision manifest format for explicit tenant mapping or quarantine; never apply it automatically.
