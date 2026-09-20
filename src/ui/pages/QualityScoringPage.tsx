@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container,
@@ -37,7 +38,7 @@ function QualityScoringPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/quality/score", {
+      const res = await authenticatedFetch("/api/quality/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ hasAudio, audioLUFS, visualResolution, frameRate, scriptLength }),

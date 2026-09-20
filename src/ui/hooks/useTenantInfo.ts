@@ -42,8 +42,8 @@ export interface TenantBillingSnapshot {
   status?: "active" | "past_due" | "canceled";
 }
 
-export function useTenants() {
-  const query = useQuery<TenantRecord[]>(() => api.tenants.list() as Promise<TenantRecord[]>);
+export function useTenants(enabled = true) {
+  const query = useQuery<TenantRecord[]>(() => api.tenants.list() as Promise<TenantRecord[]>, { enabled });
 
   return {
     ...query,
@@ -81,7 +81,17 @@ export function useTenantMembers(tenant?: TenantRecord | null) {
 
 export function useTenantQuota(tenantId?: string) {
   const query = useQuery<TenantQuotaSnapshot>(
-    () => api.tenants.quota.get(tenantId || "") as Promise<TenantQuotaSnapshot>,
+    async () => {
+      const raw = await api.tenants.quota.get(tenantId || "") as { usage?: { renders?: number; storageBytes?: number }; quota?: { limits?: { monthlyRenders?: number; maxStorageBytes?: number } } };
+      return {
+        apiCallsUsed: 0,
+        apiCallsLimit: 1,
+        rendersUsed: raw.usage?.renders ?? 0,
+        rendersLimit: raw.quota?.limits?.monthlyRenders ?? 1,
+        storageUsedGb: (raw.usage?.storageBytes ?? 0) / 1_000_000_000,
+        storageLimitGb: (raw.quota?.limits?.maxStorageBytes ?? 1_000_000_000) / 1_000_000_000,
+      };
+    },
     { enabled: Boolean(tenantId) },
   );
 
@@ -94,7 +104,16 @@ export function useTenantQuota(tenantId?: string) {
 export function useTenantBilling(tenantId?: string) {
   const month = new Date().toISOString().slice(0, 7);
   const query = useQuery<TenantBillingSnapshot>(
-    () => api.tenants.billing.get(tenantId || "", month) as Promise<TenantBillingSnapshot>,
+    async () => {
+      const raw = await api.tenants.billing.get(tenantId || "", month) as { usage?: { estimatedCostUsd?: number }; plan?: TenantBillingSnapshot["plan"]; amountUsd?: number; usageUsd?: number; status?: TenantBillingSnapshot["status"] };
+      return {
+        plan: raw.plan ?? "free",
+        month,
+        amountUsd: raw.amountUsd ?? 0,
+        usageUsd: raw.usageUsd ?? raw.usage?.estimatedCostUsd ?? 0,
+        status: raw.status ?? "active",
+      };
+    },
     { enabled: Boolean(tenantId) },
   );
 

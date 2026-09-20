@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container,
@@ -34,7 +35,7 @@ function AttentionOptimizerPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/attention/optimize", {
+      const res = await authenticatedFetch("/api/attention/optimize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ duration, platform }),

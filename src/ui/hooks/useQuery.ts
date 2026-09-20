@@ -30,9 +30,17 @@ export function useQuery<T = unknown>(
   const [error, setError] = useState<ApiError | null>(null);
   const retriesRef = useRef(0);
   const isMountedRef = useRef(true);
+  const queryFnRef = useRef(queryFn);
+  const optionsRef = useRef(options);
+  queryFnRef.current = queryFn;
+  optionsRef.current = options;
 
+  // Keep the fetch function stable. Callers commonly create query functions and
+  // option objects inline; depending on those identities here causes an effect
+  // loop that can flood a rate-limited endpoint with requests.
   const fetchData = useCallback(async () => {
-    if (options?.enabled === false) {
+    const currentOptions = optionsRef.current;
+    if (currentOptions?.enabled === false) {
       setIsLoading(false);
       return;
     }
@@ -40,11 +48,11 @@ export function useQuery<T = unknown>(
     try {
       setIsLoading(true);
       setError(null);
-      const result = await queryFn();
+      const result = await queryFnRef.current();
 
       if (isMountedRef.current) {
         setData(result);
-        options?.onSuccess?.(result);
+        currentOptions?.onSuccess?.(result);
       }
       retriesRef.current = 0;
     } catch (err) {
@@ -52,15 +60,15 @@ export function useQuery<T = unknown>(
 
       if (isMountedRef.current) {
         if (
-          (options?.retry ?? 3) > retriesRef.current &&
+          (currentOptions?.retry ?? 3) > retriesRef.current &&
           apiError.status >= 500
         ) {
           retriesRef.current += 1;
-          const delay = options?.retryDelay ?? 1000 * retriesRef.current;
+          const delay = currentOptions?.retryDelay ?? 1000 * retriesRef.current;
           setTimeout(() => fetchData(), delay);
         } else {
           setError(apiError);
-          options?.onError?.(apiError);
+          currentOptions?.onError?.(apiError);
         }
       }
     } finally {
@@ -68,13 +76,18 @@ export function useQuery<T = unknown>(
         setIsLoading(false);
       }
     }
-  }, [queryFn, options]);
+  }, []);
 
   const refetch = useCallback(async () => {
     await fetchData();
   }, [fetchData]);
 
   useEffect(() => {
+    // Re-arm the mounted guard when a disabled query becomes enabled (for example,
+    // immediately after API-key login). The previous implementation permanently
+    // left this ref false during the cleanup of the disabled render, discarding the
+    // authenticated response and leaving tenant selection empty.
+    isMountedRef.current = true;
     if (options?.enabled !== false) {
       fetchData();
     }

@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../logger";
+import { verifyRenderMediaToken } from "../services/RenderMediaToken";
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
 
@@ -55,6 +56,10 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     next();
     return;
   }
+  if (isValidRenderMediaRequest(req)) {
+    next();
+    return;
+  }
   if (!auth?.tenantId) {
     return res.status(401).json({
       error: "Authentication required",
@@ -62,6 +67,15 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     });
   }
   next();
+}
+
+function isValidRenderMediaRequest(req: Request): boolean {
+  if (req.method !== "GET" || !(req.path.startsWith("/tmp/") || req.path.startsWith("/music/"))) {
+    return false;
+  }
+  const token = typeof req.query.mediaToken === "string" ? req.query.mediaToken : "";
+  const fileName = decodeURIComponent(req.path.split("/").pop() || "");
+  return verifyRenderMediaToken(token, undefined, fileName);
 }
 
 export function validateTokenIfPresent(req: Request, res: Response, next: NextFunction) {

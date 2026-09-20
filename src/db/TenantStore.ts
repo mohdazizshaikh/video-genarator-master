@@ -8,6 +8,8 @@ export interface TenantRecord {
   id: string;
   workspaceName: string;
   tier: TenantTier;
+  description?: string;
+  logoUrl?: string;
   apiKeys: Record<string, string>;
   encryptedApiKeys?: Record<string, string>;
   quotas?: {
@@ -52,17 +54,22 @@ export class TenantStore {
   }
 
   async create(params: {
+    id?: string;
     workspaceName: string;
     tier: TenantTier;
     apiKeys?: Record<string, string>;
     encryptedApiKeys?: Record<string, string>;
+    description?: string;
+    logoUrl?: string;
   }): Promise<TenantRecord> {
     const current = await this.readAll();
     const now = new Date().toISOString();
     const tenant: TenantRecord = {
-      id: cuid(),
+      id: params.id ?? cuid(),
       workspaceName: params.workspaceName,
       tier: params.tier,
+      description: params.description,
+      logoUrl: params.logoUrl,
       apiKeys: {},
       encryptedApiKeys: params.encryptedApiKeys ?? {},
       engineConfig: {},
@@ -92,6 +99,20 @@ export class TenantStore {
     if (!authTenantId) return [];
     const tenant = await this.get(authTenantId);
     return tenant ? [tenant] : [];
+  }
+
+  async updateWorkspaceForTenant(
+    authTenantId: string,
+    requestedTenantId: string,
+    updates: { workspaceName?: string; description?: string; logoUrl?: string },
+  ): Promise<TenantRecord | undefined> {
+    if (!authTenantId || authTenantId !== requestedTenantId) return undefined;
+    const current = await this.readAll();
+    const idx = current.findIndex((t) => t.id === requestedTenantId);
+    if (idx < 0) return undefined;
+    current[idx] = { ...current[idx], ...updates, updatedAt: new Date().toISOString() };
+    await this.writeAll(current);
+    return current[idx];
   }
 
   async updateKeysForTenant(authTenantId: string, requestedTenantId: string, apiKeys: Record<string, string>): Promise<TenantRecord | undefined> {
@@ -143,6 +164,18 @@ export class TenantStore {
   async updateEncryptedKeysForTenant(authTenantId: string, requestedTenantId: string, encryptedApiKeys: Record<string, string>): Promise<TenantRecord | undefined> {
     if (!authTenantId || authTenantId !== requestedTenantId) return undefined;
     return this.updateEncryptedKeys(requestedTenantId, encryptedApiKeys);
+  }
+
+  async deleteEncryptedKeyForTenant(authTenantId: string, requestedTenantId: string, keyId: string): Promise<TenantRecord | undefined> {
+    if (!authTenantId || authTenantId !== requestedTenantId) return undefined;
+    const current = await this.readAll();
+    const idx = current.findIndex((t) => t.id === requestedTenantId);
+    if (idx < 0) return undefined;
+    const next = { ...(current[idx].encryptedApiKeys ?? {}) };
+    delete next[keyId];
+    current[idx] = { ...current[idx], encryptedApiKeys: next, updatedAt: new Date().toISOString() };
+    await this.writeAll(current);
+    return current[idx];
   }
 
   async updateEncryptedKeys(id: string, encryptedApiKeys: Record<string, string>): Promise<TenantRecord | undefined> {

@@ -19,6 +19,8 @@ export type NotificationEvent =
 export type WebhookChannel = "telegram" | "slack" | "discord" | "custom";
 
 export interface WebhookConfig {
+  /** Workspace owner; legacy records without this field are quarantined. */
+  tenantId: string;
   id: string;
   name: string;
   channel: WebhookChannel;
@@ -60,6 +62,7 @@ export interface NotificationResult {
 }
 
 export interface NotificationLog {
+  tenantId: string;
   id: string;
   webhookId: string;
   webhookName: string;
@@ -225,8 +228,8 @@ export class WebhookNotificationEngine {
 
   // ── Core dispatch ─────────────────────────────────────────────────────────
 
-  async notify(event: NotificationEvent, title: string, message: string, data?: Record<string, unknown>, severity: NotificationPayload["severity"] = "info"): Promise<NotificationResult[]> {
-    const matching = this.webhooks.filter((w) => w.enabled && w.events.includes(event));
+  async notify(tenantId: string, event: NotificationEvent, title: string, message: string, data?: Record<string, unknown>, severity: NotificationPayload["severity"] = "info"): Promise<NotificationResult[]> {
+    const matching = this.webhooks.filter((w) => w.tenantId === tenantId && w.enabled && w.events.includes(event));
     if (!matching.length) return [];
 
     const payload: NotificationPayload = { event, title, message, data, timestamp: new Date().toISOString(), severity };
@@ -260,6 +263,7 @@ export class WebhookNotificationEngine {
         results.push(result);
 
         this.logs.push({
+          tenantId,
           id: this.generateId(),
           webhookId: webhook.id,
           webhookName: webhook.name,
@@ -288,59 +292,73 @@ export class WebhookNotificationEngine {
     };
     this.webhooks.push(webhook);
     this.save();
-    return webhook;
+    return this.toSafeWebhook(webhook);
   }
 
-  updateWebhook(id: string, updates: Partial<WebhookConfig>): WebhookConfig | null {
-    const idx = this.webhooks.findIndex((w) => w.id === id);
+  private toSafeWebhook(webhook: WebhookConfig): WebhookConfig {
+    return {
+      ...webhook,
+      telegramBotToken: webhook.telegramBotToken ? "[configured]" : undefined,
+      slackWebhookUrl: webhook.slackWebhookUrl ? "[configured]" : undefined,
+      discordWebhookUrl: webhook.discordWebhookUrl ? "[configured]" : undefined,
+      customUrl: webhook.customUrl ? "[configured]" : undefined,
+      customHeaders: webhook.customHeaders ? { "[configured]": "[configured]" } : undefined,
+    };
+  }
+
+  updateWebhook(tenantId: string, id: string, updates: Partial<WebhookConfig>): WebhookConfig | null {
+    const idx = this.webhooks.findIndex((w) => w.id === id && w.tenantId === tenantId);
     if (idx === -1) return null;
     this.webhooks[idx] = { ...this.webhooks[idx], ...updates, id };
     this.save();
-    return this.webhooks[idx];
+    return this.toSafeWebhook(this.webhooks[idx]);
   }
 
-  deleteWebhook(id: string): boolean {
+  deleteWebhook(tenantId: string, id: string): boolean {
     const before = this.webhooks.length;
-    this.webhooks = this.webhooks.filter((w) => w.id !== id);
+    this.webhooks = this.webhooks.filter((w) => !(w.id === id && w.tenantId === tenantId));
     if (this.webhooks.length < before) { this.save(); return true; }
     return false;
   }
 
-  toggleWebhook(id: string): WebhookConfig | null {
-    const w = this.webhooks.find((w) => w.id === id);
+  toggleWebhook(tenantId: string, id: string): WebhookConfig | null {
+    const w = this.webhooks.find((w) => w.id === id && w.tenantId === tenantId);
     if (!w) return null;
     w.enabled = !w.enabled;
     this.save();
-    return w;
+    return this.toSafeWebhook(w);
   }
 
-  getWebhooks(): WebhookConfig[] { return this.webhooks; }
+  getWebhooks(tenantId: string): WebhookConfig[] { return this.webhooks.filter((w) => w.tenantId === tenantId).map((w) => this.toSafeWebhook(w)); }
 
-  getLogs(limit = 100): NotificationLog[] { return this.logs.slice(-limit).reverse(); }
+  getLogs(tenantId: string, limit = 100): NotificationLog[] { return this.logs.filter((log) => log.tenantId === tenantId).slice(-limit).reverse(); }
 
-  getStats() {
+  getStats(tenantId: string) {
+    const webhooks = this.webhooks.filter((w) => w.tenantId === tenantId);
+    const logs = this.logs.filter((log) => log.tenantId === tenantId);
     return {
-      total: this.webhooks.length,
-      enabled: this.webhooks.filter((w) => w.enabled).length,
+      total: webhooks.length,
+      enabled: webhooks.filter((w) => w.enabled).length,
       byChannel: {
-        telegram: this.webhooks.filter((w) => w.channel === "telegram").length,
-        slack: this.webhooks.filter((w) => w.channel === "slack").length,
-        discord: this.webhooks.filter((w) => w.channel === "discord").length,
-        custom: this.webhooks.filter((w) => w.channel === "custom").length,
+        telegram: webhooks.filter((w) => w.channel === "telegram").length,
+        slack: webhooks.filter((w) => w.channel === "slack").length,
+        discord: webhooks.filter((w) => w.channel === "discord").length,
+        custom: webhooks.filter((w) => w.channel === "custom").length,
       },
-      recentLogs: this.logs.slice(-20).reverse(),
-      successRate: this.logs.length
-        ? Math.round((this.logs.filter((l) => l.success).length / this.logs.length) * 100)
+      recentLogs: logs.slice(-20).reverse(),
+      successRate: logs.length
+        ? Math.round((logs.filter((l) => l.success).length / logs.length) * 100)
         : 100,
     };
   }
 
-  async testWebhook(id: string): Promise<NotificationResult[]> {
-    const webhook = this.webhooks.find((w) => w.id === id);
+  async testWebhook(tenantId: string, id: string): Promise<NotificationResult[]> {
+    const webhook = this.webhooks.find((w) => w.id === id && w.tenantId === tenantId);
     if (!webhook) throw new Error(`Webhook ${id} not found`);
     const original = webhook.enabled;
     webhook.enabled = true;
     const results = await this.notify(
+      tenantId,
       "video.ready",
       "Test Notification",
       `This is a test from AI Content Empire. Webhook "${webhook.name}" is working correctly.`,

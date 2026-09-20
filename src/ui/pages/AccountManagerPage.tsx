@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container,
@@ -35,7 +36,7 @@ function AccountManagerPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/account/metrics", {
+      const res = await authenticatedFetch("/api/account/metrics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ totalVideos, totalViews, totalEngagement, followersGained }),
@@ -44,7 +45,7 @@ function AccountManagerPage() {
       const data = await res.json();
       setMetrics(data.metrics);
 
-      const guidanceRes = await fetch("/api/account/guidance", {
+      const guidanceRes = await authenticatedFetch("/api/account/guidance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ metrics: data.metrics }),

@@ -4,6 +4,17 @@ import { ApprovalEngine } from "../../services/ApprovalEngine";
 import { ModerationEngine } from "../../services/ModerationEngine";
 import { ValidationEngine } from "../../services/ValidationEngine";
 import type { Config } from "../../config";
+import { getAuthenticatedTenantId, isAdminRequest } from "../auth";
+function tenantIdFrom(req: Request): string {
+  const tenantId = getAuthenticatedTenantId(req);
+  if (!tenantId) throw new Error("Authenticated workspace is required");
+  return tenantId;
+}
+function canHumanReview(req: Request): boolean {
+  if (isAdminRequest(req)) return true;
+  const permissions = (req as Request & { auth?: { permissions?: string[] } }).auth?.permissions || [];
+  return permissions.includes("release:approve") || permissions.includes("workspace:admin") || permissions.includes("admin");
+}
 
 
 export class ApprovalRouter {
@@ -23,14 +34,14 @@ export class ApprovalRouter {
 
   private register() {
     // Approval queue
-    this.router.get("/queue", (_req: Request, res: Response) => {
-      res.json({ status: "ok", data: this.approval.getAll() });
+    this.router.get("/queue", (req: Request, res: Response) => {
+      res.json({ status: "ok", data: this.approval.getAll(tenantIdFrom(req)) });
     });
-    this.router.get("/queue/pending", (_req: Request, res: Response) => {
-      res.json({ status: "ok", data: this.approval.getPending() });
+    this.router.get("/queue/pending", (req: Request, res: Response) => {
+      res.json({ status: "ok", data: this.approval.getPending(tenantIdFrom(req)) });
     });
-    this.router.get("/queue/stats", (_req: Request, res: Response) => {
-      res.json({ status: "ok", data: this.approval.getStats() });
+    this.router.get("/queue/stats", (req: Request, res: Response) => {
+      res.json({ status: "ok", data: this.approval.getStats(tenantIdFrom(req)) });
     });
     this.router.post("/queue/submit", (req: Request, res: Response) => {
       const { contentId, contentType, title, submittedBy, priority } = req.body;
@@ -38,30 +49,32 @@ export class ApprovalRouter {
         res.status(400).json({ error: "contentId, contentType, title, submittedBy required" });
         return;
       }
-      res.status(201).json({ status: "ok", data: this.approval.submit(contentId, contentType, title, submittedBy, priority) });
+      res.status(201).json({ status: "ok", data: this.approval.submit(tenantIdFrom(req), contentId, contentType, title, submittedBy, priority) });
     });
     this.router.post("/queue/:id/auto-check", (req: Request, res: Response) => {
       const { text } = req.body;
       try {
-        res.json({ status: "ok", data: this.approval.autoCheck(req.params.id, text) });
+        res.json({ status: "ok", data: this.approval.autoCheck(tenantIdFrom(req), req.params.id, text) });
       } catch (err) {
         res.status(404).json({ error: String(err) });
       }
     });
     this.router.post("/queue/:id/review", (req: Request, res: Response) => {
+      if (!canHumanReview(req)) { res.status(403).json({ error: "Human review permission required" }); return; }
       const { status, reviewedBy, comments } = req.body;
       if (!status || !reviewedBy) { res.status(400).json({ error: "status and reviewedBy required" }); return; }
       try {
-        res.json({ status: "ok", data: this.approval.review(req.params.id, status, reviewedBy, comments) });
+        res.json({ status: "ok", data: this.approval.review(tenantIdFrom(req), req.params.id, status, reviewedBy, comments) });
       } catch (err) {
         res.status(404).json({ error: String(err) });
       }
     });
     this.router.patch("/queue/:id/checklist", (req: Request, res: Response) => {
+      if (!canHumanReview(req)) { res.status(403).json({ error: "Human review permission required" }); return; }
       const { checks } = req.body;
       if (!checks) { res.status(400).json({ error: "checks required" }); return; }
       try {
-        res.json({ status: "ok", data: this.approval.updateChecklist(req.params.id, checks) });
+        res.json({ status: "ok", data: this.approval.updateChecklist(tenantIdFrom(req), req.params.id, checks) });
       } catch (err) {
         res.status(404).json({ error: String(err) });
       }

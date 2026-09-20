@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import { TenantStore, type TenantRecord } from "../../db/TenantStore";
@@ -47,9 +48,13 @@ export class TenantRouter {
   private registerRoutes(): void {
     this.router.get("/", (req: Request, res: Response) => this.list(req, res));
     this.router.post("/", requireAdminKey, (req: Request, res: Response) => this.create(req, res));
+    this.router.post("/bootstrap", (req: Request, res: Response) => this.bootstrap(req, res));
     this.router.get("/:tenantId", (req: Request, res: Response) => this.get(req, res));
-    // API-key read/rotation is admin-only.
-    this.router.post("/:tenantId/keys", requireAdminKey, (req: Request, res: Response) => this.updateKeys(req, res));
+    this.router.put("/:tenantId", (req: Request, res: Response) => this.updateWorkspace(req, res));
+    this.router.get("/:tenantId/keys", (req: Request, res: Response) => this.listManagedKeys(req, res));
+    this.router.post("/:tenantId/keys", (req: Request, res: Response) => this.manageManagedKey(req, res));
+    this.router.delete("/:tenantId/keys/:keyId", (req: Request, res: Response) => this.deleteManagedKey(req, res));
+    // Provider credential updates remain admin-only.
     this.router.post("/:tenantId/engines", (req: Request, res: Response) => this.updateEngines(req, res));
     this.router.post("/:tenantId/quotas", (req: Request, res: Response) => this.updateQuotas(req, res));
     this.router.get("/:tenantId/billing", (req: Request, res: Response) => this.getBilling(req, res));
@@ -68,6 +73,31 @@ export class TenantRouter {
         )
       : {};
     const tenant = await this.tenantStore.create({ workspaceName, tier, encryptedApiKeys: encrypted });
+    res.status(201).json(sanitizeTenant(tenant));
+  }
+
+  private async bootstrap(req: Request, res: Response): Promise<void> {
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const workspaceName = String(req.body?.workspaceName || "").trim();
+    const tier = req.body?.tier || "free";
+    if (!workspaceName || !["free", "pro", "enterprise"].includes(tier)) {
+      res.status(400).json({ error: "workspaceName and a valid tier are required" });
+      return;
+    }
+    const existing = await this.tenantStore.get(authTenantId);
+    if (existing) {
+      res.json(sanitizeTenant(existing));
+      return;
+    }
+    const tenant = await this.tenantStore.create({
+      id: authTenantId,
+      workspaceName,
+      tier,
+    });
     res.status(201).json(sanitizeTenant(tenant));
   }
 
@@ -97,6 +127,94 @@ export class TenantRouter {
       return;
     }
     res.json(sanitizeTenant(tenant));
+  }
+
+  private async updateWorkspace(req: Request, res: Response): Promise<void> {
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId && !isAdminRequest(req)) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const workspaceName = String(req.body?.workspaceName || "").trim();
+    if (!workspaceName) {
+      res.status(400).json({ error: "workspaceName is required" });
+      return;
+    }
+    const updates = { workspaceName, description: req.body?.description, logoUrl: req.body?.logoUrl };
+    const updated = isAdminRequest(req)
+      ? await this.tenantStore.updateWorkspaceForTenant(req.params.tenantId, req.params.tenantId, updates)
+      : await this.tenantStore.updateWorkspaceForTenant(authTenantId ?? "", req.params.tenantId, updates);
+    if (!updated) {
+      res.status(404).json({ error: "Tenant not found" });
+      return;
+    }
+    res.json(sanitizeTenant(updated));
+  }
+
+  private async listManagedKeys(req: Request, res: Response): Promise<void> {
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId || authTenantId !== req.params.tenantId) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const tenant = await this.tenantStore.getForTenant(authTenantId, req.params.tenantId);
+    if (!tenant) {
+      res.status(404).json({ error: "Tenant not found" });
+      return;
+    }
+    const keys = Object.keys(tenant.encryptedApiKeys ?? {}).map((id) => ({
+      id,
+      name: id.split("__")[0],
+      prefix: "••••",
+      createdAt: tenant.createdAt,
+    }));
+    res.json(keys);
+  }
+
+  private async manageManagedKey(req: Request, res: Response): Promise<void> {
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId || authTenantId !== req.params.tenantId) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const tenant = await this.tenantStore.getForTenant(authTenantId, req.params.tenantId);
+    if (!tenant) {
+      res.status(404).json({ error: "Tenant not found" });
+      return;
+    }
+    const action = req.body?.action;
+    const requestedName = String(req.body?.name || "").trim();
+    const keyId = action === "regenerate" ? String(req.body?.keyId || "") : `${requestedName}__${crypto.randomBytes(8).toString("hex")}`;
+    if (!keyId || (action !== "regenerate" && !requestedName)) {
+      res.status(400).json({ error: action === "regenerate" ? "keyId is required" : "name is required" });
+      return;
+    }
+    if (action === "regenerate" && !(tenant.encryptedApiKeys ?? {})[keyId]) {
+      res.status(404).json({ error: "API key not found" });
+      return;
+    }
+    const value = `cfk_${crypto.randomBytes(24).toString("hex")}`;
+    const updated = await this.tenantStore.updateEncryptedKeysForTenant(authTenantId, req.params.tenantId, { [keyId]: this.crypto.encrypt(value) });
+    if (!updated) {
+      res.status(404).json({ error: "Tenant not found" });
+      return;
+    }
+    res.status(action === "regenerate" ? 200 : 201).json({ id: keyId, name: keyId.split("__")[0], prefix: value.slice(0, 12) + "...", value });
+  }
+
+  private async deleteManagedKey(req: Request, res: Response): Promise<void> {
+    const authTenantId = getAuthenticatedTenantId(req);
+    if (!authTenantId || authTenantId !== req.params.tenantId) {
+      res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
+      return;
+    }
+    const tenant = await this.tenantStore.getForTenant(authTenantId, req.params.tenantId);
+    if (!tenant || !(tenant.encryptedApiKeys ?? {})[req.params.keyId]) {
+      res.status(404).json({ error: "API key not found" });
+      return;
+    }
+    await this.tenantStore.deleteEncryptedKeyForTenant(authTenantId, req.params.tenantId, req.params.keyId);
+    res.status(204).send();
   }
 
   private async updateKeys(req: Request, res: Response): Promise<void> {

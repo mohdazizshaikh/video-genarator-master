@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 /**
  * ImageFilterPage – Advanced image filters with 20+ presets, live preview, and batch apply
  */
@@ -56,7 +57,7 @@ export const ImageFilterPage: React.FC = () => {
         const url = filterPlatform && filterPlatform !== "all"
           ? `/api/image/filters?platform=${filterPlatform}`
           : "/api/image/filters";
-        const res = await fetch(url);
+        const res = await authenticatedFetch(url);
         const data = await res.json();
         if (data.status === "ok") setPresets(data.filters || []);
       } catch { setError("Failed to load filters"); }
@@ -77,7 +78,7 @@ export const ImageFilterPage: React.FC = () => {
 
   const buildCss = async (filter: string, int: number, br: number, con: number, sat: number, bl: number) => {
     try {
-      const res = await fetch("/api/image/filters/css", {
+      const res = await authenticatedFetch("/api/image/filters/css", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filter, intensity: int, brightness: br, contrast: con, saturation: sat, blur: bl }),
       });
@@ -103,7 +104,7 @@ export const ImageFilterPage: React.FC = () => {
     if (!selected) return;
     setPreviewLoading(true); setPreviewFileName(null);
     try {
-      const res = await fetch("/api/image/filters/preview", {
+      const res = await authenticatedFetch("/api/image/filters/preview", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filter: selected.id, title: previewTitle, intensity, brightness, contrast, saturation, blur }),
       });

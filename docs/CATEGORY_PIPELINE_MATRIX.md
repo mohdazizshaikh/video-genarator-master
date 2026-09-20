@@ -1,0 +1,48 @@
+# Category-to-Pipeline Matrix
+
+## Purpose
+
+The Content Factory must not route every category through a single news-like visual treatment. Category selection is a product decision that controls the editorial structure, visual language, media search strategy, audio mood, caption behavior, pacing, and call-to-action rules. This document is the source of truth for that mapping.
+
+The matrix covers the canonical categories currently declared by `src/services/CategoryEngine.ts`. A category profile must be deterministic, tenant-safe, factual where applicable, and explicit about whether the content is editorial, educational, entertainment, or promotional. No profile may silently fall back to the News overlay.
+
+## Category matrix
+
+| Category | Content intent | Structure | Visual direction | Caption treatment | Music/pacing | Media-selection rule | CTA rule | Status |
+|---|---|---|---|---|---|---|---|---|
+| News | Timely factual reporting | Breaking, explainer, story | Editorial lower-third, source/time context, restrained alert accent | Short factual lines; sentence case or controlled uppercase for alerts | Urgent but not sensational; fast hook, clear context | Verified source/topic media only; no generic business B-roll | Read source / follow for updates | Existing news path retained |
+| Tech | Product and technology explanation | Explainer, demo, story | Clean interface/device/data visuals; precise geometry | Concise sentence case; highlight technical terms | Curious, modern, medium-fast | Query must include concrete technology/topic nouns; avoid newsroom terms | Learn more / explore the product | Needs explicit non-news profile |
+| Finance | Financial education or market commentary | Explainer, listicle, story | Charts, documents, disciplined dark/gold or neutral editorial styling | Numbers and caveats remain readable; no hype formatting | Controlled, analytical pacing | Separate market data from generic money imagery; factual timestamp required for live data | Consult a qualified professional / read more | Needs risk-safe profile |
+| Health | General wellness or health education | Explainer, story, before/after only where factual | Calm clinical/wellness visuals; no implied diagnosis | Accessible sentence case; warning/disclaimer slots | Calm, trustworthy, moderate pacing | Prefer anatomy, care, lifestyle visuals; avoid fear imagery | Speak with a qualified professional / learn more | Needs safety-aware profile |
+| Food | Recipes, ingredients, food discovery | Step-by-step, listicle, story | High-key food close-ups, kitchen motion, ingredient color | Short action-led steps; lower-third or side labels | Upbeat, quick cuts, strong sensory rhythm | Food-specific queries; prioritize ingredient/process footage | Save recipe / try it / visit location | Needs profile |
+| Fitness | Workouts and performance motivation | Step-by-step, challenge, before/after only when substantiated | Dynamic full-body movement, clear exercise framing, energetic accents | Action verbs, readable rep/time cues | High-energy, beat-synced pacing | Exercise-specific queries; avoid unrelated sports/news clips | Follow routine / consult a trainer | Needs profile |
+| Travel | Destination inspiration and practical guidance | Story, listicle, guide | Cinematic location sequences, map/route cues, bright natural grade | Place names and practical tips; minimal obstruction | Warm, adventurous, medium-fast | Destination-specific queries and rights-aware landmarks | Save itinerary / explore destination | Needs profile |
+| Education | Teaching and concept explanation | Explainer, quiz, listicle | Diagrammatic, classroom, screen-recording, clean annotation | Structured lines, definitions, examples; no ticker | Calm-to-curious pacing with reveal moments | Topic-specific educational visuals; avoid sensational stock | Learn more / practice / read the lesson | Needs explicit profile |
+| Entertainment | Pop culture and fun discovery | Story, quiz, listicle, brainrot only when requested | Expressive color, rhythm, performance and culture visuals | Punchy but not all-caps by default | Fast, playful, beat-led | Entity-specific searches; avoid fabricated celebrity context | Watch, listen, or follow | Needs profile |
+| Sports | Scores, highlights, training, analysis | Story, listicle, before/after | Motion, field/court texture, score accents only for verified scores | Compact action labels; score/date/source when editorial | Energetic, fast, beat-synced | Sport/team/event-specific media; no generic breaking-news overlays | Watch highlights / follow the team | Existing family partial |
+| Motivation | Inspirational advice and habits | Story, listicle, brainrot only when requested | Human-centered, warm light, deliberate typography | Sentence case quote/advice cards; avoid fake testimonials | Hopeful, rising, medium pacing | People/action imagery relevant to the advice; no invented success claims | Save, reflect, or follow | Existing family partial |
+| Business | Company, strategy, and entrepreneurship | Marketing, explainer, story | Professional brand system, product/service proof, restrained polish | Clear value statements; no unsupported claims | Confident, medium pace, clean transitions | Company/topic-specific imagery; use verified brand assets only | Visit site / book consultation / learn more | Should share marketing profile with explicit company data |
+| Science | Research and scientific explanation | Explainer, story, quiz | Documentary/scientific visuals, diagrams, measured motion | Definitions and evidence markers; no sensational alert bar | Curious, measured pacing | Research/topic-specific queries; source/date for current findings | Read the source / learn more | Needs explicit non-news profile |
+| Gaming | Gameplay, guides, and esports | Story, listicle, explainer | Game-specific UI/gameplay, expressive but coherent motion | Short tactical captions and control labels | Fast, rhythmic, high-energy | Exact title/platform/mode queries; gameplay rights required | Watch guide / follow / join community | Needs profile |
+| Beauty | Product, routine, and style content | Step-by-step, story, before/after only when factual | High-key studio/editorial beauty visuals, clean swatches | Soft lower-thirds and concise steps | Rhythmic, polished, medium-fast | Exact product/technique queries; no fabricated results | Save routine / learn more / shop only if commerce is enabled | Needs profile |
+| Parenting | Advice and family education | Story, explainer, listicle | Warm, natural, inclusive family scenes | Empathetic, plain-language captions | Calm, supportive pacing | Age/stage-specific queries; avoid unsafe or exploitative imagery | Save tip / consult a professional where relevant | Needs profile |
+| General | Unknown or mixed topic | Story with neutral structure | Neutral documentary treatment; never silently use News | Sentence case, no ticker or breaking chrome | Moderate pacing | Topic-specific queries; require confidence threshold | Read more / follow | Needs neutral fallback |
+| Marketing | Brand, product, service, or company promotion | Brand showcase, story, explainer | Brand-owned color system, proof/value/CTA sequence, no newsroom chrome | Sentence case, clean lower-thirds, end card | Confident, polished, moderate pacing | Brand/service-specific visuals; factual claims only; use approved assets | Verified website/contact CTA only | Implemented for Aaditech; general profile extension pending |
+
+## Shared invariants
+
+Every profile must resolve before rendering and must expose its selected profile in the persisted render configuration. The render worker must receive the complete configuration rather than reconstructing category behavior from defaults.
+
+Editorial categories must preserve source attribution, timestamps, and factuality controls where the content is time-sensitive. Promotional categories must use only approved brand facts, must not fabricate reviews or testimonials, and must not infer performance guarantees from generic stock footage. Health and finance profiles must include their domain-specific safety language when the script crosses into advice.
+
+Media search terms must be generated from the category profile and the scene meaning. Generic terms such as `news`, `breaking`, `headline`, `studio`, or `live` must not be added to non-news profiles unless they are genuinely part of the subject. The same source asset must not be reused across unrelated scenes merely to fill a slot.
+
+Overlay, caption, and chrome components must be profile-aware. `NewsOverlay` is reserved for the News profile and must never be the universal fallback. Unknown categories use the neutral General profile, not News.
+
+## Current audit findings
+
+`CategoryEngine` declares 18 categories, while the video `ThemeEngine` previously covered only a smaller subset and used different names such as `Tech` versus `Technology`. The image-generation palette also covered only eight categories. This creates inconsistent visual identity between video rendering and generated cards. The next implementation slice must centralize these mappings behind category profiles and add tests for every canonical category.
+
+## Acceptance gates
+
+A category implementation is complete only when category resolution, theme resolution, content-template resolution, media query generation, caption/overlay selection, and music selection all agree on the same canonical category. Each category requires at least one resolver test and one representative render or composition test. The production pipeline must pass typecheck, lint, regression tests, and a no-publish render verification before the category is enabled for automated release.

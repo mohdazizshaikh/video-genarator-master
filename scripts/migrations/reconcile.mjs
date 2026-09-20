@@ -2,8 +2,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { isTenantScopedStore } from "./ownership-policy.mjs";
 
 const root = process.cwd();
+try { process.loadEnvFile(path.join(root, ".env")); } catch {}
 const dataDir = process.env.DATA_DIR_PATH || path.join(root, "data");
 const files = fs.existsSync(dataDir) ? fs.readdirSync(dataDir).filter((name) => name.endsWith(".json")).sort() : [];
 const stores = files.map((name) => {
@@ -16,14 +18,14 @@ const stores = files.map((name) => {
   const tenantKeyCounts = {};
   if (Array.isArray(value)) {
     for (const record of value) {
-      const tenantId = record && typeof record === "object" && typeof record.tenantId === "string" && record.tenantId.trim() ? record.tenantId.trim() : "__unowned__";
+      const tenantId = !isTenantScopedStore(name) ? "__platform_or_derived__" : record && typeof record === "object" && typeof record.tenantId === "string" && record.tenantId.trim() ? record.tenantId.trim() : "__unowned__";
       tenantKeyCounts[tenantId] = (tenantKeyCounts[tenantId] || 0) + 1;
     }
   }
   return { name, bytes: raw.byteLength, sha256: crypto.createHash("sha256").update(raw).digest("hex"), validJson, records, tenantKeyCounts };
 });
 const manifestStore = stores.find((store) => store.name === "artifact-manifests.json");
-const unownedRecords = stores.reduce((total, store) => total + (store.tenantKeyCounts.__unowned__ || 0), 0);
+const unownedRecords = stores.reduce((total, store) => total + (isTenantScopedStore(store.name) ? (store.tenantKeyCounts.__unowned__ || 0) : 0), 0);
 const result = {
   mode: "reconciliation-report",
   destructive: false,

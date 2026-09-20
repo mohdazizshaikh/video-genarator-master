@@ -87,7 +87,10 @@ export class TelegramPublisher implements PlatformPublisher {
         publishedUrl: undefined,
       };
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      const message = this.config.telegramBotToken
+        ? rawMessage.split(this.config.telegramBotToken).join("[redacted]")
+        : rawMessage;
       logger.error({ err: message }, "Telegram upload failed");
       return { success: false, error: message };
     }

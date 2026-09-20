@@ -190,7 +190,7 @@ export class AuthEngine {
   }
 
   private getDefaultPermissions(plan: Tenant["plan"]): string[] {
-    const base = ["content:read", "content:write", "publish:basic"];
+    const base = ["content:read", "content:write", "publish:basic", "release:approve"];
     if (plan === "pro") return [...base, "analytics:read", "export:basic", "ab-testing"];
     if (plan === "enterprise") return [...base, "analytics:read", "analytics:write", "export:full", "ab-testing", "api:advanced", "tenants:manage"];
     return base;

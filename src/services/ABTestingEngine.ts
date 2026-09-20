@@ -21,6 +21,8 @@ export interface ABVariant {
 }
 
 export interface ABTest {
+  /** Newly-created experiments must belong to exactly one workspace. */
+  tenantId: string;
   id: string;
   name: string;
   videoId?: string;
@@ -76,7 +78,7 @@ export class ABTestingEngine {
     try { fs.writeJsonSync(this.dataPath, this.tests, { spaces: 2 }); } catch { /* ignore */ }
   }
 
-  createTest(name: string, videoId?: string, variants?: Partial<ABVariant>[]): ABTest {
+  createTest(tenantId: string, name: string, videoId?: string, variants?: Partial<ABVariant>[]): ABTest {
     const id = `abt_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const defaultVariants: ABVariant[] = (variants || [{ name: "Control" }, { name: "Variant A" }]).map((v, i) => ({
       id: `var_${id}_${i}`, testId: id, name: v.name || `Variant ${i}`,
@@ -86,15 +88,15 @@ export class ABTestingEngine {
       ...v,
     }));
 
-    const test: ABTest = { id, name, videoId, status: "running", startedAt: new Date().toISOString(), variants: defaultVariants, sampleSize: 0 };
+    const test: ABTest = { tenantId, id, name, videoId, status: "running", startedAt: new Date().toISOString(), variants: defaultVariants, sampleSize: 0 };
     this.tests.push(test);
     this.save();
     logger.debug({ id, name }, "ABTestingEngine: test created");
     return test;
   }
 
-  recordEvent(testId: string, variantId: string, event: "impression" | "click" | "view" | "completion" | "like" | "share", count = 1): void {
-    const test = this.tests.find((t) => t.id === testId);
+  recordEvent(tenantId: string, testId: string, variantId: string, event: "impression" | "click" | "view" | "completion" | "like" | "share", count = 1): void {
+    const test = this.tests.find((t) => t.id === testId && t.tenantId === tenantId);
     if (!test) { logger.warn({ testId }, "ABTestingEngine: test not found"); return; }
     const variant = test.variants.find((v) => v.id === variantId);
     if (!variant) { logger.warn({ variantId }, "ABTestingEngine: variant not found"); return; }
@@ -109,8 +111,8 @@ export class ABTestingEngine {
     this.save();
   }
 
-  analyze(testId: string): StatResult {
-    const test = this.tests.find((t) => t.id === testId);
+  analyze(tenantId: string, testId: string): StatResult {
+    const test = this.tests.find((t) => t.id === testId && t.tenantId === tenantId);
     if (!test || test.variants.length < 2) {
       return { chiSquare: 0, pValue: 1, significant: false, confidence: 0 };
     }
@@ -154,17 +156,17 @@ export class ABTestingEngine {
     return { chiSquare: Math.round(chiSquare * 100) / 100, pValue: Math.round(pValue * 1000) / 1000, significant, confidence, winner: best.name, winnerCtr: Math.round(ctrBest * 10000) / 100, loserCtr: Math.round(ctrWorst * 10000) / 100, relativeLift };
   }
 
-  getTest(id: string): ABTest | undefined { return this.tests.find((t) => t.id === id); }
-  getAllTests(): ABTest[] { return this.tests; }
-  getRunningTests(): ABTest[] { return this.tests.filter((t) => t.status === "running"); }
+  getTest(tenantId: string, id: string): ABTest | undefined { return this.tests.find((t) => t.id === id && t.tenantId === tenantId); }
+  getAllTests(tenantId: string): ABTest[] { return this.tests.filter((t) => t.tenantId === tenantId); }
+  getRunningTests(tenantId: string): ABTest[] { return this.tests.filter((t) => t.tenantId === tenantId && t.status === "running"); }
 
-  pauseTest(id: string): void {
-    const t = this.tests.find((t) => t.id === id);
+  pauseTest(tenantId: string, id: string): void {
+    const t = this.tests.find((t) => t.id === id && t.tenantId === tenantId);
     if (t) { t.status = "paused"; this.save(); }
   }
 
-  resumeTest(id: string): void {
-    const t = this.tests.find((t) => t.id === id);
+  resumeTest(tenantId: string, id: string): void {
+    const t = this.tests.find((t) => t.id === id && t.tenantId === tenantId);
     if (t) { t.status = "running"; this.save(); }
   }
 }

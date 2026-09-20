@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container,
@@ -39,7 +40,7 @@ function ThumbnailPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/thumbnail/generate", {
+      const res = await authenticatedFetch("/api/thumbnail/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, contrast, emotionalTrigger: emotion, bgColor, textColor, accentColor }),

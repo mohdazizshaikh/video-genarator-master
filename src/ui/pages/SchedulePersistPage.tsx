@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 /**
  * SchedulePersistPage – Full schedule management with persistence
  * Create, list, pause/resume, and monitor scheduled publishing jobs
@@ -140,8 +141,8 @@ export const SchedulePersistPage: React.FC = () => {
     setLoading(true); setError(null);
     try {
       const [schedsRes, statsRes] = await Promise.all([
-        fetch("/api/schedule?limit=100"),
-        fetch("/api/schedule/stats"),
+        authenticatedFetch("/api/schedule?limit=100"),
+        authenticatedFetch("/api/schedule/stats"),
       ]);
       const sd = await schedsRes.json();
       const st = await statsRes.json();
@@ -159,7 +160,7 @@ export const SchedulePersistPage: React.FC = () => {
     setSmartScheduleLoading(true);
     setSmartScheduleResult(null);
     try {
-      const res = await fetch(`/api/schedule/best-times?platform=${form.platforms[0]}&category=${form.categories[0] || "General"}`);
+      const res = await authenticatedFetch(`/api/schedule/best-times?platform=${form.platforms[0]}&category=${form.categories[0] || "General"}`);
       const data = await res.json();
       if (data.status === "ok" && data.bestTimes?.hour !== undefined) {
         const base = new Date(form.publishAt || new Date().toISOString());
@@ -179,7 +180,7 @@ export const SchedulePersistPage: React.FC = () => {
   const createSchedule = async () => {
     setSaving(true); setError(null);
     try {
-      const res = await fetch("/api/schedule", {
+      const res = await authenticatedFetch("/api/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -202,7 +203,7 @@ export const SchedulePersistPage: React.FC = () => {
 
   const updateStatus = async (id: string, status: string) => {
     try {
-      await fetch(`/api/schedule/${id}/status`, {
+      await authenticatedFetch(`/api/schedule/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
@@ -214,7 +215,7 @@ export const SchedulePersistPage: React.FC = () => {
   const triggerRun = async (id: string) => {
     setTriggering(id);
     try {
-      const res = await fetch(`/api/schedule/${id}/run`, { method: "POST" });
+      const res = await authenticatedFetch(`/api/schedule/${id}/run`, { method: "POST" });
       const data = await res.json();
       if (data.status === "ok") fetchAll();
     } catch {}
@@ -223,7 +224,7 @@ export const SchedulePersistPage: React.FC = () => {
 
   const deleteSchedule = async (id: string) => {
     try {
-      await fetch(`/api/schedule/${id}`, { method: "DELETE" });
+      await authenticatedFetch(`/api/schedule/${id}`, { method: "DELETE" });
       fetchAll();
     } catch {}
   };

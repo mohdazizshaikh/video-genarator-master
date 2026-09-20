@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, Chip, Button, Alert,
@@ -56,9 +57,9 @@ export const StrategyDashboard: React.FC = () => {
     setLoading(true);
     try {
       const [pRes, bRes, nbRes] = await Promise.all([
-        fetch('/api/strategy/platforms'),
-        fetch('/api/strategy/buckets'),
-        fetch('/api/strategy/buckets/next'),
+        authenticatedFetch('/api/strategy/platforms'),
+        authenticatedFetch('/api/strategy/buckets'),
+        authenticatedFetch('/api/strategy/buckets/next'),
       ]);
       const [pData, bData, nbData] = await Promise.all([pRes.json(), bRes.json(), nbRes.json()]);
       if (pData.status === 'ok') { setPlatforms(pData.data); setSelectedPlatform(pData.data[0]); }
@@ -69,7 +70,7 @@ export const StrategyDashboard: React.FC = () => {
   }, []);
 
   const loadCtas = useCallback(async () => {
-    const res = await fetch(`/api/strategy/cta?platform=${ctaPlatform}&category=${ctaCategory}&limit=5`);
+    const res = await authenticatedFetch(`/api/strategy/cta?platform=${ctaPlatform}&category=${ctaCategory}&limit=5`);
     const data = await res.json();
     if (data.status === 'ok') setCtas(data.data);
   }, [ctaPlatform, ctaCategory]);

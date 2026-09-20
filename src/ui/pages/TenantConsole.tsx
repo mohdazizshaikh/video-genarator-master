@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Grid, Stack, Typography } from "@mui/material";
 import WorkspaceSwitcher from "../components/tenant/WorkspaceSwitcher";
+import AuthBootstrap from "../components/AuthBootstrap";
+import useAuthStore from "../store/authStore";
+import { apiClient } from "../services/apiClient";
 import WorkspaceSettings from "../components/tenant/WorkspaceSettings";
 import TeamMembers from "../components/tenant/TeamMembers";
 import APIKeys from "../components/tenant/APIKeys";
@@ -9,6 +12,7 @@ import BillingPage from "../components/tenant/BillingPage";
 import AuditLog, { AuditLogEntry } from "../components/tenant/AuditLog";
 import SubscriptionManagement from "../components/tenant/SubscriptionManagement";
 import Integrations, { IntegrationRecord } from "../components/tenant/Integrations";
+import AutomationRules from "../components/tenant/AutomationRules";
 import { useTenantBilling, useTenantDetails, useTenantKeys, useTenantMembers, useTenantQuota, useTenants } from "../hooks/useTenantInfo";
 import {
   useCancelSubscriptionMutation,
@@ -23,15 +27,31 @@ import {
 } from "../hooks/useTenantMutation";
 
 const TenantConsole: React.FC = () => {
-  const { tenants, isLoading: listLoading, error: listError, refetch: refetchTenants } = useTenants();
-  const [selectedTenantId, setSelectedTenantId] = useState("");
+  const isAuthenticated = useAuthStore((state) => Boolean(state.token && state.user));
+  const authTenantId = useAuthStore((state) => state.user?.tenantId || state.user?.id || "");
+  const authUserName = useAuthStore((state) => state.user?.name || "Workspace");
+  const { tenants, isLoading: listLoading, error: listError, refetch: refetchTenants } = useTenants(isAuthenticated);
+  const [selectedTenantId, setSelectedTenantId] = useState(authTenantId);
   const [latestSecret, setLatestSecret] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    if (!selectedTenantId && authTenantId) {
+      setSelectedTenantId(authTenantId);
+      return;
+    }
     if (!selectedTenantId && tenants.length > 0) {
       setSelectedTenantId(tenants[0].id);
     }
-  }, [selectedTenantId, tenants]);
+  }, [authTenantId, selectedTenantId, tenants]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !authTenantId || listLoading || tenants.length > 0) return;
+    let cancelled = false;
+    void apiClient.post("/api/tenants/bootstrap", { workspaceName: authUserName, tier: "free" })
+      .then(() => { if (!cancelled) void refetchTenants(); })
+      .catch(() => { /* The visible console error remains fail-closed; no child request is sent without a tenant ID. */ });
+    return () => { cancelled = true; };
+  }, [apiClient, authTenantId, authUserName, isAuthenticated, listLoading, refetchTenants, tenants.length]);
 
   const { tenant, refetch: refetchTenant } = useTenantDetails(selectedTenantId);
   const { keys, refetch: refetchKeys } = useTenantKeys(selectedTenantId);
@@ -83,6 +103,15 @@ const TenantConsole: React.FC = () => {
     if (!listLoading && tenants.length === 0) return "No workspaces found. Create one via API, then refresh.";
     return null;
   }, [listError, listLoading, tenants.length]);
+
+  if (!isAuthenticated) {
+    return (
+      <Stack spacing={3}>
+        <Typography variant="h4">Multi-Tenant Console</Typography>
+        <AuthBootstrap />
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={3}>
@@ -203,6 +232,9 @@ const TenantConsole: React.FC = () => {
         </Grid>
         <Grid item xs={12} md={6}>
           <AuditLog entries={auditEntries} />
+        </Grid>
+        <Grid item xs={12}>
+          <AutomationRules onAudit={appendAudit} />
         </Grid>
       </Grid>
     </Stack>

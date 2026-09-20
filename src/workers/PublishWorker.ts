@@ -8,6 +8,9 @@
 import { Worker, Job } from "bullmq";
 import { Config } from "../config";
 import { PublishJobStore } from "../db/PublishJobStore";
+import { ReleaseStore } from "../db/ReleaseStore";
+import { ConnectorStore } from "../db/ConnectorStore";
+import { ConnectorSecretStore } from "../db/ConnectorSecretStore";
 import { JobEventStore } from "../db/JobEventStore";
 import { JobEventOutboxStore } from "../db/JobEventOutboxStore";
 import { JobLifecycleEventService } from "../services/JobLifecycleEventService";
@@ -30,17 +33,28 @@ export interface PublishJobPayload {
   language: string;
   thumbnailPath?: string;
   scheduleAt?: string;
-  /** Optional profile account id. When set, the job publishes to that account. */
+  /** Optional profile account id. Legacy compatibility path only. */
   accountId?: string;
+  /** Target identity for the approved workspace-owned release path. */
+  releaseTargetId?: string;
+  connectorId?: string;
+  destinationId?: string;
 }
 
 export class PublishWorker {
   private worker: Worker;
   private publishJobStore: PublishJobStore;
   private lifecycleEvents: JobLifecycleEventService;
+  private releaseStore: ReleaseStore;
+  private connectorStore: ConnectorStore;
+  private connectorSecrets?: ConnectorSecretStore;
 
   constructor(private config: Config) {
     this.publishJobStore = new PublishJobStore(config.dataDirPath);
+    this.releaseStore = new ReleaseStore(config.dataDirPath);
+    this.connectorStore = new ConnectorStore(config.dataDirPath);
+    const connectorSecret = process.env.TENANT_KEYS_SECRET || "";
+    if (connectorSecret.trim()) this.connectorSecrets = new ConnectorSecretStore(config.dataDirPath, connectorSecret);
     this.lifecycleEvents = new JobLifecycleEventService(new JobEventStore(config.dataDirPath), new JobEventOutboxStore(config.dataDirPath));
 
     const publishConcurrency = Math.max(1, this.config.publishWorkerConcurrency || 3);
@@ -105,11 +119,24 @@ export class PublishWorker {
 
   private async processJob(job: Job<PublishJobPayload>): Promise<void> {
     const { publishJobId, platform, channelId } = job.data;
+    const tenantId = job.data.tenantId;
+    if (!tenantId) throw new Error("Publish job requires an authenticated workspace");
+
+    let releaseTarget;
+    if (job.data.releaseTargetId) {
+      releaseTarget = this.releaseStore.getTarget(tenantId, job.data.releaseTargetId);
+      if (!releaseTarget) throw new Error("Release target not found for workspace");
+      if (releaseTarget.status === "published") {
+        logger.info({ publishJobId, releaseTargetId: releaseTarget.id }, "Release target already published; skipping duplicate worker execution");
+        return;
+      }
+      await this.releaseStore.updateTarget(tenantId, releaseTarget.id, { status: "publishing" });
+    }
 
     logger.info({ jobId: job.id, publishJobId, platform, channelId }, "PublishWorker processing job");
 
     this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "publishing", attempt: job.attemptsMade ?? 0 });
-    await this.publishJobStore.updateJobStatusForTenant(job.data.tenantId ?? "", publishJobId, "publishing");
+    await this.publishJobStore.updateJobStatusForTenant(tenantId, publishJobId, "publishing");
     await job.updateProgress(10);
 
     // Dynamic import of the right publisher based on platform
@@ -117,7 +144,24 @@ export class PublishWorker {
       const { createPublisher } = await import("../publishers/PublisherFactory.js");
 
       let publisher;
-      if (job.data.accountId) {
+      if (job.data.connectorId) {
+        if (!job.data.destinationId) throw new Error("Connector publishing requires a destination");
+        const connector = this.connectorStore.getConnector(tenantId, job.data.connectorId);
+        if (!connector || connector.platform !== platform || connector.status !== "connected") {
+          throw new Error("Connected workspace connector not found or provider mismatch");
+        }
+        const destination = this.connectorStore.listDestinations(tenantId, connector.id).find((candidate) => candidate.id === job.data.destinationId);
+        if (!destination || destination.status !== "verified") throw new Error("Verified workspace destination not found");
+        if (!this.connectorSecrets) throw new Error("Workspace connector secret storage is not configured");
+        const credentials = this.connectorSecrets.get(tenantId, connector.id);
+        if (!credentials || Object.keys(credentials).length === 0) throw new Error("Workspace connector credentials are unavailable");
+        const connectorCredentials = {
+          ...credentials,
+          ...(platform === "telegram" ? { channelId: destination.externalDestinationId } : {}),
+        };
+        const { createPublisherForAccount } = await import("../publishers/PublisherFactory.js");
+        publisher = createPublisherForAccount(platform, this.config, connectorCredentials);
+      } else if (job.data.accountId) {
         const { ProfileService } = await import("../services/ProfileService.js");
         const service = new ProfileService(
           this.config.dataDirPath,
@@ -170,10 +214,17 @@ export class PublishWorker {
         throw new Error(result.error ?? "Unknown publish error");
       }
 
-      await this.publishJobStore.updateJobStatusForTenant(job.data.tenantId ?? "", publishJobId, "published", {
+      await this.publishJobStore.updateJobStatusForTenant(tenantId, publishJobId, "published", {
         externalId: result.externalId,
         publishedUrl: result.publishedUrl,
       });
+      if (releaseTarget) {
+        await this.releaseStore.updateTarget(tenantId, releaseTarget.id, {
+          status: "published",
+          externalId: result.externalId,
+          publishedUrl: result.publishedUrl,
+        });
+      }
 
       await this.publishJobStore.addAttempt({
         publishJobId,
@@ -187,6 +238,9 @@ export class PublishWorker {
 
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      if (releaseTarget) {
+        await this.releaseStore.updateTarget(tenantId, releaseTarget.id, { status: "retryable", lastErrorCode: message.slice(0, 160) });
+      }
       await this.publishJobStore.addAttempt({
         publishJobId,
         attemptNumber: (job.attemptsMade ?? 0) + 1,

@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container,
@@ -35,7 +36,7 @@ function AudioQualityPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/audio/process", {
+      const res = await authenticatedFetch("/api/audio/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentLUFS, targetLUFS }),

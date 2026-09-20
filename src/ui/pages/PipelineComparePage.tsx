@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useRef, useEffect } from "react";
 import {
   Alert,
@@ -363,7 +364,7 @@ export default function PipelineComparePage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    fetch("/api/pipeline/comparisons?limit=5")
+    authenticatedFetch("/api/pipeline/comparisons?limit=5")
       .then((r) => r.json())
       .then((d) => { if (d.data) setHistory(d.data); })
       .catch(() => {});
@@ -380,14 +381,14 @@ export default function PipelineComparePage() {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
       try {
-        const r = await fetch(`/api/pipeline/comparisons/${runId}`);
+        const r = await authenticatedFetch(`/api/pipeline/comparisons/${runId}`);
         const d = await r.json();
         if (d.run) {
           setComparison(d.run);
           if (d.run.status !== "running") {
             if (pollRef.current) clearInterval(pollRef.current);
             setLoading(false);
-            fetch("/api/pipeline/comparisons?limit=5")
+            authenticatedFetch("/api/pipeline/comparisons?limit=5")
               .then((r2) => r2.json())
               .then((d2) => { if (d2.data) setHistory(d2.data); })
               .catch(() => {});
@@ -404,7 +405,7 @@ export default function PipelineComparePage() {
     setComparison(null);
 
     try {
-      const res = await fetch("/api/pipeline/compare", {
+      const res = await authenticatedFetch("/api/pipeline/compare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic: topic.trim(), tone, platforms: selectedPlatforms }),

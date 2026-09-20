@@ -6,6 +6,8 @@ import type { Config } from "../../config";
 import type { ShortCreator } from "../../short-creator/ShortCreator";
 import { SchedulerService } from "../../services/SchedulerService";
 import { getAuthenticatedTenantId } from "../auth";
+import { renderConfig } from "../../types/shorts";
+import { resolveCategoryPipeline } from "../../components/videos/CategoryPipelineProfiles";
 
 export class QueueRouter {
   public router: Router;
@@ -23,17 +25,35 @@ export class QueueRouter {
   }
 
   private async bulkEnqueue(req: Request, res: Response): Promise<void> {
-    const { sceneInput, orientation, category, videoType, subtitleLanguage, namingKey } = req.body;
-    if (!sceneInput || !orientation || !category) {
-      res.status(400).json({ error: "sceneInput, orientation, category are required" });
+    const { sceneInput, config, orientation, category, videoType, subtitleLanguage, namingKey } = req.body;
+    const parsedConfig = renderConfig.safeParse(config ?? { category: category || "Technology", videoType: videoType || "short", subtitleLanguage: subtitleLanguage || "en" });
+    if (!parsedConfig.success) {
+      res.status(400).json({ error: "Valid render config is required", details: parsedConfig.error.flatten() });
+      return;
+    }
+    const normalizedSceneInput = Array.isArray(sceneInput)
+      ? sceneInput
+      : typeof sceneInput === "string" && sceneInput.trim().length > 0
+        ? [{ text: sceneInput.trim(), searchTerms: [String(category)] }]
+        : null;
+    if (!normalizedSceneInput || normalizedSceneInput.length === 0 || !orientation || !category) {
+      res.status(400).json({ error: "sceneInput (array or non-empty string), orientation, category are required" });
       return;
     }
 
     try {
       const tenantId = getAuthenticatedTenantId(req) ?? "";
+      const effectiveCategory = String(category || parsedConfig.data.category || "General");
+      const pipeline = resolveCategoryPipeline(effectiveCategory);
+      const effectiveConfig = {
+        ...parsedConfig.data,
+        category: effectiveCategory,
+        contentTemplate: parsedConfig.data.contentTemplate || pipeline.template,
+      };
       const renderJobId = await this.scheduler.enqueueRenderJob({
         tenantId,
-        sceneInput,
+        sceneInput: normalizedSceneInput,
+        config: effectiveConfig,
         orientation,
         category,
         videoType,

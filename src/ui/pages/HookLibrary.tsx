@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, Chip, Button, TextField,
@@ -80,7 +81,7 @@ export const HookLibrary: React.FC = () => {
   const loadHooks = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/hooks');
+      const res = await authenticatedFetch('/api/hooks');
       const data = await res.json();
       if (data.status === 'ok') { setHooks(data.data); setFiltered(data.data); }
     } catch { /* ignore */ }
@@ -99,19 +100,19 @@ export const HookLibrary: React.FC = () => {
 
   const generateHooks = async () => {
     if (!topic) return;
-    const res = await fetch('/api/hooks/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic, limit: 6 }) });
+    const res = await authenticatedFetch('/api/hooks/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic, limit: 6 }) });
     const data = await res.json();
     if (data.status === 'ok') setGenerated(data.data);
   };
 
   const addHook = async () => {
-    await fetch('/api/hooks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newHook, category: ['General'], platform: newHook.platform.split(',').map((p) => p.trim()), performanceScore: 70 }) });
+    await authenticatedFetch('/api/hooks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newHook, category: ['General'], platform: newHook.platform.split(',').map((p) => p.trim()), performanceScore: 70 }) });
     setAddOpen(false);
     loadHooks();
   };
 
   const deleteHook = async (id: string) => {
-    await fetch(`/api/hooks/${id}`, { method: 'DELETE' });
+    await authenticatedFetch(`/api/hooks/${id}`, { method: 'DELETE' });
     loadHooks();
   };
 

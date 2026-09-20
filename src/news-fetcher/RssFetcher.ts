@@ -93,13 +93,16 @@ export class RssFetcher {
   private parser: Parser;
   private customSourceStore: CustomNewsSourceStore;
 
-  constructor(basePath: string = process.env.DATA_DIR_PATH || path.join(process.cwd(), "data")) {
+  constructor(
+    basePath: string = process.env.DATA_DIR_PATH || path.join(process.cwd(), "data"),
+    private tenantId?: string,
+  ) {
     this.parser = new Parser();
     this.customSourceStore = new CustomNewsSourceStore(basePath);
   }
 
   public listSourcesSync(): NewsSourceDefinition[] {
-    const customSources = this.customSourceStore.listSync().map((source) => this.mapCustomSource(source));
+    const customSources = this.customSourceStore.listSync(this.tenantId).map((source) => this.mapCustomSource(source));
     return [...NEWS_SOURCES, ...customSources]
       .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
   }

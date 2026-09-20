@@ -14,6 +14,7 @@ import { FFMpeg } from "./libraries/FFmpeg";
 import { PexelsAPI } from "./libraries/Pexels";
 import { Config } from "../config";
 import { MusicManager } from "./music";
+import { LanguageEnum } from "../types/shorts";
 
 // mock fs-extra
 vi.mock("fs-extra", () => {
@@ -130,7 +131,7 @@ vi.mock("fluent-ffmpeg", () => {
     pipe: mockPipe,
   }));
 
-  ffmpegMock.setFfmpegPath = vi.fn();
+  (ffmpegMock as any).setFfmpegPath = vi.fn();
 
   return { default: ffmpegMock };
 });
@@ -221,7 +222,7 @@ test("ShortCreator basic current behavior", async () => {
   const remotion = await Remotion.init(config);
 
   // control the render promise resolution
-  let resolveRenderPromise: () => void;
+  let resolveRenderPromise: () => void = () => undefined;
   const renderPromiseMock: Promise<void> = new Promise((resolve) => {
     resolveRenderPromise = resolve;
   });
@@ -255,9 +256,10 @@ test("ShortCreator basic current behavior", async () => {
       {
         text: "test",
         searchTerms: ["test"],
+      language: LanguageEnum.en,
       },
     ],
-    {},
+    {} as any,
     "short",
     "en",
   );
@@ -333,9 +335,10 @@ test("ShortCreator renders the requested base video id when subtitleLanguage is 
       {
         text: "This scene has enough content to pass validation.",
         searchTerms: ["markets", "economy"],
+      language: LanguageEnum.en,
       },
     ],
-    {},
+    {} as any,
     "short",
   );
 
@@ -393,9 +396,10 @@ test("ShortCreator continues rendering when Whisper transcription fails", async 
       {
         text: "This render should still complete even without captions.",
         searchTerms: ["news", "studio"],
+      language: LanguageEnum.en,
       },
     ],
-    {},
+    {} as any,
     "short",
     "en",
   );
@@ -455,12 +459,13 @@ test("ShortCreator returns the existing video id for duplicate ready videos", as
     {
       text: "This duplicate story should resolve to the same already rendered video.",
       searchTerms: ["markets", "earnings"],
+      language: LanguageEnum.en,
       keywords: ["stocks", "quarterly"],
       subcategory: "Markets",
     },
   ];
 
-  const firstVideoId = shortCreator.addToQueue(inputScenes, {}, "short", "en");
+  const firstVideoId = shortCreator.addToQueue(inputScenes, {} as any, "short", "en");
 
   let attempts = 0;
   let status = shortCreator.status(firstVideoId);
@@ -472,7 +477,7 @@ test("ShortCreator returns the existing video id for duplicate ready videos", as
 
   expect(status).toBe("ready");
 
-  const duplicateVideoId = shortCreator.addToQueue(inputScenes, {}, "short", "en");
+  const duplicateVideoId = shortCreator.addToQueue(inputScenes, {} as any, "short", "en");
 
   expect(duplicateVideoId).toBe(firstVideoId);
   expect(renderSpy).toHaveBeenCalledTimes(1);
@@ -522,12 +527,13 @@ test("ShortCreator dedupes scenes with only formatting differences", async () =>
       {
         text: "Markets react as investors digest the latest policy decision.",
         searchTerms: ["market reaction", "policy decision"],
+        language: LanguageEnum.en,
         keywords: ["Investors", "Policy"],
         subcategory: "Markets",
         headline: "MARKETS REACT",
       },
     ],
-    {},
+    {} as any,
     "short",
     "en",
   );
@@ -545,12 +551,13 @@ test("ShortCreator dedupes scenes with only formatting differences", async () =>
       {
         text: "  Markets react as investors digest the latest policy decision.  ",
         searchTerms: ["Policy Decision", "market reaction"],
+        language: LanguageEnum.en,
         keywords: ["policy", "investors"],
         subcategory: "  markets ",
         headline: "markets react",
       },
     ],
-    {},
+    {} as any,
     "short",
     "en",
   );
@@ -603,12 +610,13 @@ test("ShortCreator does not dedupe meaningful variants of the same topic", async
       {
         text: "Investors cheer the policy decision as markets rally sharply.",
         searchTerms: ["market rally", "policy decision"],
+        language: LanguageEnum.en,
         keywords: ["stocks", "rally"],
         subcategory: "Markets",
         headline: "MARKET RELIEF",
       },
     ],
-    {},
+    {} as any,
     "short",
     "en",
   );
@@ -626,12 +634,13 @@ test("ShortCreator does not dedupe meaningful variants of the same topic", async
       {
         text: "Analysts warn the same policy decision may still trigger a delayed selloff.",
         searchTerms: ["market selloff", "policy risk"],
+        language: LanguageEnum.en,
         keywords: ["stocks", "selloff"],
         subcategory: "Markets",
         headline: "RALLY MAY FADE",
       },
     ],
-    {},
+    {} as any,
     "short",
     "en",
   );
@@ -671,6 +680,7 @@ test("ShortCreator builds richer media search terms from cues and domain anchors
     text: "PCB confirms Moeen Ali is available for the IPL final after injury concerns eased.",
     headline: "PCB BACKS MOEEN ALI",
     searchTerms: ["cricket controversy", "sports"],
+    language: LanguageEnum.en,
     keywords: ["PCB", "Moeen Ali", "IPL final"],
     subcategory: "Cricket",
     cues: [
@@ -680,7 +690,6 @@ test("ShortCreator builds richer media search terms from cues and domain anchors
         brollSearchTerms: ["stadium crowd"],
       },
     ],
-    language: "en",
   });
 
   expect(terms).toContain("stadium crowd");

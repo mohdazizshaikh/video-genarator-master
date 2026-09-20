@@ -39,6 +39,7 @@ export interface PipelineJob {
   bulkCount: number;
   autoSchedule: boolean;
   status: PipelineStatus;
+  reviewIds: string[];
   currentStep: string;
   totalVariations: number;
   topVariations: string[];
@@ -123,6 +124,7 @@ export class PipelineStore {
       totalVariations: 0,
       topVariations: [],
       scheduleIds: [],
+      reviewIds: [],
       createdAt: now,
       updatedAt: now,
     };

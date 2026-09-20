@@ -120,6 +120,19 @@ class ApiClientService {
           error.response?.data?.error || error.message || "Unknown error";
         const details = error.response?.data?.details;
 
+        // A persisted token can outlive its JWT. Clear it only after a protected
+        // request actually receives 401; failed login attempts must remain local
+        // form errors rather than causing a redirect loop.
+        const requestUrl = error.config?.url || "";
+        if (
+          status === 401 &&
+          !requestUrl.includes("/api/system/auth/") &&
+          typeof window !== "undefined"
+        ) {
+          useAuthStore.getState().logout();
+          window.dispatchEvent(new CustomEvent("auth-expired"));
+        }
+
         throw new ApiError(status, message, details);
       },
     );

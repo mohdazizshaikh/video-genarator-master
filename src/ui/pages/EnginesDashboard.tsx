@@ -36,6 +36,7 @@ function CompetitorTab() {
   const [creators, setCreators] = useState<unknown[]>([]);
   const [strategy, setStrategy] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reviewComments, setReviewComments] = useState('');
 
   const analyze = async () => {
     setLoading(true);
@@ -603,6 +604,8 @@ function ApprovalTab() {
   };
 
   const review = async (id: string, status: string) => {
+    await API.post(`/approval/queue/${id}/review`, { status, reviewedBy: 'admin', comments: reviewComments || undefined });
+    setReviewComments('');
     await API.post(`/approval/queue/${id}/review`, { status, reviewedBy: 'admin' });
     await load();
   };
@@ -612,6 +615,7 @@ function ApprovalTab() {
       <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
         <TextField label="Content Title" value={title} onChange={e => setTitle(e.target.value)} size="small" sx={{ minWidth: 280 }} />
         <TextField label="Submitted By" value={submittedBy} onChange={e => setSubmittedBy(e.target.value)} size="small" />
+        <TextField label="Reviewer comments" value={reviewComments} onChange={e => setReviewComments(e.target.value)} size="small" sx={{ minWidth: 300 }} placeholder="Explain approval, rejection, or revision" />
         <Button variant="contained" onClick={submit} disabled={loading}>
           {loading ? <CircularProgress size={20} /> : 'Submit for Approval'}
         </Button>
@@ -636,6 +640,16 @@ function ApprovalTab() {
                 <Button size="small" variant="outlined" color="warning" onClick={() => review(it.id as string, 'needs_revision')}>Needs Revision</Button>
               </Box>
               {it.comments ? <Alert severity="info" sx={{ mt: 1 }}>{String(it.comments)}</Alert> : null}
+              {Array.isArray(it.reviewHistory) && it.reviewHistory.length > 0 ? (
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="caption" fontWeight={700}>Review history</Typography>
+                  {(it.reviewHistory as Array<Record<string, unknown>>).slice(-5).map((entry, index) => (
+                    <Typography key={index} variant="caption" display="block" color="text.secondary">
+                      {String(entry.action)} · {String(entry.actor)} · {new Date(String(entry.at)).toLocaleString()}{entry.comments ? ` — ${String(entry.comments)}` : ''}
+                    </Typography>
+                  ))}
+                </Box>
+              ) : null}
             </AccordionDetails>
           </Accordion>
         );

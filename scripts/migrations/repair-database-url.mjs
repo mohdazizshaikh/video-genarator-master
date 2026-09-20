@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+const envPath = path.resolve(process.argv[2] || ".env");
+const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+const backupPath = `${envPath}.pre-url-encoding-${timestamp}.bak`;
+const original = fs.readFileSync(envPath, "utf8");
+const match = original.match(/^(DATABASE_URL=)([^\r\n]*)$/m);
+if (!match) throw new Error("DATABASE_URL line not found");
+const raw = match[2].trim();
+const schemeEnd = raw.indexOf("://");
+const authorityEnd = raw.indexOf("/", schemeEnd + 3);
+if (schemeEnd < 0 || authorityEnd < 0) throw new Error("DATABASE_URL has no standard authority/path shape");
+const authority = raw.slice(schemeEnd + 3, authorityEnd);
+const lastAt = authority.lastIndexOf("@");
+const separator = authority.indexOf(":");
+if (lastAt < 0 || separator < 0 || separator > lastAt) throw new Error("DATABASE_URL credentials shape is not repairable");
+const user = authority.slice(0, separator);
+const password = authority.slice(separator + 1, lastAt);
+const host = authority.slice(lastAt + 1);
+const repaired = `${raw.slice(0, schemeEnd + 3)}${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}${raw.slice(authorityEnd)}`;
+if (repaired === raw) throw new Error("DATABASE_URL does not require URL encoding");
+fs.copyFileSync(envPath, backupPath);
+fs.chmodSync(backupPath, 0o600);
+const updated = original.replace(match[0], `${match[1]}${repaired}`);
+fs.writeFileSync(envPath, updated, { mode: 0o600 });
+console.log(JSON.stringify({ repaired: true, envPath, backupPath, secretValuesPrinted: false, sourceRecordsModified: false }, null, 2));

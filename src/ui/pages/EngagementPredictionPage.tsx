@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container,
@@ -38,7 +39,7 @@ function EngagementPredictionPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/engagement/predict", {
+      const res = await authenticatedFetch("/api/engagement/predict", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ views, hookQuality, topicTrend, postingTime }),

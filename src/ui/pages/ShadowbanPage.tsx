@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect } from "react";
 import {
   Container, Paper, Box, Typography, Alert, Stack, Chip,
@@ -84,7 +85,7 @@ function ShadowbanPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/shadowban/");
+      const res = await authenticatedFetch("/api/shadowban/");
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setStatuses(Array.isArray(data.data) ? data.data : []);

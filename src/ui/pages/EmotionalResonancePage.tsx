@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container,
@@ -37,7 +38,7 @@ function EmotionalResonancePage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/emotional/score", {
+      const res = await authenticatedFetch("/api/emotional/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scriptText: script, audioLength: audioDuration, visualElements }),

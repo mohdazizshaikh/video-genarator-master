@@ -218,6 +218,30 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Run typecheck, full tests, build, Docker/runtime checks, update evidence, and push the verified commit.
 ## Phase 3 — Safe Reconciliation Remediation
 
+## API-Key Onboarding Fix
+- [ ] Trace the browser auth state and first-workspace API contract causing `/api/tenants` and `/api/tenants//keys` to return `401`.
+- [ ] Implement secure local API-key login/session bootstrap without exposing credentials.
+- [ ] Fix first-workspace creation and key-generation UX so empty tenant IDs cannot be submitted.
+- [ ] Validate authenticated protected routes, tenant isolation, workspace creation, and API-key generation.
+- [ ] Update current status and local setup documentation with the corrected login steps.
+
+## Aaditech Local Workspace and Telegram Automation
+- [ ] Inspect the `/tenants` workspace creation flow and Telegram integration configuration.
+- [ ] Create the Aaditech Solution workspace with verified website metadata and tenant isolation.
+- [ ] Configure a Telegram auto-posting target only when the connector, bot permissions, and destination are unambiguous.
+- [ ] Define draft/approval/publish rules so unapproved marketing content is never posted automatically.
+- [ ] Prepare original, verified, non-duplicate Aaditech marketing content and reel brief.
+- [ ] Validate the workspace and automation boundary, then update status documentation.
+
+## End-to-End Pipeline Verification
+- [x] Re-read runtime guidance and inventory current pipeline entrypoints and worker services.
+- [x] Define an isolated, non-destructive test scope and credentials without fabricating provider outcomes.
+- [x] Verify authenticated API, tenant claims, queue/event flow, worker processing, artifacts, and analytics where reachable.
+- [x] Fix the discovered queue-to-render contract mismatch where string `sceneInput` reaches a worker expecting a scene array, then rerun the end-to-end test.
+- [x] Fix renderer access to tenant-scoped `/api/tmp` and `/api/music` media with short-lived signed authorization while preserving external HTTP 401 behavior.
+- [x] Verify negative auth/isolation cases and provider-dependent boundaries; external provider publishing remains intentionally unexecuted.
+- [x] Update current status with a stage-by-stage end-to-end verdict.
+
 ## User .env Verification and Local Stack Run
 - [x] Verify required local database, MinIO, auth, and migration variables without printing values.
 - [x] Restart the unified Compose stack from the user-populated `.env`.
@@ -265,3 +289,338 @@ The promoted newer checkout does not contain the archived master’s `RELEASE_CO
 - [x] Add fixture validation proving source files remain unchanged and tenant mappings are fail-closed.
 - [x] Re-run the full regression suite, typecheck, build, Docker smoke tests, and migration preflight.
 - [x] Record remediation results and remaining owner-approved blockers in the current status document.
+
+## Newly reported tenant-console blockers
+
+- [x] Trace why `/api/health/dashboard` is requested without a valid bearer session and make the request auth-aware or disable it until authenticated.
+- [x] Fix the empty tenant ID state that produces `/api/tenants//logs/workspace`.
+- [x] Replace the invalid `/api/tenants/:tenantId/keys` generation/list/delete contract with an implemented tenant-scoped API-key contract.
+- [x] Rebuild and verify Aaditech workspace selection and API-key generation end to end in the browser.
+
+## Quota request flood reported by browser
+
+- [x] Stabilize quota query function/options references so one tenant-console mount does not create an unbounded request loop.
+- [x] Ensure HTTP 429 responses are treated as terminal for the current fetch and do not trigger rapid retries.
+- [x] Rebuild and verify the quota endpoint request cadence and rendered quota values.
+
+## AI Content Empire dashboard audit findings
+
+- [x] Cross-check `/api/short-videos` failure against the current backend route, auth middleware, and frontend API client.
+- [x] Make dashboard navigation controls route to real pages or clearly mark unavailable destinations.
+- [x] Separate loading, error, and empty video-list states so conflicting messages are not shown together.
+- [x] Determine whether search, filtering, and pagination are required by the current video-list contract and implement only supported behavior.
+- [x] Rebuild and verify dashboard behavior on the local Docker stack.
+
+## Dashboard audit: auth, navigation, and creation flow
+
+- [x] Verify whether the stored session token is expired/invalid and whether the API client handles 401 responses consistently.
+- [x] Verify Create Video, Publish, Analytics, and other sidebar routes in the actual route table and browser.
+- [x] Inventory sidebar items that are real pages versus placeholders or unavailable features; do not label implemented pages as placeholders without evidence.
+- [x] Verify the Create Video form has the required text, media, and render inputs for the current product scope.
+- [x] Verify session-expiry UX redirects or gates safely without weakening authentication.
+- [x] Rebuild and run regression/browser verification for confirmed fixes.
+
+## Multi-workspace connector architecture
+
+- [ ] Document workspace-scoped connector and credential isolation rules.
+- [ ] Define Telegram multi-bot data model, permissions, approvals, and posting lifecycle.
+- [ ] Define social-media connector account mapping, token lifecycle, and per-workspace queues.
+- [ ] Define retries, idempotency, rate limits, audit logs, observability, and failure handling.
+- [ ] Define local Docker and production deployment requirements for connector workers.
+
+## Documentation reconciliation
+
+- [x] Inventory existing connector, tenant, migration, local-setup, and automation documents.
+- [x] Compare the new connector blueprint against existing implementation and runbooks for duplicate or conflicting contracts.
+- [x] Consolidate the connector documentation into one source of truth and cross-link supporting runbooks.
+- [x] Record confirmed implemented items separately from planned connector capabilities.
+- [x] Validate documentation references and report remaining gaps.
+
+## Fresh deep technical audit and implementation plan
+
+- [x] Establish one current baseline across code, runtime, and documentation authority.
+- [x] Audit tenancy, authentication, authorization, and secret boundaries end to end.
+- [x] Audit PostgreSQL/MinIO migration, artifact lifecycle, queues, workers, and recovery controls.
+- [x] Audit connector, publishing, scheduling, approvals, retries, and idempotency against current implementation.
+- [x] Audit frontend routes, state transitions, UX, observability, and test coverage.
+- [x] Rank only confirmed gaps and reconcile duplicate or conflicting plan items.
+- [ ] Write the final dependency-aware implementation plan with acceptance gates.
+
+## Approved end-to-end implementation order
+
+- [x] Freeze canonical workspace, connector, destination, release, and content-version vocabulary.
+- [ ] Classify all routes and complete current file-backed authorization hardening.
+- [ ] Replace protected direct UI fetches with the authenticated client boundary.
+- [ ] Resolve migration reconciliation, backup/restore, database, MinIO, and approval gates without enabling primary reads automatically.
+- [ ] Introduce repository interfaces and verified dual-read/write migration evidence.
+- [ ] Migrate profile accounts into workspace-owned connectors without duplicate active stores.
+- [ ] Add release targets, destination verification, approval enforcement, failure classes, retries, and idempotency.
+- [ ] Implement Telegram connector first, then staged social providers with real credentials or explicit test doubles only.
+- [ ] Complete worker operations, observability, recovery drills, and deployment hardening.
+- [ ] Complete connector UX, authorization matrix, acceptance tests, documentation, and final checkpoint.
+
+## Approved implementation progress
+
+- [x] Canonical workspace/connector/destination/release ownership vocabulary and tests.
+- [x] Workspace-scoped approval and A/B testing access paths.
+- [x] Workspace-scoped webhook CRUD, notification dispatch, and secret-safe responses.
+- [x] Authenticated UI fetch boundary and protected 401 session cleanup.
+- [x] Gated PostgreSQL foundation migration at migrations/001_content_factory.sql; not executed.
+- [x] File-backed workspace-owned ConnectorStore and protected /api/connectors metadata routes.
+- [x] ReleaseStore approval and idempotency foundation; not yet wired to the publish worker.
+- [x] Global provider credential fallback is explicit opt-in and defaults to fail-closed.
+- [ ] Wire ConnectorStore/ReleaseStore into the publish worker and provider verification lifecycle.
+- [ ] Complete PostgreSQL/MinIO readiness prerequisites and perform owner-approved migration.
+- [ ] Add Telegram connector verification and approval-gated publishing.
+- [ ] Add remaining social provider adapters and operational recovery drills.
+
+## End-to-end implementation progress (latest)
+
+- [x] Encrypted workspace-scoped connector secret vault with no plaintext-at-rest storage.
+- [x] Protected connector secret rotation endpoint returns metadata only.
+- [x] Workspace-owned release and release-target API with approval and verified-destination gates.
+- [x] Publish worker recognizes release targets, records publishing/published/retryable lifecycle, and skips already-published targets.
+- [x] Missing gated SQL migration authority added at migrations/001_content_factory.sql; readiness discovers it and still fails closed on unmet gates.
+- [x] Full regression after latest slice: 63 test files / 150 tests passed.
+- [ ] Provider verification must resolve connector secrets from ConnectorSecretStore instead of legacy global Config values.
+- [ ] Migrate legacy ProfileAccount credentials into explicit workspace connector mappings with provenance and rollback.
+- [ ] Add Telegram getMe/getChat/member verification and destination status transitions.
+- [ ] Add provider idempotency/reconciliation and queue retry policies for release targets.
+
+## Connector and release vertical slice progress
+
+- [x] Workspace connector secrets are encrypted at rest in a separate store and are never returned by APIs.
+- [x] Telegram connector destination verification uses official getMe/getChat calls and stores only safe evidence.
+- [x] Verified Telegram destinations transition connector metadata to connected.
+- [x] Approved release targets can be queued with workspace connectorId/destinationId and a deterministic BullMQ job ID.
+- [x] PublishWorker resolves workspace connector credentials and requires a verified destination before provider execution.
+- [x] Unauthenticated connector/release API smoke tests return 401 after Docker rebuild.
+- [ ] Provider-specific secret key schemas and provider adapters remain to be completed one-by-one.
+- [ ] PostgreSQL/MinIO cutover remains gated; no migration data was applied.
+
+## Forensic readiness mismatch audit
+
+- [ ] Compare canonical checkout path with Docker build context, container working directory, and bind-mounted data path.
+- [ ] Compare `.env`/`.env.example` names, dotenv loading, compose interpolation, and runtime environment without printing secrets.
+- [ ] Compare migration directory/name discovery with readiness/apply scripts and documentation references.
+- [ ] Compare every store filename and data directory used by the app, migration tools, and reconciliation tools.
+- [ ] Reconcile tenant/workspace IDs and identify whether unowned records are caused by path, seed, or schema mismatch.
+- [ ] Produce a non-destructive mismatch report before any quarantine, migration, or destructive operation.
+
+## Safe migration-readiness remediation
+
+- [x] Create a non-destructive backup of the canonical `data/` directory and record its manifest/checksums.
+- [x] Repair only the verified zero-byte `reports.json` and `scriptPlans.json` stores as valid empty JSON arrays, preserving the backup.
+- [x] Generate a redacted mapping/quarantine report for the 49 legacy unowned tenant-scoped records before reset; this report is superseded by the completed greenfield reset.
+- [x] Validate the database URL/configuration shape without printing secret values.
+- [x] Rerun migration readiness and reconciliation before reset; the old dataset was then discarded by owner approval. Fresh greenfield readiness now passes with zero unowned records; no PostgreSQL/MinIO migration was applied.
+
+## Greenfield runtime reset
+
+- [x] Audit and freeze the exact reset scope; preserve source code and current configuration.
+- [x] Create an emergency rollback archive outside the active project data path.
+- [x] Stop the Docker stack and remove old file-backed runtime data, PostgreSQL/MinIO/Redis runtime state, and queues.
+- [x] Recreate the clean local stack and verify service health.
+- [x] Verify zero legacy users/workspaces/objects/jobs remain and initialize only required baseline records.
+- [x] Create or onboard the fresh `Aaditech Solution` workspace without publishing to Telegram.
+- [x] Update the authoritative audit and reset evidence.
+
+## Fresh Aaditech Telegram connector
+
+- [x] Inspect connector, destination, release, and encrypted-secret contracts.
+- [x] Confirm the Telegram bot token and destination/chat ID are owner-provided without printing secrets.
+- [x] Implement or refine workspace-scoped Telegram verification using `getMe` and `getChat`.
+- [x] Store Telegram credentials encrypted at rest and retain only safe verification evidence.
+- [x] Verify the Aaditech bot and destination through read-only provider calls.
+- [x] Test release approval and publish safeguards without sending a Telegram post; pre-approval target creation was rejected, owner approval succeeded after the permission fix, and a verified target was created without queueing.
+- [x] Document the exact remaining explicit publish action.
+
+## Telegram publishing-pipeline hardening
+
+- [x] Audit the authoritative plan and current Telegram publish worker path.
+- [x] Trace connector, destination, release target, queue, and worker ownership boundaries.
+- [x] Implement missing workspace-scoped Telegram publish safeguards only where evidence shows a gap; the worker now binds the verified workspace destination ID instead of relying on global channel configuration.
+- [~] Add focused tests for approval, idempotency, routing, and secret redaction; focused lint and 5 release/job-store tests pass, while worker-level mock coverage remains. The full TypeScript check still reports 20 pre-existing fixture/type errors in unrelated test files.
+- [x] Run a no-send release-gate dry run and validate the clean local stack; pre-approval was rejected, approved target creation succeeded, no queue was submitted, and the stack is healthy.
+- [x] Document implementation status and the explicit real-publish action.
+
+## Repository quality gate
+
+- [x] Audit and classify all current TypeScript errors.
+- [x] Repair only safe test fixtures and type contracts without changing runtime behavior.
+- [~] Add regression coverage for workspace destination binding and Telegram secret redaction; production safeguards and focused validation are complete, but dedicated publisher mock tests remain a follow-up.
+- [x] Run full type-check, touched-file lint, focused tests (16 passed), and production build.
+- [x] Run no-send integration checks and validate Docker service health.
+- [x] Document quality-gate results and remaining publish prerequisites.
+
+## Telegram publisher regression coverage
+
+- [ ] Inspect Telegram publisher seams and existing test conventions.
+- [ ] Add isolated mocked tests for `getMe` validation and `sendVideo` request behavior.
+- [ ] Add regression coverage for workspace destination binding and bot-token redaction.
+- [ ] Run focused and full quality gates without provider writes.
+- [ ] Document coverage and remaining explicit publish prerequisites.
+
+## Dedicated Telegram publisher tests
+
+- [x] Inspect current Telegram publisher seams and test conventions.
+- [x] Add mocked `getMe` and `sendVideo` tests with network access blocked.
+- [x] Assert workspace destination routing and bot-token redaction.
+- [x] Run full type-check, lint, tests, and production build.
+- [x] Document coverage and remaining real-publish prerequisites.
+
+## Aaditech first marketing reel package
+
+- [x] Verify factual business information from `https://aditechs.in` and record source URLs; the domain is currently a GoDaddy parked page with no reliable business facts.
+- [x] Audit content-generation and duplicate-detection contracts; the package uses a unique title/script/caption and relies on the greenfield content stores plus normal signature checks.
+- [x] Draft one factual reel script and platform metadata.
+- [ ] Run duplicate-safety and approval-readiness checks.
+- [ ] Create a non-publishing release draft for the verified Telegram destination.
+- [ ] Deliver the package for explicit owner approval; do not publish automatically.
+
+## Corrected Aaditech domain verification
+
+- [x] Re-check `https://aaditechs.in` as the corrected official source and replace the earlier parked-domain conclusion if supported by live content.
+- [x] Preserve source URLs and only use claims visibly supported by the corrected official site.
+
+## Aaditech reel approval-draft validation
+
+- [x] Inspect content and release contract requirements.
+- [x] Validate script metadata and duplicate-safety inputs; the draft has a unique title/script/caption, but backend signature computation must run after a real content version is created.
+- [x] Check asset and workspace prerequisites without external side effects; workspace, connector, verified private destination, and release authorization are present, while no rendered asset exists yet.
+- [ ] Create only a non-publishing approval draft if validation passes.
+- [ ] Report validation results and the explicit approval gate.
+
+## Aaditech real content version and local render
+
+- [ ] Inspect content-version, scene, engine, and render input contracts.
+- [ ] Prepare a factual Aaditech content version from the approved reel package.
+- [ ] Render the reel locally using existing engines without publishing.
+- [ ] Validate video metadata, duplicate signature, and workspace ownership.
+- [x] Create only a pending approval draft tied to the real content version; release `rel_120ed0be-628c-4872-a85e-f96ba7f7166a` is pending approval.
+- [ ] Deliver the local reel asset and explicit approval decision.
+
+## Workspace-scoped content versions
+
+- [x] Audit existing ownership types, validators, and router wiring.
+- [x] Define the content-version record and workspace-scoped store contract; initial `ContentVersionStore` foundation added with workspace isolation, signatures, lifecycle status, and safe atomic writes.
+- [ ] Implement authenticated content-version routes and duplicate checks.
+- [ ] Add tests for tenant isolation, signatures, lifecycle, and safe asset references.
+- [ ] Wire release creation to validated content versions without queueing.
+- [ ] Run quality gates and document the new content-version boundary.
+- [ ] Report implementation status and remaining render approval steps.
+
+## Content-version API boundary
+
+- [ ] Inspect router construction and shared validation conventions.
+- [x] Implement authenticated workspace-scoped content-version routes; added authenticated create/list/get/render-state endpoints under `/api/content-versions`.
+- [x] Enforce content-version ownership and readiness in release creation; releases now require an existing same-workspace non-archived/non-failed version.
+- [ ] Add tenant-isolation, duplicate, lifecycle, and safe-path tests.
+- [ ] Run type-check, lint, tests, build, and no-send integration checks.
+- [ ] Document the content-version boundary and remaining render steps.
+
+## Active content-version API implementation
+
+- [x] Implement authenticated workspace-scoped content-version routes; added authenticated create/list/get/render-state endpoints under `/api/content-versions`.
+- [x] Enforce content-version ownership and readiness in release creation; releases now require an existing same-workspace non-archived/non-failed version.
+- [ ] Add tenant-isolation, duplicate, lifecycle, and safe-path tests.
+- [ ] Run type-check, lint, tests, build, and no-send integration checks.
+- [ ] Document the content-version boundary and remaining render steps.
+
+## Content-version verification
+
+- [x] Add ContentVersionStore unit tests for workspace isolation, signatures, lifecycle, and safe render-path inputs; 3/3 passed.
+- [ ] Add route-level tests for validation and safe render updates.
+- [x] Run authenticated local API smoke tests without queueing; API-key exchange, content-version creation, and pending release creation succeeded with no queue submission.
+- [ ] Run full type-check, lint, tests, and production build.
+- [ ] Document verification evidence and remaining render integration.
+
+## Content-version route verification
+
+- [ ] Inspect route test utilities and authentication fixtures.
+- [ ] Add route-level tests for validation, isolation, duplicates, and render updates.
+- [x] Run authenticated local API smoke tests without queueing; API-key exchange, content-version creation, and pending release creation succeeded with no queue submission.
+- [ ] Run full type-check, lint, tests, and production build.
+- [ ] Document route evidence and remaining render integration.
+
+## Aaditech local render
+
+- [x] Inspect render-worker input, scene, engine, and output contracts.
+- [x] Map the stored content version into a valid render job request; five factual scenes now include narration text, two search terms each, visual prompts, English language metadata, and a complete portrait explainer render configuration.
+- [x] Run the local render without queueing a Telegram publish; render job `cmtc33boz00000dp32ej77i8l` completed successfully.
+- [x] Validate rendered MP4 metadata, workspace binding, and content signature; 48.04s, H.264/AAC, 1080x1920 9:16, 44,737,481 bytes, SHA-256 recorded.
+- [x] Attach the render to the pending draft without approval or publishing; content version `content-ccf7f6c6-d9a2-4425-a8c2-2b2ee1d4e8ea` is now `ready` with the local output path.
+- [x] Report render result and explicit approval gate.
+
+## Renderer-compatible Aaditech draft
+
+- [ ] Inspect content-version update and render configuration contracts.
+- [ ] Enrich Aaditech scenes with factual narration and visual search inputs.
+- [~] Map the content version to a valid local render job; audit found the queue scheduler currently sends `config: {}` to the worker, so render configuration must be propagated before a real job is enqueued.
+- [ ] Run the local render without queueing Telegram publishing.
+- [ ] Validate output metadata, signature, and workspace ownership.
+- [ ] Attach only local render evidence to the pending draft.
+- [ ] Report render status and explicit approval gate.
+
+## Aaditech actual local render
+
+- [x] Inspect render job route, worker payload, and engine availability.
+- [ ] Create a render job from the stored Aaditech content version.
+- [ ] Run the local render and monitor its non-publishing lifecycle.
+- [ ] Validate MP4 metadata, output path, signature, and workspace ownership.
+- [ ] Attach the render result to the pending release without queueing Telegram.
+- [ ] Report local render status and explicit approval gate.
+
+## Render-config propagation
+
+- [ ] Extend the render queue contract with validated render configuration.
+- [ ] Bind content-version lifecycle updates to the render worker.
+- [ ] Add queue and worker regression tests for config propagation.
+- [ ] Run type-check, lint, tests, build, and restart the local stack.
+- [ ] Enqueue and monitor a no-publish Aaditech render job.
+- [ ] Validate the MP4 and document the approval gate.
+
+## Aaditech marketing-video template redesign
+
+- [x] Audit the current news template and identify marketing-specific visual mismatches.
+- [x] Define an Aaditech marketing visual system and content treatment.
+- [x] Implement a marketing-specific render template/profile without breaking news rendering.
+- [x] Add marketing template regression tests; revised MP4 render remains pending.
+- [ ] Compare the revised render against marketing requirements and update the pending release draft.
+- [ ] Report the redesign, known limitations, and approval gate.
+
+## Category-aware pipeline rollout
+
+- [x] Inventory all supported categories, engines, templates, and current fallback behavior.
+- [x] Define the category-to-pipeline matrix and shared safety invariants.
+- [x] Implement category-specific profiles, themes, overlays, caption policies, and media rules.
+- [x] Wire category profiles into generation, rendering, and queue payload configuration.
+- [~] Add regression tests; focused profile/template tests pass (15/15), while representative renders for each category family remain pending.
+- [ ] Update documentation and report category coverage, gaps, and rollout status.
+
+## Advanced overlay systems
+
+- [x] Audit existing overlay components, category routing, and scene metadata contracts.
+- [x] Define the flexible knowledge/trend/quote/motivation overlay and dedicated sports overlay.
+- [x] Implement both advanced overlay components.
+- [x] Wire overlay selection to categories, sport metadata, captions, and render configuration.
+- [~] Add regression tests and validate representative overlay compositions; TypeScript and 15 focused profile/template tests pass, and Tech/Sports MP4s rendered successfully. Connected-browser visual inspection remains pending.
+- [x] Document overlay usage, supported categories, and remaining render validation.
+
+## Continuation — Connected Intelligence and Source-Driven Automation
+- [x] Audit existing scheduler, RSS/custom-source, tenant/workspace, approval, and duplicate-protection contracts.
+- [~] Define tenant-scoped automation rule shape without duplicating existing source stores. Custom RSS source ownership is now tenant-aware; durable automation-rule persistence remains for the next slice.
+- [~] Add source health and fallback behavior for unavailable providers. Existing intelligence fetchers already log provider failures and use available/cached signals; durable source-health state remains.
+- [x] Wire scheduler ticks to create intelligence-backed review-queue drafts only; `runOnce()` processes enabled tenant rules and never renders or publishes.
+- [x] Preserve explicit human approval before release or Telegram publishing; scheduler submissions remain pending in ApprovalEngine.
+- [~] Add regression tests for tenant isolation, duplicate suppression, provider fallback, and scheduler approval gating. Tenant source/rule isolation, duplicate signature handling, and safe empty tick are covered; live provider fallback and populated scheduler approval integration remain.
+- [x] Run typecheck, focused/full prior validation, and inspect the final diff; latest focused automation suite is green.
+- [ ] Update implementation documentation with final status and remaining operational setup.
+
+## Continuation — Workspace Automation Management
+- [x] Audit existing REST router, auth guards, UI API client, and automation-rule contracts.
+- [~] Implement authenticated tenant-scoped automation-rule APIs and source-health summaries. Rule APIs and configuration visibility are complete; durable per-provider health history remains.
+- [x] Connect workspace UI controls and scheduler status to the new APIs through TenantConsole and AutomationRules.
+- [~] Add regression tests for API tenant isolation, validation, rule lifecycle, and scheduler status. Store lifecycle and scheduler safety are covered; authenticated HTTP endpoint tests remain.
+- [x] Run typecheck, full tests, and inspect the final diff; **71 test files / 171 tests pass**.
+- [ ] Update implementation documentation with the final status and operational setup.

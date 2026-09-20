@@ -4,6 +4,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { RenderJobStore } from "./RenderJobStore";
+import { OrientationEnum } from "../types/shorts";
 
 describe("RenderJobStore tenant isolation", () => {
   const createParams = (tenantId: string, namingKey: string) => ({
@@ -12,7 +13,7 @@ describe("RenderJobStore tenant isolation", () => {
     videoType: "short" as const,
     language: "en",
     subtitleLanguage: "en",
-    orientation: "portrait" as const,
+    orientation: OrientationEnum.portrait,
     category: "tech",
     namingKey,
   });

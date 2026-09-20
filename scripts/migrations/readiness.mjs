@@ -2,8 +2,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { isTenantScopedStore } from "./ownership-policy.mjs";
 
 const root = process.cwd();
+try { process.loadEnvFile(path.join(root, ".env")); } catch {}
 const dataDir = process.env.DATA_DIR_PATH || path.join(root, "data");
 const migrationDir = path.join(root, "migrations");
 const checkpointPath = path.join(dataDir, "migration-checkpoints.json");
@@ -22,7 +24,7 @@ let unownedRecords = 0;
 for (const name of localFiles) {
   let parsed;
   try { parsed = JSON.parse(fs.readFileSync(path.join(dataDir, name), "utf8")); } catch { malformedStores.push(name); continue; }
-  if (Array.isArray(parsed)) for (const record of parsed) if (!record || typeof record !== "object" || typeof record.tenantId !== "string" || !record.tenantId.trim()) unownedRecords += 1;
+  if (isTenantScopedStore(name) && Array.isArray(parsed)) for (const record of parsed) if (!record || typeof record !== "object" || typeof record.tenantId !== "string" || !record.tenantId.trim()) unownedRecords += 1;
 }
 const database = requiredEnv(["DATABASE_URL"]);
 const minio = requiredEnv(["MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_BUCKET"]);

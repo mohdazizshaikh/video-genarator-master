@@ -1,7 +1,15 @@
 import { Router } from "express";
+import type { Request } from "express";
 import type { Config } from "../../config";
 import { WebhookNotificationEngine } from "../../services/WebhookNotificationEngine";
 import { logger } from "../../logger";
+import { getAuthenticatedTenantId } from "../auth";
+
+function tenantIdFrom(req: Request): string {
+  const tenantId = getAuthenticatedTenantId(req);
+  if (!tenantId) throw new Error("Authenticated workspace is required");
+  return tenantId;
+}
 
 export class WebhooksRouter {
   readonly router: Router;
@@ -15,9 +23,9 @@ export class WebhooksRouter {
 
   private registerRoutes() {
     // GET /api/webhooks — list all webhooks
-    this.router.get("/", (_req, res) => {
+    this.router.get("/", (req, res) => {
       try {
-        res.json({ webhooks: this.engine.getWebhooks() });
+        res.json({ webhooks: this.engine.getWebhooks(tenantIdFrom(req)) });
       } catch (err) {
         logger.error({ err }, "GET /webhooks failed");
         res.status(500).json({ error: "Failed to fetch webhooks" });
@@ -25,9 +33,9 @@ export class WebhooksRouter {
     });
 
     // GET /api/webhooks/stats — stats + recent logs
-    this.router.get("/stats", (_req, res) => {
+    this.router.get("/stats", (req, res) => {
       try {
-        res.json(this.engine.getStats());
+        res.json(this.engine.getStats(tenantIdFrom(req)));
       } catch (err) {
         logger.error({ err }, "GET /webhooks/stats failed");
         res.status(500).json({ error: "Failed to fetch stats" });
@@ -38,7 +46,7 @@ export class WebhooksRouter {
     this.router.get("/logs", (req, res) => {
       try {
         const limit = Number(req.query.limit) || 100;
-        res.json({ logs: this.engine.getLogs(limit) });
+        res.json({ logs: this.engine.getLogs(tenantIdFrom(req), limit) });
       } catch (err) {
         logger.error({ err }, "GET /webhooks/logs failed");
         res.status(500).json({ error: "Failed to fetch logs" });
@@ -53,6 +61,7 @@ export class WebhooksRouter {
           return res.status(400).json({ error: "name, channel, and events are required" });
         }
         const webhook = this.engine.addWebhook({
+          tenantId: tenantIdFrom(req),
           name,
           channel,
           enabled: true,
@@ -75,7 +84,7 @@ export class WebhooksRouter {
     // PUT /api/webhooks/:id — update webhook
     this.router.put("/:id", (req, res) => {
       try {
-        const updated = this.engine.updateWebhook(req.params.id, req.body);
+        const updated = this.engine.updateWebhook(tenantIdFrom(req), req.params.id, req.body);
         if (!updated) return res.status(404).json({ error: "Webhook not found" });
         res.json({ webhook: updated });
       } catch (err) {
@@ -87,7 +96,7 @@ export class WebhooksRouter {
     // DELETE /api/webhooks/:id — delete webhook
     this.router.delete("/:id", (req, res) => {
       try {
-        const ok = this.engine.deleteWebhook(req.params.id);
+        const ok = this.engine.deleteWebhook(tenantIdFrom(req), req.params.id);
         if (!ok) return res.status(404).json({ error: "Webhook not found" });
         res.json({ success: true });
       } catch (err) {
@@ -99,7 +108,7 @@ export class WebhooksRouter {
     // PATCH /api/webhooks/:id/toggle — enable/disable
     this.router.patch("/:id/toggle", (req, res) => {
       try {
-        const updated = this.engine.toggleWebhook(req.params.id);
+        const updated = this.engine.toggleWebhook(tenantIdFrom(req), req.params.id);
         if (!updated) return res.status(404).json({ error: "Webhook not found" });
         res.json({ webhook: updated });
       } catch (err) {
@@ -111,7 +120,7 @@ export class WebhooksRouter {
     // POST /api/webhooks/:id/test — send test notification
     this.router.post("/:id/test", async (req, res) => {
       try {
-        const results = await this.engine.testWebhook(req.params.id);
+        const results = await this.engine.testWebhook(tenantIdFrom(req), req.params.id);
         res.json({ results });
       } catch (err) {
         logger.error({ err }, "POST /webhooks/:id/test failed");
@@ -126,7 +135,7 @@ export class WebhooksRouter {
         if (!event || !title || !message) {
           return res.status(400).json({ error: "event, title, and message are required" });
         }
-        const results = await this.engine.notify(event, title, message, data, severity);
+        const results = await this.engine.notify(tenantIdFrom(req), event, title, message, data, severity);
         res.json({ results, count: results.length });
       } catch (err) {
         logger.error({ err }, "POST /webhooks/notify failed");

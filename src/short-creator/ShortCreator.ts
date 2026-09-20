@@ -19,9 +19,11 @@ import { SubtitleBuilder } from "./libraries/SubtitleBuilder";
 import { Config } from "../config";
 import { logger } from "../logger";
 import { MusicManager } from "./music";
+import { createRenderMediaToken } from "../services/RenderMediaToken";
 import { VideoMetadataStore } from "../db/VideoMetadataStore";
 import { AiLlmGenerator } from "../script-generator/AiLlmGenerator";
 import { resolveTheme } from "../components/videos/ThemeEngine";
+import { resolveCategoryPipeline } from "../components/videos/CategoryPipelineProfiles";
 import type {
   SceneInput,
   RenderConfig,
@@ -51,6 +53,7 @@ export class ShortCreator {
     id: string;
     videoType: "short" | "long";
     subtitleLanguage?: string;
+    tenantId?: string;
   }[] = [];
   private ttsAdapter: TtsAdapter;
   private videoMetadataStore: VideoMetadataStore;
@@ -133,7 +136,8 @@ export class ShortCreator {
     return Array.from(anchors).filter((anchor) => !terms.includes(anchor));
   }
 
-  private buildMediaSearchTerms(scene: SceneInput): string[] {
+  private buildMediaSearchTerms(scene: SceneInput, category?: string): string[] {
+    const pipeline = resolveCategoryPipeline(category);
     const keywordTerms = [...(scene.keywords || [])]
       .map((term) => this.normalizeSearchPhrase(term))
       .filter(Boolean);
@@ -150,7 +154,9 @@ export class ShortCreator {
       .filter(Boolean);
 
     const anchorTerms = this.inferVisualAnchors(scene, baseTerms);
-    const uniqueTerms = Array.from(new Set([...baseTerms, ...anchorTerms]));
+    const profileTerms = pipeline.mediaPrefixes.map((term) => this.normalizeSearchPhrase(term));
+    const uniqueTerms = Array.from(new Set([...profileTerms, ...baseTerms, ...anchorTerms]))
+      .filter((term) => !pipeline.prohibitedMediaTerms.some((blocked) => term.toLowerCase().includes(blocked.toLowerCase())));
 
     const specificityScore = (term: string): number => {
       const normalized = term.trim();
@@ -360,6 +366,7 @@ export class ShortCreator {
       id,
       videoType,
       subtitleLanguage,
+      tenantId,
     });
     if (this.queue.length === 1) {
       this.processQueue();
@@ -372,14 +379,14 @@ export class ShortCreator {
     if (this.queue.length === 0) {
       return;
     }
-    const { sceneInput, config, id, videoType, subtitleLanguage } = this.queue[0];
+    const { sceneInput, config, id, videoType, subtitleLanguage, tenantId } = this.queue[0];
     console.log(`[ShortCreator] Starting to process video ${id} with ${sceneInput.length} scenes.`);
     logger.debug(
       { sceneInput, config, id },
       "Processing video item in the queue",
     );
     try {
-      await this.createShort(id, sceneInput, config, videoType, subtitleLanguage);
+      await this.createShort(id, sceneInput, config, videoType, subtitleLanguage, tenantId);
       console.log(`[ShortCreator] Video ${id} created successfully.`);
     } catch (error: any) {
       console.error(`[ShortCreator] Error creating video ${id}: ${error.message}`);
@@ -390,12 +397,18 @@ export class ShortCreator {
     }
   }
 
+  private renderMediaUrl(kind: "tmp" | "music", fileName: string, tenantId?: string): string {
+    const token = createRenderMediaToken(tenantId || "unscoped", fileName);
+    return `http://localhost:${this.config.port}/api/${kind}/${encodeURIComponent(fileName)}?mediaToken=${encodeURIComponent(token)}`;
+  }
+
   private async createShort(
     videoId: string,
     inputScenes: SceneInput[],
     config: RenderConfig,
     videoType: "short" | "long" = "short",
     subtitleLanguage?: string,
+    tenantId?: string,
   ): Promise<string> {
     if (!subtitleLanguage) {
       subtitleLanguage = inputScenes[0]?.language ?? LanguageEnum.en;
@@ -418,6 +431,7 @@ export class ShortCreator {
           config,
           videoType,
           subtitleLanguage,
+          tenantId,
         );
       }
       // Render the parent video as the concatenation of all parts so the
@@ -543,7 +557,7 @@ export class ShortCreator {
       }
 
       const isAiImage = config.useAiImages || this.config.useAiImages;
-      const mediaSearchTerms = this.buildMediaSearchTerms(scene);
+      const mediaSearchTerms = this.buildMediaSearchTerms(scene, config.category);
       let mediaExt = ".mp4"; // Default generic extension, will be updated
       if (isAiImage) {
         mediaExt = ".jpg"; 
@@ -574,7 +588,7 @@ export class ShortCreator {
         console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Fetching AI image: ${pollinationsUrl.replace(/key=[^&]*/, 'key=***')}`);
         try {
           await this.downloadFile(pollinationsUrl, tempMediaPath);
-          mediaUrl = `http://localhost:${this.config.port}/api/tmp/${tempMediaFileName}`;
+          mediaUrl = this.renderMediaUrl("tmp", tempMediaFileName, tenantId);
         } catch (err: any) {
           console.error(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] AI image failed (${pollinationsUrl}): ${err.message}. Falling back to Pexels video.`);
           logger.error(err, `Error downloading AI image for scene ${sceneNum}`);
@@ -597,7 +611,7 @@ export class ShortCreator {
           tempFiles.push(tempMediaPath);
           await this.downloadFile(video.url, tempMediaPath);
           excludeVideoIds.push(video.id);
-          mediaUrl = `http://localhost:${this.config.port}/api/tmp/${tempMediaFileName}`;
+          mediaUrl = this.renderMediaUrl("tmp", tempMediaFileName, tenantId);
         }
       } else {
         console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Searching Pexels for: ${mediaSearchTerms.join(", ")}`);
@@ -611,7 +625,7 @@ export class ShortCreator {
         console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Downloading video: ${video.url}`);
         await this.downloadFile(video.url, tempMediaPath);
         excludeVideoIds.push(video.id);
-        mediaUrl = `http://localhost:${this.config.port}/api/tmp/${tempMediaFileName}`;
+        mediaUrl = this.renderMediaUrl("tmp", tempMediaFileName, tenantId);
 
         // Detect visually flat/static stock clips (dark screens, solid-color
         // shots, no motion) and replace them with an AI image so the scene
@@ -644,7 +658,7 @@ export class ShortCreator {
             console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Fetching AI replacement image: ${pollinationsUrl.replace(/key=[^&]*/, 'key=***')}`);
             try {
               await this.downloadFile(pollinationsUrl, aiMediaPath);
-              mediaUrl = `http://localhost:${this.config.port}/api/tmp/${aiFileName}`;
+              mediaUrl = this.renderMediaUrl("tmp", aiFileName, tenantId);
               tempMediaPath = aiMediaPath;
               tempMediaFileName = aiFileName;
               console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] AI replacement image ready`);
@@ -680,10 +694,10 @@ export class ShortCreator {
         captions: displayCaptions,
         headline: overlayHeadline,
         subcategory: scene.subcategory,
-        [mediaUrl.endsWith(".mp4") ? "video" : "imageUrl"]: mediaUrl,
+        [tempMediaFileName.endsWith(".mp4") ? "video" : "imageUrl"]: mediaUrl,
         visualPrompt: scene.visualPrompt,
         audio: {
-          url: `http://localhost:${this.config.port}/api/tmp/${tempMp3FileName}`,
+          url: this.renderMediaUrl("tmp", tempMp3FileName, tenantId),
           duration: audioLength,
         },
       });
@@ -693,12 +707,15 @@ export class ShortCreator {
     }
 
     const selectedMusic = this.findMusic(totalDuration, config.music, config.category);
+    const rendererMusic = selectedMusic
+      ? { ...selectedMusic, url: this.renderMediaUrl("music", selectedMusic.file, tenantId) }
+      : selectedMusic;
     logger.debug({ selectedMusic }, "Selected music for the video");
 
     console.log(`[ShortCreator] Final rendering with Remotion for video ${videoId}...`);
     await this.remotion.render(
       {
-        music: selectedMusic,
+        music: rendererMusic,
         scenes,
         config: {
           durationMs: totalDuration * 1000,
@@ -718,6 +735,7 @@ export class ShortCreator {
           musicVolume: config.musicVolume,
           category: config.category,
           templateVariant: config.templateVariant,
+          contentTemplate: config.contentTemplate || resolveCategoryPipeline(config.category).template,
         },
       },
       videoId,

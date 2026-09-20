@@ -7,6 +7,8 @@ import { logger } from "../logger";
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "needs_revision";
 
 export interface ApprovalItem {
+  /** Workspace ownership is mandatory for all newly-created records. */
+  tenantId: string;
   id: string;
   contentId: string;
   contentType: "video" | "image" | "caption" | "script";
@@ -19,6 +21,7 @@ export interface ApprovalItem {
   comments?: string;
   checklist: ChecklistItem[];
   priority: "low" | "medium" | "high";
+  reviewHistory?: Array<{ action: string; actor: string; at: string; comments?: string }>;
 }
 
 export interface ChecklistItem {
@@ -58,13 +61,15 @@ export class ApprovalEngine {
     try { fs.writeJsonSync(this.dataPath, this.items, { spaces: 2 }); } catch { /* ignore */ }
   }
 
-  submit(contentId: string, contentType: ApprovalItem["contentType"], title: string, submittedBy: string, priority: ApprovalItem["priority"] = "medium"): ApprovalItem {
+  submit(tenantId: string, contentId: string, contentType: ApprovalItem["contentType"], title: string, submittedBy: string, priority: ApprovalItem["priority"] = "medium"): ApprovalItem {
     const id = `apr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const item: ApprovalItem = {
+      tenantId,
       id, contentId, contentType, title, submittedBy,
       submittedAt: new Date().toISOString(),
       status: "pending",
       priority,
+      reviewHistory: [],
       checklist: DEFAULT_CHECKLIST.map((c) => ({ ...c, passed: false })),
     };
     this.items.push(item);
@@ -73,11 +78,13 @@ export class ApprovalEngine {
     return item;
   }
 
-  autoCheck(itemId: string, text?: string): ApprovalItem {
-    const item = this.items.find((i) => i.id === itemId);
+  autoCheck(tenantId: string, itemId: string, text?: string): ApprovalItem {
+    const item = this.items.find((i) => i.id === itemId && i.tenantId === tenantId);
     if (!item) throw new Error(`Approval item ${itemId} not found`);
     const lower = (text || item.title).toLowerCase();
 
+    item.reviewHistory = item.reviewHistory ?? [];
+    item.reviewHistory.push({ action: "auto_check", actor: "system", at: new Date().toISOString(), comments: item.comments });
     item.checklist = item.checklist.map((c) => {
       let passed = c.passed;
       if (c.id === "no_hate_speech") passed = !/\b(hate|racist|sexist|slur)\b/.test(lower);
@@ -90,9 +97,9 @@ export class ApprovalEngine {
 
     const requiredFailed = item.checklist.filter((c) => c.required && !c.passed);
     if (requiredFailed.length === 0) {
-      item.status = "approved";
-      item.reviewedAt = new Date().toISOString();
-      item.reviewedBy = "auto-check";
+      // Automated checks are advisory only. Explicit human review remains mandatory.
+      item.status = "pending";
+      item.comments = "Automated checks passed; explicit human approval is still required.";
     } else {
       item.status = "needs_revision";
       item.comments = `Auto-check failed: ${requiredFailed.map((c) => c.label).join(", ")}`;
@@ -101,10 +108,15 @@ export class ApprovalEngine {
     return item;
   }
 
-  review(itemId: string, status: ApprovalStatus, reviewedBy: string, comments?: string): ApprovalItem {
-    const item = this.items.find((i) => i.id === itemId);
+  review(tenantId: string, itemId: string, status: ApprovalStatus, reviewedBy: string, comments?: string): ApprovalItem {
+    const item = this.items.find((i) => i.id === itemId && i.tenantId === tenantId);
     if (!item) throw new Error(`Approval item ${itemId} not found`);
+    if (status === "approved" && item.checklist.some((check) => check.required && !check.passed)) {
+      throw new Error("Required approval checks must pass before human approval");
+    }
     item.status = status;
+    item.reviewHistory = item.reviewHistory ?? [];
+    item.reviewHistory.push({ action: status === "needs_revision" ? "revision_requested" : "human_review", actor: reviewedBy, at: new Date().toISOString(), comments });
     item.reviewedBy = reviewedBy;
     item.reviewedAt = new Date().toISOString();
     if (comments) item.comments = comments;
@@ -113,25 +125,28 @@ export class ApprovalEngine {
     return item;
   }
 
-  updateChecklist(itemId: string, checks: Record<string, boolean>): ApprovalItem {
-    const item = this.items.find((i) => i.id === itemId);
+  updateChecklist(tenantId: string, itemId: string, checks: Record<string, boolean>): ApprovalItem {
+    const item = this.items.find((i) => i.id === itemId && i.tenantId === tenantId);
     if (!item) throw new Error(`Approval item ${itemId} not found`);
+    item.reviewHistory = item.reviewHistory ?? [];
+    item.reviewHistory.push({ action: "checklist_updated", actor: "human", at: new Date().toISOString() });
     item.checklist = item.checklist.map((c) => checks[c.id] !== undefined ? { ...c, passed: checks[c.id] } : c);
     this.save();
     return item;
   }
 
-  getPending(): ApprovalItem[] { return this.items.filter((i) => i.status === "pending"); }
-  getAll(): ApprovalItem[] { return this.items; }
-  getById(id: string): ApprovalItem | undefined { return this.items.find((i) => i.id === id); }
+  getPending(tenantId: string): ApprovalItem[] { return this.items.filter((i) => i.tenantId === tenantId && i.status === "pending"); }
+  getAll(tenantId: string): ApprovalItem[] { return this.items.filter((i) => i.tenantId === tenantId); }
+  getById(tenantId: string, id: string): ApprovalItem | undefined { return this.items.find((i) => i.id === id && i.tenantId === tenantId); }
 
-  getStats() {
+  getStats(tenantId: string) {
+    const items = this.items.filter((i) => i.tenantId === tenantId);
     return {
-      total: this.items.length,
-      pending: this.items.filter((i) => i.status === "pending").length,
-      approved: this.items.filter((i) => i.status === "approved").length,
-      rejected: this.items.filter((i) => i.status === "rejected").length,
-      needsRevision: this.items.filter((i) => i.status === "needs_revision").length,
+      total: items.length,
+      pending: items.filter((i) => i.status === "pending").length,
+      approved: items.filter((i) => i.status === "approved").length,
+      rejected: items.filter((i) => i.status === "rejected").length,
+      needsRevision: items.filter((i) => i.status === "needs_revision").length,
     };
   }
 }

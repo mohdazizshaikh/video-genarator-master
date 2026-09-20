@@ -153,6 +153,8 @@ export class Config {
   public slackWebhookUrl: string = "";
   public pagerDutyRoutingKey: string = "";
   public alertEmailTo: string = "";
+  /** Legacy compatibility only; production connector publishing must keep this false. */
+  public allowGlobalProviderCredentialFallback = false;
 
   // Phase 6: Scheduling
   public cronInterval: string = "*/30 * * * *";
@@ -255,6 +257,7 @@ export class Config {
   this.slackWebhookUrl = process.env.SLACK_WEBHOOK_URL || "";
   this.pagerDutyRoutingKey = process.env.PAGERDUTY_ROUTING_KEY || "";
   this.alertEmailTo = process.env.ALERT_EMAIL_TO || "";
+  this.allowGlobalProviderCredentialFallback = process.env.ALLOW_GLOBAL_PROVIDER_CREDENTIAL_FALLBACK === "true";
 
   // Phase 6: Scheduling
   this.cronInterval = process.env.CRON_INTERVAL || "*/30 * * * *";

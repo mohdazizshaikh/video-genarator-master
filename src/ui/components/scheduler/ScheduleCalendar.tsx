@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../../services/authenticatedFetch";
 /**
  * ScheduleCalendar – Weekly calendar grid with drag-to-reschedule
  * Shows all active schedules mapped to their publish times.
@@ -280,7 +281,7 @@ export const ScheduleCalendar: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/schedule?limit=200");
+      const res = await authenticatedFetch("/api/schedule?limit=200");
       const data = await res.json();
       setSchedules(Array.isArray(data.schedules) ? data.schedules : []);
     } catch {
@@ -332,7 +333,7 @@ export const ScheduleCalendar: React.FC = () => {
 
     setSaving(dragId);
     try {
-      const res = await fetch(`/api/schedule/${dragId}`, {
+      const res = await authenticatedFetch(`/api/schedule/${dragId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ publishAt: newPublishAt.toISOString(), nextRun: newPublishAt.toISOString() }),

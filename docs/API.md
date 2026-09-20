@@ -45,6 +45,7 @@ Live API surface derived from source (312 routes).
 | `GET` | `/api/ai/model` | aiRouter |
 | `POST` | `/api/ai/suggest` | aiRouter |
 | `POST` | `/api/ai/train` | aiRouter |
+| `POST` | `/api/approval/editorial-review` | approvalRouter |
 | `POST` | `/api/approval/moderate` | approvalRouter |
 | `POST` | `/api/approval/moderate/batch` | approvalRouter |
 | `GET` | `/api/approval/moderate/rules` | approvalRouter |

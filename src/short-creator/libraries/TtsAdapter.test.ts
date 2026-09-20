@@ -15,7 +15,7 @@ vi.mock("../../script-generator/AiLlmGenerator", () => {
 });
 
 vi.mock("./EdgeTts", () => {
-  const EdgeTts = vi.fn();
+  const EdgeTts = vi.fn() as any;
   EdgeTts.isEdgeVoice = vi.fn((voice: string) =>
     ["en_IN_prabhat", "en_IN_neeerja", "hi_IN_madhur", "hi_IN_swara"].includes(voice),
   );
@@ -27,7 +27,7 @@ vi.mock("./EdgeTts", () => {
 });
 
 vi.mock("./Chatterbox", () => {
-  const Chatterbox = vi.fn();
+  const Chatterbox = vi.fn() as any;
   Chatterbox.isChatterboxVoice = vi.fn((voice: string) =>
     ["en_IN_prabhat"].includes(voice),
   );

@@ -9,6 +9,7 @@
  * no longer all render like one news template.
  */
 import { MusicMoodEnum } from "../../types/shorts";
+import { resolveCategoryPipeline } from "./CategoryPipelineProfiles";
 
 export type TemplateVariantName =
   | "classic"
@@ -156,6 +157,23 @@ const THEMES: VideoTheme[] = [
     variants: ["soft", "classic", "modern"],
   },
   {
+    family: "Marketing",
+    label: "Aaditech Solution",
+    subLabels: ["Digital Solutions", "Business Growth", "Trusted Support"],
+    palette: {
+      bg: "#0b1720",
+      bgAlt: "#123449",
+      accent: "#f4a340",
+      accentSoft: "#fff0d5",
+      accentGlow: "rgba(244, 163, 64, 0.32)",
+      headlineColor: "#ffffff",
+      captionHighlight: "#f4a340",
+    },
+    musicMood: MusicMoodEnum.hopeful,
+    fontTone: "clean",
+    variants: ["modern", "soft", "classic"],
+  },
+  {
     family: "Motivation",
     label: "Inspire Daily",
     subLabels: ["Success", "Mindset", "Growth"],
@@ -238,6 +256,10 @@ const FAMILY_KEYWORDS: Array<{ family: string; keywords: string[] }> = [
     keywords: ["health", "fitness", "medical", "nutrition", "wellness", "disease", "mental"],
   },
   {
+    family: "Marketing",
+    keywords: ["marketing", "brand", "business profile", "company", "services", "solution", "growth", "contact", "aaditech"],
+  },
+  {
     family: "Motivation",
     keywords: ["motivation", "success", "mindset", "inspirational", "self-help"],
   },
@@ -287,7 +309,26 @@ export function resolveTheme(category: string, subcategories: string[] = []): Vi
     return matched;
   }
 
-  return THEMES[0];
+  const profile = resolveCategoryPipeline(category);
+  const accent = profile.category === "Food" ? "#f97316" : profile.category === "Travel" ? "#2dd4bf" : profile.category === "Gaming" ? "#a78bfa" : profile.category === "Beauty" ? "#f472b6" : profile.category === "Parenting" ? "#60a5fa" : "#94a3b8";
+  const bg = profile.category === "Food" ? "#20120a" : profile.category === "Travel" ? "#071d22" : profile.category === "Gaming" ? "#120d24" : profile.category === "Beauty" ? "#240f1d" : profile.category === "Parenting" ? "#0b1728" : "#111827";
+  return {
+    family: profile.category,
+    label: profile.category,
+    subLabels: [],
+    palette: {
+      bg,
+      bgAlt: "#1f2937",
+      accent,
+      accentSoft: "#f8fafc",
+      accentGlow: `${accent}55`,
+      headlineColor: "#ffffff",
+      captionHighlight: accent,
+    },
+    musicMood: profile.musicMood,
+    fontTone: profile.category === "Beauty" || profile.category === "Entertainment" ? "rounded" : "clean",
+    variants: ["modern", "soft", "classic"],
+  };
 }
 
 /**

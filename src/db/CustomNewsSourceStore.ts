@@ -9,6 +9,8 @@ export interface CustomNewsSourceRecord {
   subCategory?: string;
   kind: "rss";
   createdAt: string;
+  /** Workspace owner; legacy records without this field are hidden from scoped reads. */
+  tenantId?: string;
 }
 
 export class CustomNewsSourceStore {
@@ -50,12 +52,13 @@ export class CustomNewsSourceStore {
     }
   }
 
-  public listSync(): CustomNewsSourceRecord[] {
-    return this.readAllSync();
+  public listSync(tenantId?: string): CustomNewsSourceRecord[] {
+    const records = this.readAllSync();
+    return tenantId ? records.filter((record) => record.tenantId === tenantId) : records;
   }
 
-  public async list(): Promise<CustomNewsSourceRecord[]> {
-    return this.readAllSync();
+  public async list(tenantId?: string): Promise<CustomNewsSourceRecord[]> {
+    return this.listSync(tenantId);
   }
 
   public async add(input: {
@@ -63,6 +66,7 @@ export class CustomNewsSourceStore {
     url: string;
     category: string;
     subCategory?: string;
+    tenantId?: string;
   }): Promise<CustomNewsSourceRecord> {
     const records = this.readAllSync();
     const normalizedUrl = this.normalizeComparableUrl(input.url);
@@ -85,6 +89,7 @@ export class CustomNewsSourceStore {
       subCategory: input.subCategory?.trim() || undefined,
       kind: "rss",
       createdAt: new Date().toISOString(),
+      ...(input.tenantId ? { tenantId: input.tenantId } : {}),
     };
     records.push(record);
     this.writeAllSync(records);

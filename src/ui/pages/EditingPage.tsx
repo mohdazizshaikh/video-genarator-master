@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container,
@@ -42,7 +43,7 @@ function EditingPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/editing/plan", {
+      const res = await authenticatedFetch("/api/editing/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ videoDuration: duration * 1000, emotionalIntensity: intensity }),

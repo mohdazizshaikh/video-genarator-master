@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../../services/authenticatedFetch";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
@@ -118,7 +119,7 @@ const ScenePreviewPanel: React.FC<ScenePreviewPanelProps> = ({
       }
 
       try {
-        const response = await fetch("/api/auto-script/translate", {
+        const response = await authenticatedFetch("/api/auto-script/translate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

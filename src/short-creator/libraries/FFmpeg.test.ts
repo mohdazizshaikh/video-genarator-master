@@ -51,7 +51,7 @@ test("assessVideoFlatness keeps a video with real motion as non-flat", async () 
 
 test("assessVideoFlatness resolves non-flat without throwing when ffmpeg errors", async () => {
   mockExecFile.mockImplementation((_bin, _args, _opts, cb: (err: Error) => void) => {
-    cb(new Error("ffmpeg crashed"), "", "");
+    cb(new Error("ffmpeg crashed"));
   });
   const result = await instantiate().assessVideoFlatness("/tmp/missing.mp4");
   expect(result).toEqual({ flat: false, yavgRange: 0, frames: 0 });

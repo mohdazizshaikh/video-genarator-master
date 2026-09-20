@@ -2,6 +2,7 @@
 
 import fs from "fs-extra";
 import path from "path";
+import { randomUUID } from "node:crypto";
 import { logger } from "../logger";
 
 export interface Episode {
@@ -61,7 +62,7 @@ export class SeriesBuilderEngine {
   createSeriesForTenant(tenantId: string, data: { title: string; category: string; platform: string[]; totalEpisodes: number; style: Series["style"]; autoCliffhanger?: boolean }): Series {
     if (!tenantId.trim()) throw new Error("tenantId is required");
     const series: Series = {
-      id: `series_${Date.now()}`,
+      id: `series_${Date.now()}_${randomUUID()}`,
       tenantId,
       title: data.title,
       category: data.category,

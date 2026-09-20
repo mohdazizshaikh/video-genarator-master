@@ -13,16 +13,29 @@
  */
 import cron from "node-cron";
 import cuid from "cuid";
+import crypto from "node:crypto";
 import type { Config } from "../config";
 import type { ShortCreator } from "../short-creator/ShortCreator";
 import { RenderJobStore } from "../db/RenderJobStore";
+import { ContentAutomationRuleStore, type ContentAutomationRule } from "../db/ContentAutomationRuleStore";
+import { ContentVersionStore } from "../db/ContentVersionStore";
+import { ApprovalEngine } from "./ApprovalEngine";
+import { ContentIntelligenceEngine } from "./ContentIntelligenceEngine";
+import { RssFetcher } from "../news-fetcher/RssFetcher";
+import { AiLlmGenerator } from "../script-generator/AiLlmGenerator";
 import { createRenderQueue } from "../workers/QueueManager";
 import { logger } from "../logger";
 import type { RenderJobPayload } from "../workers/RenderWorker";
+import type { RenderConfig } from "../types/shorts";
 
 export class SchedulerService {
   private task: ReturnType<typeof cron.schedule> | null = null;
   private renderJobStore: RenderJobStore;
+  private automationRules: ContentAutomationRuleStore;
+  private contentVersions: ContentVersionStore;
+  private approval: ApprovalEngine;
+  private intelligence: ContentIntelligenceEngine;
+  private aiLlm: AiLlmGenerator;
   private running = false;
   private inFlightCategorySlot = new Set<string>();
 
@@ -31,6 +44,11 @@ export class SchedulerService {
     private shortCreator: ShortCreator,
   ) {
     this.renderJobStore = new RenderJobStore(config.dataDirPath);
+    this.automationRules = new ContentAutomationRuleStore(config.dataDirPath);
+    this.contentVersions = new ContentVersionStore(config.dataDirPath);
+    this.approval = new ApprovalEngine(config.dataDirPath);
+    this.intelligence = new ContentIntelligenceEngine(config.dataDirPath);
+    this.aiLlm = new AiLlmGenerator(config.aiLlmUrl, config.aiLlmModel);
   }
 
   start(): void {
@@ -57,18 +75,75 @@ export class SchedulerService {
     logger.info("SchedulerService stopped");
   }
 
-  private async tick(): Promise<void> {
+  async runOnce(): Promise<{ rules: number; drafts: number; skipped: number }> {
+    if (this.running) return { rules: 0, drafts: 0, skipped: 0 };
     this.running = true;
+    let drafts = 0;
+    let skipped = 0;
     try {
-      logger.info("Scheduler tick: checking for new content to render");
-
-      // Future: call RssFetcher → AiLlmGenerator → build SceneInput[] per category
-      // For now we emit a lifecycle log so the scheduler is observable
-      logger.info("Scheduler tick: no new content rules configured yet – idle");
-
+      const rules = this.automationRules.listEnabled();
+      for (const rule of rules) {
+        const result = await this.processRule(rule);
+        drafts += result.drafts;
+        skipped += result.skipped;
+      }
+      logger.info({ rules: rules.length, drafts, skipped }, "Scheduler source tick complete; all outputs remain review-gated");
+      return { rules: rules.length, drafts, skipped };
     } finally {
       this.running = false;
     }
+  }
+
+  private async tick(): Promise<void> {
+    await this.runOnce();
+  }
+
+  private async processRule(rule: ContentAutomationRule): Promise<{ drafts: number; skipped: number }> {
+    const fetcher = new RssFetcher(this.config.dataDirPath, rule.tenantId);
+    const stories = await fetcher.fetchStoriesFromSources(rule.sourceIds);
+    let drafts = 0;
+    let skipped = 0;
+    for (const story of stories.slice(0, rule.maxDraftsPerTick)) {
+      const sourceKey = story.link || `${story.sourceId || "source"}:${story.title}`;
+      const signature = crypto.createHash("sha256").update(`${rule.tenantId}:${sourceKey}`.toLowerCase()).digest("hex");
+      try {
+        const brief = await this.intelligence.buildBrief({
+          tenantId: rule.tenantId,
+          category: rule.category,
+          platform: rule.platform,
+          niche: rule.niche,
+          topic: story.title,
+        });
+        const scenes = await this.aiLlm.generateScript([story], {
+          category: rule.category,
+          topic: story.title,
+          style: brief.suggestedFormat === "Viral" ? "Viral" : "Explainer",
+          hook: brief.hookDirection,
+          videoType: rule.videoType,
+        });
+        const version = this.contentVersions.create({
+          workspaceId: rule.tenantId,
+          title: story.title,
+          script: scenes.map((scene) => scene.text).join("\\n\\n"),
+          scenes,
+          metadata: { automationRuleId: rule.id, intelligenceBrief: brief, source: story.sourceName || story.sourceId },
+          sourceUrls: story.link ? [story.link] : [],
+          contentSignature: signature,
+          createdBy: "scheduler",
+        });
+        const approvalPriority = brief.priority === "critical" || brief.priority === "high" ? "high" : brief.priority === "medium" ? "medium" : "low";
+        this.approval.submit(rule.tenantId, version.id, "script", version.title, "scheduler", approvalPriority);
+        drafts += 1;
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("Duplicate content signature")) {
+          skipped += 1;
+          continue;
+        }
+        logger.warn({ err: error, tenantId: rule.tenantId, ruleId: rule.id, story: story.title }, "Scheduler source item skipped");
+        skipped += 1;
+      }
+    }
+    return { drafts, skipped };
   }
 
   /**
@@ -77,6 +152,7 @@ export class SchedulerService {
   async enqueueRenderJob(params: {
     tenantId: string;
     sceneInput: unknown;
+    config: RenderConfig;
     orientation: string;
     category: string;
     videoType?: "short" | "long";
@@ -112,7 +188,7 @@ export class SchedulerService {
         renderJobId: jobId,
         scriptPlanId: "",
         sceneInput: params.sceneInput as any,
-        config: {} as any,
+        config: params.config,
         videoType: params.videoType ?? "short",
         subtitleLanguage: params.subtitleLanguage,
         orientation: params.orientation as any,

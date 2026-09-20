@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect } from "react";
 import {
   Container, Paper, TextField, Button, FormControl, InputLabel,
@@ -38,7 +39,7 @@ function WatermarkPage() {
     try {
       const payload = { ...config };
       if (useLogoMode && logoPath) payload.logoPath = logoPath;
-      const res = await fetch("/api/watermark/filter", {
+      const res = await authenticatedFetch("/api/watermark/filter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -57,7 +58,7 @@ function WatermarkPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/watermark/default", {
+      const res = await authenticatedFetch("/api/watermark/default", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),

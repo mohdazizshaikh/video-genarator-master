@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, Chip, Button, Alert,
@@ -47,7 +48,7 @@ export const RecycleDashboard: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cRes, sRes] = await Promise.all([fetch('/api/recycle/candidates'), fetch('/api/recycle/stats')]);
+      const [cRes, sRes] = await Promise.all([authenticatedFetch('/api/recycle/candidates'), authenticatedFetch('/api/recycle/stats')]);
       const [cData, sData] = await Promise.all([cRes.json(), sRes.json()]);
       if (cData.status === 'ok') setCandidates(cData.data);
       if (sData.status === 'ok') setStats(sData.data);
@@ -58,20 +59,20 @@ export const RecycleDashboard: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const markRecycled = async (videoId: string) => {
-    await fetch(`/api/recycle/${videoId}/recycle`, { method: 'POST' });
+    await authenticatedFetch(`/api/recycle/${videoId}/recycle`, { method: 'POST' });
     setSuccess(`Video ${videoId} marked as recycled`);
     load();
     setTimeout(() => setSuccess(null), 3000);
   };
 
   const checkFreshness = async () => {
-    const res = await fetch('/api/recycle/freshness/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: freshnessKeyword, category: freshnessCategory }) });
+    const res = await authenticatedFetch('/api/recycle/freshness/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: freshnessKeyword, category: freshnessCategory }) });
     const data = await res.json();
     if (data.status === 'ok') setFreshnessResult(data.data);
   };
 
   const checkDedupe = async () => {
-    const res = await fetch('/api/recycle/dedupe/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: dedupTitle, keywords: dedupTitle.split(' '), category: freshnessCategory }) });
+    const res = await authenticatedFetch('/api/recycle/dedupe/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: dedupTitle, keywords: dedupTitle.split(' '), category: freshnessCategory }) });
     const data = await res.json();
     if (data.status === 'ok') setDedupResult(data.data);
   };

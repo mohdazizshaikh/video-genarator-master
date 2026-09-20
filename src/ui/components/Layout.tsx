@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar, Box, Container, CssBaseline, Toolbar, Typography, Button,
@@ -144,6 +144,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      if (location.pathname !== '/tenants') navigate('/tenants');
+    };
+    window.addEventListener('auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('auth-expired', handleAuthExpired);
+  }, [location.pathname, navigate]);
 
   const isActive = (path: string) => location.pathname === path;
 

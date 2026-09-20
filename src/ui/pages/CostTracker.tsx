@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, Button, TextField, MenuItem,
@@ -33,7 +34,7 @@ export const CostTracker: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/costs/summary');
+      const res = await authenticatedFetch('/api/costs/summary');
       const data = await res.json();
       if (data.status === 'ok') setSummary(data.data);
     } catch { /* ignore */ }
@@ -43,7 +44,7 @@ export const CostTracker: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const addRecord = async () => {
-    await fetch('/api/costs/record', {
+    await authenticatedFetch('/api/costs/record', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...newRecord, units: parseFloat(newRecord.units), costPerUnit: newRecord.costPerUnit ? parseFloat(newRecord.costPerUnit) : undefined }),
     });

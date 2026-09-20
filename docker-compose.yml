@@ -100,7 +100,6 @@ services:
       - "${PORT:-3123}:${PORT:-3123}"
     volumes:
       - ./data:/app/data
-      - ./cache:/app/cache
     extra_hosts:
       - "host.docker.internal:host-gateway"
     shm_size: "2gb"

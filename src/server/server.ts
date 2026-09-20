@@ -51,6 +51,9 @@ import { ContentBucketsRouter } from "./routers/contentbuckets";
 import { ChannelConfigRouter } from "./routers/channelconfigs";
 import { ProfilesRouter, OAuthRouter } from "./routers/profiles";
 import { RepurposeRouter } from "./routers/repurpose";
+import { ConnectorsRouter } from "./routers/connectors";
+import { ReleasesRouter } from "./routers/releases";
+import { ContentVersionsRouter } from "./routers/contentversions";
 import { apiRateLimiter } from "./rateLimit";
 import { logger } from "../logger";
 import { Config } from "../config";
@@ -168,6 +171,9 @@ export class Server {
     const profilesRouter = new ProfilesRouter(config);
     const oauthRouter = new OAuthRouter(config);
     const repurposeRouter = new RepurposeRouter(config);
+    const connectorsRouter = new ConnectorsRouter(config);
+    const releasesRouter = new ReleasesRouter(config);
+    const contentVersionsRouter = new ContentVersionsRouter(config.dataDirPath);
 
     // Always-available routes (no ShortCreator dependency)
     this.app.use("/api/health", healthRouter.router);
@@ -211,6 +217,9 @@ export class Server {
     this.app.use("/api/profiles", requireAuth, profilesRouter.router);
     this.app.use("/api/oauth", oauthRouter.router);
     this.app.use("/api/repurpose", requireAuth, repurposeRouter.router);
+    this.app.use("/api/connectors", requireAuth, connectorsRouter.router);
+    this.app.use("/api/releases", requireAuth, releasesRouter.router);
+    this.app.use("/api/content-versions", requireAuth, contentVersionsRouter.router);
 
     // API Documentation (Swagger UI) — always available
     this.app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {

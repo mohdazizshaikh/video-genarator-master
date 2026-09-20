@@ -1,5 +1,7 @@
 # Architecture – AI Viral Content Empire v12.0
 
+> **Scope note:** This is the original system overview and remains useful for component context. For current migration status, use `docs/CURRENT_STATUS.md`, `docs/MIGRATION_RUNBOOK.md`, and `docs/POSTGRES_MINIO_MIGRATION_MATRIX.md`. For the connector/account evolution and workspace isolation model, use `docs/MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`. The file-backed and global-provider sections below describe the legacy/current compatibility path, not a completed PostgreSQL connector cutover.
+
 ## Overview
 
 AI Viral Content Empire is a full-stack SaaS platform for automated viral content creation and multi-platform publishing. It ships **60 AI engines** across a TypeScript/Node.js backend and a React frontend.

@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container,
@@ -35,7 +36,7 @@ function HumanizedContentPage() {
     setError(null);
     const controller = new AbortController();
     try {
-      const res = await fetch("/api/humanized/humanize", {
+      const res = await authenticatedFetch("/api/humanized/humanize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ script, emotion }),

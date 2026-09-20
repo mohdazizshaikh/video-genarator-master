@@ -16,11 +16,16 @@ import {
   shortVideoSchema,
 } from "../utils";
 import { NewsOverlay } from "./NewsOverlay";
+import { MarketingOverlay } from "./MarketingOverlay";
+import { AdvancedKnowledgeOverlay } from "./AdvancedKnowledgeOverlay";
+import { SportsOverlay } from "./SportsOverlay";
+import { ITProductShowcaseOverlay } from "./ITProductShowcaseOverlay";
 import { TemplateChrome } from "./TemplateChrome";
 import { resolveContentTemplate } from "./ContentTemplateEngine";
 import { TextModeEnum } from "../../types/shorts";
 import { videoUiFontFamily } from "./fontStacks";
 import { pickTemplateVariant, resolveTheme, stableHash } from "./ThemeEngine";
+import { resolveCategoryPipeline } from "./CategoryPipelineProfiles";
 
 export const PortraitVideo: React.FC<z.infer<typeof shortVideoSchema>> = ({
   scenes,
@@ -45,23 +50,34 @@ export const PortraitVideo: React.FC<z.infer<typeof shortVideoSchema>> = ({
     config.templateVariant,
   );
 
+  const pipeline = resolveCategoryPipeline(config.category);
   const contentTemplate = resolveContentTemplate({
     category: config.category || "News",
     scenes,
     family: theme.family,
-    override: config.contentTemplate,
+    override: config.contentTemplate || pipeline.template,
   });
 
+  const isMarketing = pipeline.overlayMode === "marketing";
   const captionBackgroundColor = config.captionBackgroundColor ?? theme.palette.captionHighlight;
 
-  const activeStyle = {
-    backgroundColor: captionBackgroundColor,
-    padding: "10px 14px",
-    marginLeft: "-10px",
-    marginRight: "-10px",
-    borderRadius: "14px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.24)",
-  };
+  const activeStyle = isMarketing
+    ? {
+        backgroundColor: captionBackgroundColor,
+        padding: "6px 12px",
+        marginLeft: "-6px",
+        marginRight: "-6px",
+        borderRadius: "8px",
+        boxShadow: "0 5px 16px rgba(0,0,0,0.18)",
+      }
+    : {
+        backgroundColor: captionBackgroundColor,
+        padding: "10px 14px",
+        marginLeft: "-10px",
+        marginRight: "-10px",
+        borderRadius: "14px",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.24)",
+      };
 
   const captionPosition = config.captionPosition ?? "center";
   let captionStyle = {};
@@ -112,14 +128,51 @@ export const PortraitVideo: React.FC<z.infer<typeof shortVideoSchema>> = ({
           >
             <SceneMedia scene={scene} durationInFrames={durationInFrames} variant={variant} />
             {showOverlay ? (
-              <NewsOverlay
-                headline={scene.headline}
-                sceneIndex={i}
-                totalScenes={scenes.length}
-                categoryLabel={theme.label}
-                theme={theme}
-                variant={variant}
-              />
+              pipeline.overlayMode === "it-showcase" ? (
+                <ITProductShowcaseOverlay
+                  headline={scene.headline}
+                  subcategory={scene.subcategory}
+                  sceneIndex={i}
+                  totalScenes={scenes.length}
+                  theme={theme}
+                  profile={pipeline}
+                />
+              ) : isMarketing ? (
+                <MarketingOverlay
+                  headline={scene.headline}
+                  sceneIndex={i}
+                  totalScenes={scenes.length}
+                  categoryLabel={theme.label}
+                  theme={theme}
+                />
+              ) : pipeline.overlayMode === "news" ? (
+                <NewsOverlay
+                  headline={scene.headline}
+                  sceneIndex={i}
+                  totalScenes={scenes.length}
+                  categoryLabel={theme.label}
+                  theme={theme}
+                  variant={variant}
+                />
+              ) : (
+                pipeline.overlayMode === "sports" ? (
+                  <SportsOverlay
+                    headline={scene.headline}
+                    subcategory={scene.subcategory}
+                    sceneIndex={i}
+                    totalScenes={scenes.length}
+                    theme={theme}
+                  />
+                ) : (
+                  <AdvancedKnowledgeOverlay
+                    headline={scene.headline}
+                    sceneIndex={i}
+                    totalScenes={scenes.length}
+                    theme={theme}
+                    profile={pipeline}
+                  />
+                )
+              )
             ) : null}
             <TemplateChrome
               template={contentTemplate}
@@ -148,17 +201,17 @@ export const PortraitVideo: React.FC<z.infer<typeof shortVideoSchema>> = ({
                   {page.lines.map((line, k) => (
                     <p
                       style={{
-                        fontSize: `${5.8 * subtitleFontScale}em`,
+                        fontSize: `${isMarketing ? 4.7 : 5.8 * subtitleFontScale}em`,
                         fontFamily: videoUiFontFamily,
-                        fontWeight: 800,
+                        fontWeight: isMarketing ? 700 : 800,
                         color: "white",
-                        WebkitTextStroke: "2px rgba(5,8,14,0.9)",
+                        WebkitTextStroke: isMarketing ? "1px rgba(5,8,14,0.55)" : "2px rgba(5,8,14,0.9)",
                         WebkitTextFillColor: "white",
-                        textShadow: "0px 10px 22px rgba(0,0,0,0.42)",
-                        textAlign: "center",
-                        width: "100%",
-                        textTransform: "uppercase",
-                        letterSpacing: 0.5,
+                        textShadow: isMarketing ? "0px 6px 16px rgba(0,0,0,0.28)" : "0px 10px 22px rgba(0,0,0,0.42)",
+                        textAlign: isMarketing ? "left" : "center",
+                        width: isMarketing ? "88%" : "100%",
+                        textTransform: isMarketing ? "none" : "uppercase",
+                        letterSpacing: isMarketing ? 0 : 0.5,
                       }}
                       key={`scene-${i}-page-${j}-line-${k}`}
                     >

@@ -1,5 +1,7 @@
 # Database Schema – AI Viral Content Empire v12.0
 
+> **Scope note:** This document defines the existing JSON-store contracts and is retained for compatibility and migration reference. It is not the final PostgreSQL schema. Connector evolution, workspace ownership, profile-account reconciliation, and the planned destination model are consolidated in `docs/MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`; migration safety and cutover status remain in `docs/MIGRATION_RUNBOOK.md` and `docs/POSTGRES_MINIO_MIGRATION_MATRIX.md`.
+
 ## Overview
 
 The platform uses a **file-based JSON store** pattern. All data is stored as JSON files in `DATA_DIR_PATH` (default: `~/.ai-content-empire/`). Each store is a single JSON file read fully into memory, modified, and written back atomically.

@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container,
@@ -35,7 +36,7 @@ function VisualEnhancementPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/visual/enhance", {
+      const res = await authenticatedFetch("/api/visual/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect } from "react";
 import {
   Container, Paper, TextField, Button, FormControl, InputLabel,
@@ -50,7 +51,7 @@ function TranslatePage() {
   const [activeTab, setActiveTab] = useState<"single" | "batch">("single");
 
   useEffect(() => {
-    fetch("/api/translate/languages")
+    authenticatedFetch("/api/translate/languages")
       .then((r) => r.json())
       .then((d) => {
         if (d.data && Array.isArray(d.data)) {
@@ -68,7 +69,7 @@ function TranslatePage() {
     setError(null);
     setResult(null);
     try {
-      const res = await fetch("/api/translate/", {
+      const res = await authenticatedFetch("/api/translate/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, targetLang, sourceLang }),
@@ -90,7 +91,7 @@ function TranslatePage() {
     setError(null);
     setBatchResults([]);
     try {
-      const res = await fetch("/api/translate/batch", {
+      const res = await authenticatedFetch("/api/translate/batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ texts: lines, targetLang, sourceLang }),

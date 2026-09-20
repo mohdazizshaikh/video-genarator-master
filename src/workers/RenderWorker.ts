@@ -112,7 +112,6 @@ export class RenderWorker {
       config,
       videoType,
       subtitleLanguage,
-      orientation,
       category,
       namingKey,
     } = job.data;

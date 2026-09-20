@@ -41,13 +41,24 @@ const PLATFORM_DIMENSIONS: Record<string, { w: number; h: number }> = {
 
 const CATEGORY_PALETTES: Record<string, { bg: string; text: string; accent: string }> = {
   Tech: { bg: "#0f172a", text: "#f8fafc", accent: "#3b82f6" },
-  Business: { bg: "#1a1a2e", text: "#eee", accent: "#f59e0b" },
+  Technology: { bg: "#0f172a", text: "#f8fafc", accent: "#3b82f6" },
+  Finance: { bg: "#17130a", text: "#fff8e7", accent: "#eab308" },
+  Business: { bg: "#10202b", text: "#f8fafc", accent: "#f4a340" },
   Motivation: { bg: "#7c3aed", text: "#ffffff", accent: "#fbbf24" },
   News: { bg: "#dc2626", text: "#ffffff", accent: "#fef2f2" },
-  Health: { bg: "#059669", text: "#ffffff", accent: "#a7f3d0" },
-  Education: { bg: "#1d4ed8", text: "#ffffff", accent: "#93c5fd" },
-  Entertainment: { bg: "#db2777", text: "#ffffff", accent: "#fbcfe8" },
-  General: { bg: "#111827", text: "#f9fafb", accent: "#6366f1" },
+  Education: { bg: "#12305c", text: "#ffffff", accent: "#60a5fa" },
+  Entertainment: { bg: "#2a1027", text: "#ffffff", accent: "#f472b6" },
+  Food: { bg: "#29150a", text: "#fff7ed", accent: "#f97316" },
+  Fitness: { bg: "#0b231a", text: "#f0fdf4", accent: "#4ade80" },
+  Travel: { bg: "#082529", text: "#ecfeff", accent: "#2dd4bf" },
+  Sports: { bg: "#0b231a", text: "#f0fdf4", accent: "#22c55e" },
+  Science: { bg: "#10233b", text: "#eff6ff", accent: "#38bdf8" },
+  Gaming: { bg: "#180f2e", text: "#faf5ff", accent: "#a78bfa" },
+  Beauty: { bg: "#2a1020", text: "#fff1f2", accent: "#f472b6" },
+  Parenting: { bg: "#10233b", text: "#eff6ff", accent: "#60a5fa" },
+  Health: { bg: "#09251e", text: "#ecfdf5", accent: "#34d399" },
+  Marketing: { bg: "#10202b", text: "#f8fafc", accent: "#f4a340" },
+  General: { bg: "#111827", text: "#f9fafb", accent: "#94a3b8" },
 };
 
 export class ImageGenerationEngine {

@@ -18,6 +18,8 @@
  * touching the render components.
  */
 
+import { resolveCategoryPipeline } from "./CategoryPipelineProfiles";
+
 export type ContentStructure =
   | "breaking"
   | "listicle"
@@ -25,6 +27,7 @@ export type ContentStructure =
   | "beforeafter"
   | "brainrot"
   | "explainer"
+  | "marketing"
   | "story";
 
 export type TemplateChromeKind = "none" | "step-chip" | "countdown" | "split-label";
@@ -188,6 +191,27 @@ const TEMPLATES: ContentTemplate[] = [
     ],
   },
   {
+    id: "marketing",
+    label: "Brand Showcase",
+    structure: "marketing",
+    chromeKind: "none",
+    chromeAnchor: "top-left",
+    chromeLabel: "BRAND",
+    introFlash: false,
+    roleGuide: ["brand hook", "proof", "service/value", "trust", "cta"],
+    signals: [
+      "marketing",
+      "brand showcase",
+      "service highlight",
+      "business profile",
+      "company profile",
+      "product showcase",
+      "why choose us",
+      "contact us",
+      "visit our website",
+    ],
+  },
+  {
     id: "story",
     label: "Story Flow",
     structure: "story",
@@ -239,6 +263,8 @@ const familyPreferences: Record<string, string[]> = {
   Motivation: ["story", "brainrot", "listicle"],
   Politics: ["breaking", "explainer", "story"],
   Education: ["explainer", "quiz", "listicle"],
+  Marketing: ["marketing", "story", "explainer"],
+  Business: ["marketing", "explainer", "story"],
 };
 
 const templateById = (id: string): ContentTemplate | undefined =>
@@ -261,6 +287,7 @@ export function resolveContentTemplate(options: {
     if (forced) return forced;
   }
 
+  const profileTemplate = templateById(resolveCategoryPipeline(family || category).template);
   const haystack = buildHaystack(scenes);
 
   // Order matters: more specific structures scored before generic ones.
@@ -269,6 +296,7 @@ export function resolveContentTemplate(options: {
     "quiz",
     "beforeafter",
     "brainrot",
+    "marketing",
     "listicle",
     "explainer",
   ];
@@ -283,6 +311,10 @@ export function resolveContentTemplate(options: {
 
   if (haystack.includes("__numbered__")) {
     return templateById("listicle") || TEMPLATES[0];
+  }
+
+  if (profileTemplate && (family || category)) {
+    return profileTemplate;
   }
 
   const preferenceKey = family || category || "News";

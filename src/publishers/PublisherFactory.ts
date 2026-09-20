@@ -90,9 +90,10 @@ const ACCOUNT_CREDENTIAL_TO_CONFIG: Record<PlatformType, Record<string, string>>
 };
 
 /**
- * Builds a publisher for a specific profile account, overlaying the account's
- * decrypted credentials on top of the global config. Falls back to global
- * credentials for any key the account does not provide.
+ * Builds a publisher for a specific account. Account credentials are the
+ * production authority. Global configuration is inherited only when the
+ * explicit local compatibility flag is enabled; otherwise missing credentials
+ * remain absent and the provider fails closed.
  */
 export function createPublisherForAccount(
   platform: PlatformType,
@@ -107,6 +108,8 @@ export function createPublisherForAccount(
   for (const [credentialKey, configKey] of Object.entries(mapping)) {
     if (credentials[credentialKey]) overlay[configKey] = credentials[credentialKey];
   }
-  const merged = Object.assign(Object.create(config), overlay) as Config;
-  return createPublisher(platform, merged);
+  const merged = config.allowGlobalProviderCredentialFallback
+    ? Object.assign(Object.create(config), overlay)
+    : Object.assign(Object.create(null), overlay);
+  return createPublisher(platform, merged as Config);
 }

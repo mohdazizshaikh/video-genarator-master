@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect } from "react";
 import {
   Container, Paper, TextField, Button, FormControl, InputLabel,
@@ -67,7 +68,7 @@ function SeriesBuilderPage() {
   const loadSeries = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/strategy/series");
+      const res = await authenticatedFetch("/api/strategy/series");
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setSeries(Array.isArray(data.data) ? data.data : []);
@@ -85,7 +86,7 @@ function SeriesBuilderPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/strategy/series", {
+      const res = await authenticatedFetch("/api/strategy/series", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newSeries),
@@ -103,7 +104,7 @@ function SeriesBuilderPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(`/api/strategy/series/${id}`, { method: "DELETE" });
+      const res = await authenticatedFetch(`/api/strategy/series/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       await loadSeries();
     } catch (err: any) {

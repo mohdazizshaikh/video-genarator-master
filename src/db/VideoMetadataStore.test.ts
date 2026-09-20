@@ -4,11 +4,12 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { VideoMetadataStore } from "./VideoMetadataStore";
+import { LanguageEnum } from "../types/shorts";
 
 const scenes = [{
   text: "A sufficiently long technology scene for metadata extraction.",
   searchTerms: ["technology", "security"],
-  language: "en" as const,
+  language: LanguageEnum.en,
   headline: "Tenant-safe metadata",
   audio: { url: "", duration: 1 },
 }];

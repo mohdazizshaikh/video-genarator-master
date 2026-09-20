@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, Chip, Button, CircularProgress,
@@ -64,7 +65,7 @@ export const TrendDashboard: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/trends');
+      const res = await authenticatedFetch('/api/trends');
       const data = await res.json();
       if (data.status === 'ok') {
         setTrends(data.data.topics || []);
@@ -77,7 +78,7 @@ export const TrendDashboard: React.FC = () => {
   const loadRadar = useCallback(async () => {
     setRadarLoading(true);
     try {
-      const res = await fetch('/api/trends/viral-radar');
+      const res = await authenticatedFetch('/api/trends/viral-radar');
       const data = await res.json();
       if (data.status === 'ok') {
         setAlerts(data.data.alerts || []);
@@ -90,7 +91,7 @@ export const TrendDashboard: React.FC = () => {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      await fetch('/api/trends/refresh', { method: 'POST' });
+      await authenticatedFetch('/api/trends/refresh', { method: 'POST' });
       await loadTrends();
       await loadRadar();
     } catch { setError('Refresh failed'); }

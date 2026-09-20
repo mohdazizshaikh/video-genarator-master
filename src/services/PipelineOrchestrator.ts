@@ -8,7 +8,7 @@ import { ThumbnailEngine } from "./ThumbnailEngine";
 import { WatermarkEngine } from "./WatermarkEngine";
 import { HookLibraryEngine } from "./HookLibraryEngine";
 import { PipelineStore, type PipelineJob, type GeneratedVariation, type AIScores } from "../db/PipelineStore";
-import { ScheduleStore } from "../db/ScheduleStore";
+import { ApprovalEngine } from "./ApprovalEngine";
 
 export interface PipelineInput {
   tenantId?: string;
@@ -52,7 +52,7 @@ export class PipelineOrchestrator {
   private watermark: WatermarkEngine;
   private hooks: HookLibraryEngine;
   private store: PipelineStore;
-  private scheduleStore: ScheduleStore;
+  private approval: ApprovalEngine;
 
   constructor(dataDirPath: string) {
     this.humanized = new HumanizedContentEngine(dataDirPath);
@@ -64,7 +64,7 @@ export class PipelineOrchestrator {
     this.watermark = new WatermarkEngine();
     this.hooks = new HookLibraryEngine(dataDirPath);
     this.store = new PipelineStore(dataDirPath);
-    this.scheduleStore = new ScheduleStore(dataDirPath);
+    this.approval = new ApprovalEngine(dataDirPath);
   }
 
   async run(input: PipelineInput): Promise<PipelineResult> {
@@ -154,38 +154,22 @@ export class PipelineOrchestrator {
 
       const topVariations = variations.slice(0, 3);
       const scheduleIds: string[] = [];
+      const reviewIds: string[] = [];
 
       if (input.autoSchedule && topVariations.length > 0) {
-        await this.store.updateJob(job.id, { currentStep: "scheduling" });
-
+        await this.store.updateJob(job.id, { currentStep: "human-review" });
         for (const variation of topVariations) {
-          const publishAt = new Date(Date.now() + (scheduleIds.length + 1) * 24 * 60 * 60 * 1000);
-          const schedule = await this.scheduleStore.createForTenant(input.tenantId ?? "", {
-            name: `Pipeline: ${input.topic} — Variation #${variation.rank}`,
-            videoId: `pipeline_${job.id}_${variation.id}`,
-            platforms: [input.platform],
-            categories: [this.detectCategory(input.topic)],
-            languages: ["en"],
-            engines: {
-              enableTranslation: false,
-              enableCommentCTA: true,
-              enablePlatformPsych: true,
-              enableSeries: false,
-              enableHumanMimicry: true,
-              enableHashtagOptimization: true,
-              enableEngagementOptimization: true,
-            },
-            quality: { targetLUFS: -14, sharpnessLevel: 8, visualQualityTier: "premium" },
-            cronExpression: "0 18 * * *",
-            publishAt: publishAt.toISOString(),
-            status: "active",
-            metadata: {
-              tags: ["pipeline", "auto-generated"],
-              notes: `Auto-scheduled from pipeline job ${job.id}. Score: ${variation.aiScores.overallScore}`,
-            },
-          });
-          scheduleIds.push(schedule.id);
+          const review = this.approval.submit(
+            input.tenantId ?? "",
+            `pipeline_${job.id}_${variation.id}`,
+            "video",
+            `${input.topic} — Variation #${variation.rank}`,
+            "pipeline",
+            variation.aiScores.overallScore >= 85 ? "high" : "medium",
+          );
+          reviewIds.push(review.id);
         }
+        logger.info({ jobId: job.id, reviewCount: reviewIds.length }, "Pipeline variations submitted for human review; no active schedule created");
       }
 
       const completedJob = await this.store.updateJob(job.id, {
@@ -194,10 +178,11 @@ export class PipelineOrchestrator {
         totalVariations: variations.length,
         topVariations: topVariations.map((v) => v.id),
         scheduleIds,
+        reviewIds,
         durationMs: Date.now() - startTime,
       });
 
-      logger.info({ jobId: job.id, variations: variations.length, scheduleIds: scheduleIds.length, durationMs: Date.now() - startTime }, "Pipeline completed");
+      logger.info({ jobId: job.id, variations: variations.length, scheduleIds: scheduleIds.length, reviewIds: reviewIds.length, durationMs: Date.now() - startTime }, "Pipeline completed");
 
       return {
         job: completedJob!,

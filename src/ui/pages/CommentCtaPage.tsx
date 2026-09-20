@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from "react";
 import {
   Container, Paper, TextField, Button, FormControl, InputLabel,
@@ -69,7 +70,7 @@ function CommentCtaPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/strategy/cta/generate", {
+      const res = await authenticatedFetch("/api/strategy/cta/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ platform, category, language }),
@@ -89,7 +90,7 @@ function CommentCtaPage() {
     setError(null);
     try {
       const params = new URLSearchParams({ platform, category, language, placement, limit: "6" });
-      const res = await fetch(`/api/strategy/cta?${params}`);
+      const res = await authenticatedFetch(`/api/strategy/cta?${params}`);
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setCtas(Array.isArray(data.data) ? data.data : []);

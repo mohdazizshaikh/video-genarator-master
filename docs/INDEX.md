@@ -2,6 +2,10 @@
 
 > For commit: `721e765` · 316 source files · 312 API endpoints · 44 pages · 18 stores
 
+## Current documentation authority
+
+For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md) as the consolidated source of truth. It explicitly separates the current `ProfileAccountStore`/`ChannelConfigStore` implementation from the planned workspace-owned connector/destination model and links to the authoritative migration, local-setup, authentication, pipeline, and schema documents. It does not imply that PostgreSQL/MinIO cutover or multi-bot publishing is already complete.
+
 ## Files
 
 | File | Type | Responsibility | Exports |

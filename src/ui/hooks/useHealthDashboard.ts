@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "../services/apiClient";
+import useAuthStore from "../store/authStore";
 
 export interface QueueCounts {
   active: number;
@@ -124,8 +125,15 @@ export function useHealthDashboard(options: { autoLoad?: boolean } = {}) {
   const [data, setData] = useState<HealthDashboardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isAuthenticated = useAuthStore((state) => Boolean(state.token && state.user));
 
   const refresh = useCallback(async () => {
+    if (!isAuthenticated) {
+      setData(null);
+      setError("Authentication required");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -140,13 +148,13 @@ export function useHealthDashboard(options: { autoLoad?: boolean } = {}) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    if (autoLoad) {
+    if (autoLoad && isAuthenticated) {
       void refresh();
     }
-  }, [autoLoad, refresh]);
+  }, [autoLoad, isAuthenticated, refresh]);
 
   return {
     data,

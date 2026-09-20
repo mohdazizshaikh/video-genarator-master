@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, Button, TextField, MenuItem,
@@ -42,7 +43,7 @@ export const ImageGenerator: React.FC = () => {
   const generate = async (endpoint: string, body: object) => {
     setLoading(true); setError(null); setResult(null);
     try {
-      const res = await fetch(`/api/image/${endpoint}`, {
+      const res = await authenticatedFetch(`/api/image/${endpoint}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       const data = await res.json();

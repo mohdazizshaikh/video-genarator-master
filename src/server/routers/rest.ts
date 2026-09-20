@@ -14,6 +14,7 @@ import { ReportStore } from "../../db/ReportStore";
 import { ScriptPlanStore } from "../../db/ScriptPlanStore";
 import { VideoMetadataStore } from "../../db/VideoMetadataStore";
 import { CustomNewsSourceStore } from "../../db/CustomNewsSourceStore";
+import { ContentAutomationRuleStore, type ContentAutomationRule } from "../../db/ContentAutomationRuleStore";
 import { ReportMerger } from "../../aggregator/ReportMerger";
 import { RssFetcher } from "../../news-fetcher/RssFetcher";
 import { AiLlmGenerator, configureLlmDefaults, type AutoScriptStyle, type HookOption } from "../../script-generator/AiLlmGenerator";
@@ -39,6 +40,7 @@ export class APIRouter {
   private scriptPlanStore: ScriptPlanStore;
   private videoMetadataStore: VideoMetadataStore;
   private customNewsSourceStore: CustomNewsSourceStore;
+  private automationRuleStore: ContentAutomationRuleStore;
 
   constructor(config: Config, shortCreator: ShortCreator) {
     this.config = config;
@@ -48,6 +50,7 @@ export class APIRouter {
     this.scriptPlanStore = new ScriptPlanStore(config.dataDirPath);
     this.videoMetadataStore = new VideoMetadataStore(config.dataDirPath);
     this.customNewsSourceStore = new CustomNewsSourceStore(config.dataDirPath);
+    this.automationRuleStore = new ContentAutomationRuleStore(config.dataDirPath);
 
     configureLlmDefaults({
       provider: config.aiLlmProvider,
@@ -310,10 +313,63 @@ export class APIRouter {
     this.router.get(
       "/news-sources",
       async (req: ExpressRequest, res: ExpressResponse) => {
-        const rssFetcher = new RssFetcher(this.config.dataDirPath);
+        const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
         res.status(200).json(rssFetcher.listSourcesSync());
       },
     );
+    this.router.get("/automation/rules", (req: ExpressRequest, res: ExpressResponse) => {
+      res.status(200).json({ rules: this.automationRuleStore.listForTenant(getAuthenticatedTenantId(req) ?? "") });
+    });
+    this.router.post("/automation/rules", (req: ExpressRequest, res: ExpressResponse) => {
+      try {
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const body = req.body as Partial<ContentAutomationRule>;
+        if (!body.name || !body.category || !body.niche || !body.platform || !body.tone || !Array.isArray(body.sourceIds)) {
+          res.status(400).json({ error: "name, sourceIds, category, niche, platform, and tone are required" });
+          return;
+        }
+        const videoType = body.videoType === "long" ? "long" : "short";
+        const rule = this.automationRuleStore.create({
+          tenantId,
+          name: String(body.name),
+          sourceIds: body.sourceIds.map(String),
+          category: String(body.category),
+          niche: String(body.niche),
+          platform: String(body.platform),
+          tone: String(body.tone),
+          videoType,
+          enabled: body.enabled !== false,
+          maxDraftsPerTick: Number(body.maxDraftsPerTick || 1),
+        });
+        res.status(201).json({ rule });
+      } catch (error: unknown) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Invalid automation rule" });
+      }
+    });
+    this.router.patch("/automation/rules/:id", (req: ExpressRequest, res: ExpressResponse) => {
+      const enabled = req.body?.enabled;
+      if (typeof enabled !== "boolean") {
+        res.status(400).json({ error: "enabled must be boolean" });
+        return;
+      }
+      const rule = this.automationRuleStore.setEnabled(getAuthenticatedTenantId(req) ?? "", req.params.id, enabled);
+      if (!rule) {
+        res.status(404).json({ error: "Automation rule not found" });
+        return;
+      }
+      res.status(200).json({ rule });
+    });
+    this.router.get("/automation/status", (req: ExpressRequest, res: ExpressResponse) => {
+      const tenantId = getAuthenticatedTenantId(req) ?? "";
+      const sources = new RssFetcher(this.config.dataDirPath, tenantId).listSourcesSync();
+      const rules = this.automationRuleStore.listForTenant(tenantId);
+      const configuredSourceIds = new Set(rules.flatMap((rule) => rule.sourceIds));
+      res.status(200).json({
+        scheduler: { mode: "review_queue_only", publishingEnabled: false },
+        rules,
+        sources: sources.map((source) => ({ ...source, configured: configuredSourceIds.has(source.id), health: "unknown" })),
+      });
+    });
 
     this.router.post(
       "/news-sources/custom",
@@ -338,7 +394,7 @@ export class APIRouter {
             return;
           }
 
-          const rssFetcher = new RssFetcher(this.config.dataDirPath);
+          const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
           const validation = await rssFetcher.validateFeedUrl(parsedUrl.toString());
           if (!validation.ok) {
             res.status(400).json({ error: `Feed validation failed: ${validation.reason}` });
@@ -350,6 +406,7 @@ export class APIRouter {
             url: parsedUrl.toString(),
             category: String(category),
             subCategory: subCategory ? String(subCategory) : undefined,
+            tenantId: getAuthenticatedTenantId(req) ?? undefined,
           });
 
           res.status(201).json({ source: record });
@@ -396,7 +453,7 @@ export class APIRouter {
       "/reports/fetch",
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
-          const rssFetcher = new RssFetcher(this.config.dataDirPath);
+          const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
           const availableSources = rssFetcher.listSourcesSync();
           const sourceId = req.body.sourceId || availableSources[0]?.id;
           if (!sourceId) {
@@ -544,7 +601,7 @@ export class APIRouter {
             return;
           }
 
-          const rssFetcher = new RssFetcher();
+          const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
           const stories = await rssFetcher.fetchStoriesFromSources(selectedSourceIds);
           if (stories.length === 0) {
             res.status(404).json({ error: "No news stories found for this source" });
@@ -596,7 +653,7 @@ export class APIRouter {
             return;
           }
 
-          const rssFetcher = new RssFetcher();
+          const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
           const stories = await rssFetcher.fetchStoriesFromSources(selectedSourceIds);
           if (stories.length === 0) {
             res.status(404).json({ error: "No news stories found for this source" });
@@ -657,7 +714,7 @@ export class APIRouter {
 
           logger.info({ selectedSourceIds, scriptLanguage }, "Auto-generating script from news");
 
-          const rssFetcher = new RssFetcher();
+          const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
           const stories = await rssFetcher.fetchStoriesFromSources(selectedSourceIds);
 
           if (stories.length === 0) {

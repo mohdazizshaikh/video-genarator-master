@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect } from "react";
 import {
   Box,
@@ -324,12 +325,12 @@ export default function AutoModePage() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
   useEffect(() => {
-    fetch("/api/pipeline/stats")
+    authenticatedFetch("/api/pipeline/stats")
       .then((r) => r.json())
       .then((d) => { if (d.stats) setStats(d.stats); })
       .catch(() => {});
 
-    fetch("/api/pipeline/jobs?limit=10")
+    authenticatedFetch("/api/pipeline/jobs?limit=10")
       .then((r) => r.json())
       .then((d) => {
         if (d.data) { setHistory(d.data); setHistoryLoaded(true); }
@@ -355,7 +356,7 @@ export default function AutoModePage() {
     setResult(null);
 
     try {
-      const res = await fetch("/api/pipeline/run", {
+      const res = await authenticatedFetch("/api/pipeline/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic: topic.trim(), platform, tone, bulkCount, autoSchedule }),
@@ -365,8 +366,8 @@ export default function AutoModePage() {
       setResult(data);
       setStepIndex(STEPS.length - 1);
 
-      fetch("/api/pipeline/stats").then((r) => r.json()).then((d) => { if (d.stats) setStats(d.stats); }).catch(() => {});
-      fetch("/api/pipeline/jobs?limit=10").then((r) => r.json()).then((d) => { if (d.data) setHistory(d.data); }).catch(() => {});
+      authenticatedFetch("/api/pipeline/stats").then((r) => r.json()).then((d) => { if (d.stats) setStats(d.stats); }).catch(() => {});
+      authenticatedFetch("/api/pipeline/jobs?limit=10").then((r) => r.json()).then((d) => { if (d.data) setHistory(d.data); }).catch(() => {});
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Pipeline failed");
     } finally {

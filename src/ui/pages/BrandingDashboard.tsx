@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Button, Card, CardContent, TextField, Grid, Alert, LinearProgress,
@@ -36,7 +37,7 @@ const BrandingDashboard: React.FC = () => {
   const fetchBranding = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/branding/${tenantId}`);
+      const res = await authenticatedFetch(`/api/branding/${tenantId}`);
       const data = await res.json();
       setBranding(data.config);
       setForm(data.config);
@@ -53,7 +54,7 @@ const BrandingDashboard: React.FC = () => {
     if (!form.name || !form.domain || !form.colors) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/branding/${tenantId}`, {
+      const res = await authenticatedFetch(`/api/branding/${tenantId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -83,7 +84,7 @@ const BrandingDashboard: React.FC = () => {
 
   const handleReset = async () => {
     try {
-      const res = await fetch(`/api/branding/${tenantId}/reset`, { method: 'POST' });
+      const res = await authenticatedFetch(`/api/branding/${tenantId}/reset`, { method: 'POST' });
       const data = await res.json();
       setBranding(data.branding);
       setForm(data.branding);

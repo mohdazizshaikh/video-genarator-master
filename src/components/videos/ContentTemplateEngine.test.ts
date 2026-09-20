@@ -85,6 +85,18 @@ describe("ContentTemplateEngine", () => {
     expect(news.structure).toBe("breaking");
   });
 
+  it("resolves marketing content to the brand showcase template", () => {
+    const template = resolveContentTemplate({
+      category: "Marketing",
+      family: "Marketing",
+      scenes: [
+        { headline: "Digital solutions for business growth", text: "Aaditech Solution helps businesses with practical digital services.", subcategory: "Company profile" },
+      ],
+    });
+    expect(template.id).toBe("marketing");
+    expect(template.structure).toBe("marketing");
+  });
+
   it("falls back to story for unknown genre", () => {
     const template = resolveContentTemplate({
       category: "Random",
@@ -124,6 +136,7 @@ describe("ContentTemplateEngine", () => {
         "beforeafter",
         "brainrot",
         "explainer",
+        "marketing",
         "story",
       ]),
     );

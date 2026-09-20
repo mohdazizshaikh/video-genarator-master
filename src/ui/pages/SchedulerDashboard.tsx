@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../services/authenticatedFetch";
 /**
  * SchedulerDashboard – Phase F3
  * Manage automated video creation scheduling, queue health, and job history.
@@ -130,7 +131,7 @@ const UpcomingTab: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/schedule/upcoming?hours=24");
+      const res = await authenticatedFetch("/api/schedule/upcoming?hours=24");
       const data = await res.json();
       setSchedules(Array.isArray(data.schedules) ? data.schedules : []);
     } catch {
