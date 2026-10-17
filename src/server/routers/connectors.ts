@@ -94,6 +94,18 @@ export class ConnectorsRouter {
       return res.json({ connectorId: req.params.connectorId, secretStored: true });
     });
 
+    this.router.delete("/:connectorId/secret", (req: Request, res: Response) => {
+      const workspaceId = tenantIdFrom(req);
+      const connector = this.store.getConnector(workspaceId, req.params.connectorId);
+      if (!connector) return res.status(404).json({ error: "Connector not found" });
+      if (!this.secrets) return res.status(503).json({ error: "Connector secret storage is not configured" });
+      const removed = this.secrets.remove(workspaceId, req.params.connectorId);
+      const updated = removed
+        ? this.store.updateConnector(workspaceId, connector.id, { status: "reauthorization_required" })
+        : connector;
+      return res.json({ connectorId: connector.id, secretRemoved: removed, connector: updated });
+    });
+
     this.router.post("/:connectorId/destinations/:destinationId/verify", async (req: Request, res: Response) => {
       const workspaceId = tenantIdFrom(req);
       const connector = this.store.getConnector(workspaceId, req.params.connectorId);

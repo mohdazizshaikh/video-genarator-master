@@ -170,9 +170,31 @@ function ConnectorsPage() {
         `/api/connectors/${selected.id}/secret`,
         jsonPut({ secret }),
       );
-      setNotice(`Secret material stored for connector ${selected.id}. Values are encrypted at rest and never returned.`);
+      setNotice(`Secret material stored for connector ${selected.id}. Values are encrypted at rest and never returned. Storing again rotates the secret in place.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Secret storage failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revokeSecret = async () => {
+    if (!selected) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const payload = await authenticatedJson<{ connectorId: string; secretRemoved: boolean; connector: ConnectorRecord }>(
+        `/api/connectors/${selected.id}/secret`,
+        { method: "DELETE" },
+      );
+      setNotice(payload.secretRemoved
+        ? `Secret revoked for connector ${payload.connectorId}. Provider actions for this connector now fail closed until new credentials are stored.`
+        : `No stored secret existed for connector ${payload.connectorId}.`);
+      await loadConnectors();
+      if (payload.connector) setSelected(payload.connector);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Secret revocation failed");
     } finally {
       setBusy(false);
     }
@@ -321,6 +343,7 @@ function ConnectorsPage() {
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 Stored encrypted at rest. Values are never returned by the API and never placed in queue payloads or logs.
+                Storing a new value rotates the existing secret in place; revoking removes it and marks the connector as requiring reauthorization.
               </Typography>
               <TextField
                 multiline
@@ -330,7 +353,10 @@ function ConnectorsPage() {
                 onChange={(e) => setSecretJson(e.target.value)}
                 sx={{ mb: 2, "& textarea": { fontFamily: "monospace", fontSize: 13 } }}
               />
-              <Button variant="contained" onClick={storeSecret} disabled={busy}>Store Secret</Button>
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" onClick={storeSecret} disabled={busy}>Store Secret</Button>
+                <Button variant="outlined" color="error" onClick={revokeSecret} disabled={busy}>Revoke Secret</Button>
+              </Stack>
             </CardContent>
           </Card>
 

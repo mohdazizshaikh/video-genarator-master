@@ -31,4 +31,18 @@ describe("ConnectorSecretStore", () => {
     expect(() => store.put("workspace-a", "connector-a", {})).toThrow("connector secret");
     expect(() => store.put("workspace-a", "connector-a", { token: "" })).toThrow("connector secret");
   });
+
+  it("rotates a secret in place and removes it only for the owning workspace", () => {
+    const { store, dir } = makeStore();
+    store.put("workspace-a", "connector-a", { botToken: "first-token" });
+    store.put("workspace-a", "connector-a", { botToken: "second-token" });
+    expect(store.get("workspace-a", "connector-a")).toEqual({ botToken: "second-token" });
+    expect(fs.readFileSync(path.join(dir, "connector-secrets.json"), "utf8")).not.toContain("first-token");
+
+    expect(store.remove("workspace-b", "connector-a")).toBe(false);
+    expect(store.get("workspace-a", "connector-a")).toEqual({ botToken: "second-token" });
+    expect(store.remove("workspace-a", "connector-a")).toBe(true);
+    expect(store.get("workspace-a", "connector-a")).toBeUndefined();
+    expect(store.remove("workspace-a", "connector-a")).toBe(false);
+  });
 });

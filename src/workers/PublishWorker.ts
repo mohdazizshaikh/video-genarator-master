@@ -41,6 +41,19 @@ export interface PublishJobPayload {
   destinationId?: string;
 }
 
+/**
+ * Retry terminality contract for publish jobs.
+ *
+ * The BullMQ job's own `attempts` budget is the single source of truth: a
+ * failure is terminal only when the attempt that just failed was the last one
+ * BullMQ will execute. Dead-lettering before this point would let the worker
+ * declare "permanently failed" while another retry is still scheduled — and a
+ * retry that later succeeds would contradict the recorded terminal state.
+ */
+export function isTerminalPublishFailure(attemptsMade: number, maxAttempts: number | undefined): boolean {
+  return attemptsMade >= Math.max(1, maxAttempts ?? 1);
+}
+
 export class PublishWorker {
   private worker: Worker;
   private publishJobStore: PublishJobStore;
@@ -80,13 +93,15 @@ export class PublishWorker {
     this.worker.on("failed", async (job, err) => {
       if (!job) return;
       const { publishJobId } = job.data;
-      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "failed", attempt: (job.attemptsMade ?? 0) + 1, payload: { error: err.message } });
+      const attemptsMade = job.attemptsMade ?? 0;
+      const terminal = isTerminalPublishFailure(attemptsMade, job.opts.attempts);
+      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "failed", attempt: attemptsMade, payload: { error: err.message, terminal } });
 
       await this.publishJobStore.incrementAttemptForTenant(job.data.tenantId ?? "", publishJobId);
       const record = await this.publishJobStore.getJobForTenant(job.data.tenantId ?? "", publishJobId);
       const attempts = record?.attemptCount ?? 0;
 
-      if (attempts >= 2) {
+      if (terminal) {
         const { createQueue } = await import("./QueueManager.js");
         const deadletter = createQueue(QUEUE_NAMES.DEADLETTER, this.config);
         await deadletter.add("publish-deadletter", {
@@ -94,7 +109,7 @@ export class PublishWorker {
           jobId: publishJobId,
           originalQueue: QUEUE_NAMES.PUBLISH,
           failReason: err.message,
-          attemptsMade: attempts,
+          attemptsMade: attemptsMade,
           originalJobData: job.data,
         });
 
@@ -102,6 +117,12 @@ export class PublishWorker {
           error: `Max retries exceeded: ${err.message}`,
           attemptCount: attempts,
         });
+        if (job.data.releaseTargetId && job.data.tenantId) {
+          await this.releaseStore.updateTarget(job.data.tenantId, job.data.releaseTargetId, {
+            status: "failed",
+            lastErrorCode: err.message.slice(0, 160),
+          });
+        }
         logger.error(
           { publishJobId, platform: job.data.platform, attempts, err: err.message },
           "Publish job moved to dead-letter after max retries",
@@ -111,6 +132,10 @@ export class PublishWorker {
           error: err.message,
           attemptCount: attempts,
         });
+        logger.warn(
+          { publishJobId, platform: job.data.platform, attemptsMade, maxAttempts: job.opts.attempts ?? 1, err: err.message },
+          "Publish job failed; BullMQ retry scheduled",
+        );
       }
     });
 

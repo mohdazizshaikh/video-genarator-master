@@ -2,10 +2,11 @@ import { Router, json } from "express";
 import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import { ConnectorStore } from "../../db/ConnectorStore";
+import { ConnectorSecretStore } from "../../db/ConnectorSecretStore";
 import { ReleaseStore } from "../../db/ReleaseStore";
 import { PublishJobStore } from "../../db/PublishJobStore";
 import { ContentVersionStore } from "../../db/ContentVersionStore";
-import { createQueue, QUEUE_NAMES } from "../../workers/QueueManager";
+import { createPublishQueue } from "../../workers/QueueManager";
 import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 interface ClaimsRequest extends Request {
@@ -27,6 +28,7 @@ export class ReleasesRouter {
   public readonly router: Router;
   private readonly releases: ReleaseStore;
   private readonly connectors: ConnectorStore;
+  private readonly secrets?: ConnectorSecretStore;
   private readonly publishJobs: PublishJobStore;
   private readonly contentVersions: ContentVersionStore;
   private readonly config: Config;
@@ -37,6 +39,8 @@ export class ReleasesRouter {
     this.config = config;
     this.releases = new ReleaseStore(config.dataDirPath);
     this.connectors = new ConnectorStore(config.dataDirPath);
+    const encryptionSecret = process.env.TENANT_KEYS_SECRET || "";
+    if (encryptionSecret.trim()) this.secrets = new ConnectorSecretStore(config.dataDirPath, encryptionSecret);
     this.publishJobs = new PublishJobStore(config.dataDirPath);
     this.contentVersions = new ContentVersionStore(config.dataDirPath);
     this.register();
@@ -94,9 +98,14 @@ export class ReleasesRouter {
         const release = this.releases.getRelease(workspaceId, req.params.releaseId);
         if (!release || release.approvalStatus !== "approved") return res.status(409).json({ error: "Approved release is required" });
         if (!connector || connector.status !== "connected" || !destination || destination.status !== "verified") return res.status(409).json({ error: "Connected connector and verified destination are required" });
+        if (!this.secrets) return res.status(503).json({ error: "Connector secret storage is not configured" });
+        const credentials = this.secrets.get(workspaceId, connector.id);
+        if (!credentials || Object.keys(credentials).length === 0) {
+          return res.status(409).json({ error: "Connector credentials are unavailable; store the connector secret before queueing" });
+        }
         if (!renderOutputPath || !title || !Array.isArray(tags)) return res.status(400).json({ error: "renderOutputPath, title, and tags are required" });
         const job = await this.publishJobs.createJob({ tenantId: workspaceId, renderOutputPath, platform: connector.platform === "twitter" ? "x" : connector.platform, channelId: destination.externalDestinationId, title, description, tags, category, language, thumbnailPath, scheduleAt });
-        const queue = createQueue(QUEUE_NAMES.PUBLISH, this.config);
+        const queue = createPublishQueue(this.config);
         await queue.add("publish-release-target", { ...job, tenantId: workspaceId, publishJobId: job.id, releaseTargetId: target.id, connectorId: connector.id, destinationId: destination.id }, { jobId: `release-target-${target.id}` });
         return res.status(202).json({ jobId: job.id, targetId: target.id, queued: true });
       } catch (error) {
