@@ -77,4 +77,34 @@ describe("ReleaseStore", () => {
     expect(store.listReleases("workspace-b")).toHaveLength(1);
     expect(store.listReleases("workspace-c")).toEqual([]);
   });
+
+  it("counts publish attempts only when a target starts publishing", () => {
+    const store = makeStore();
+    const release = store.createRelease(baseRelease);
+    const first = store.createTarget({
+      workspaceId: "workspace-a",
+      releaseId: release.id,
+      connectorId: "connector-a",
+      destinationId: "destination-a",
+      idempotencyKey: "release-a-target-a",
+    });
+    expect(first.attempts).toBe(0);
+
+    store.updateTarget("workspace-a", first.id, { status: "publishing" });
+    store.updateTarget("workspace-a", first.id, { status: "published", externalId: "msg-1" });
+    expect(store.getTarget("workspace-a", first.id)?.attempts).toBe(1);
+
+    const second = store.createTarget({
+      workspaceId: "workspace-a",
+      releaseId: release.id,
+      connectorId: "connector-a",
+      destinationId: "destination-a",
+      idempotencyKey: "release-a-target-b",
+    });
+    store.updateTarget("workspace-a", second.id, { status: "publishing" });
+    store.updateTarget("workspace-a", second.id, { status: "retryable", lastErrorCode: "timeout" });
+    store.updateTarget("workspace-a", second.id, { status: "publishing" });
+    store.updateTarget("workspace-a", second.id, { status: "published", externalId: "msg-2" });
+    expect(store.getTarget("workspace-a", second.id)?.attempts).toBe(2);
+  });
 });

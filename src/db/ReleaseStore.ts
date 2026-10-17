@@ -151,7 +151,9 @@ export class ReleaseStore {
     const target = file.targets.find((candidate) => candidate.workspaceId === workspaceId && candidate.id === targetId);
     if (!target) return undefined;
     Object.assign(target, updates, { updatedAt: this.now() });
-    if (updates.status && updates.status !== "queued") target.attempts += 1;
+    // Count publish attempts only: a target enters "publishing" once per worker
+    // execution, while terminal/retryable transitions must not inflate the count.
+    if (updates.status === "publishing") target.attempts += 1;
     this.write(file);
     return target;
   }

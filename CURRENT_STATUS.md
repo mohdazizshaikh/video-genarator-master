@@ -204,3 +204,11 @@ Phase 8 product surfaces started:
 - The Connectors page states explicitly that a connected account does not enable posting, and provider verification is labeled Telegram-only. No UI action is presented without a matching protected route and test.
 
 Validation: backend and UI typecheck passed; full regression suite passed with 73 files / 176 tests; route inventory passed; production build and documentation regeneration passed. The two-tenant acceptance gate executed successfully against the local stack. No provider credentials were fabricated, PostgreSQL and MinIO remain outside the Compose definition as unused, and migration/primary-read gates remain closed.
+
+## Telegram provider acceptance — 2026-10-18
+
+The first owner-provided provider acceptance completed through the workspace connector path. The owner-supplied Telegram bot credential from `.env` was stored in the encrypted connector secret store (never returned by the API, never placed in queue payloads, and never printed in evidence), the destination was verified against the live Telegram API (`getMe` returned the bot identity `Overseas_Jobs_Alerts_bot`, `getChat` returned chat type `private`), and one approved release asset was delivered exactly once through release → target → publish queue → worker.
+
+Evidence: the worker log shows a single `PublishWorker processing job` and a single `Telegram: video sent` (message id `5`); the release target reached `published` with `externalId: "5"`. The workspace event timeline (`GET /api/job-events/events`) exposes the `publishing` → `completed` chain for the publish job, and the target's connector used `channelId` from the verified destination rather than any global fallback. Re-queueing the published target is refused with HTTP 409 (`Release target is not queueable`) and the worker skips already-published targets, so the accepted asset cannot be published twice. A follow-up fix makes `ReleaseTargetRecord.attempts` count publish starts only, with store-level regression coverage.
+
+Not yet exercised: token rotation/revocation, provider failure and retry drills, audit retention, provider scheduling, and every non-Telegram provider. No provider credentials were fabricated, no automatic posting is enabled, and publishing required an explicit approved release, connected connector, and verified destination.
