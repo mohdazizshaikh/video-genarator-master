@@ -20,7 +20,7 @@ import express from "express";
 import type { Config } from "../../config";
 import { VideoLibraryStore } from "../../db/VideoLibraryStore";
 import { logger } from "../../logger";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 export class VideoLibraryRouter {
   public router: Router;
@@ -34,6 +34,8 @@ export class VideoLibraryRouter {
   }
 
   private registerRoutes(): void {
+    this.router.use(requireAuth);
+
     this.router.get("/search", (req: Request, res: Response) => this.searchVideos(req, res));
     this.router.get("/stats", (req: Request, res: Response) => this.getStats(req, res));
     this.router.get("/tags", (req: Request, res: Response) => this.getTrendingTags(req, res));

@@ -5,7 +5,7 @@ import type { Config } from "../../config";
 import { ProfileService } from "../../services/ProfileService";
 import { buildAuthorizationUrl, defaultCallbackUrl, exchangeOAuthCode, oauthProviderInfo } from "../../services/OAuthProvider";
 import { logger } from "../../logger";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 import type { PlatformType } from "../../types/shorts";
 
 interface PendingOAuth {
@@ -39,6 +39,8 @@ export class ProfilesRouter {
   }
 
   private registerRoutes(): void {
+    this.router.use(requireAuth);
+
     this.router.get("/", async (req: Request, res: Response) => {
       try {
         const tenantId = getAuthenticatedTenantId(req) ?? "";

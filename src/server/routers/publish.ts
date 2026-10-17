@@ -18,7 +18,7 @@ import type { PlatformType } from "../../types/shorts";
 import type { PublishJobPayload } from "../../workers/PublishWorker";
 import { validatePublishPayload } from "../../publishers/PlatformLimits";
 import { MetadataGenerator } from "../../services/MetadataGenerator";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 const ALLOWED_PLATFORMS: PlatformType[] = ["youtube", "telegram", "instagram", "facebook", "linkedin", "x"];
 
@@ -38,6 +38,7 @@ export class PublishRouter {
 
   private registerRoutes(): void {
     this.router.use(express_json_middleware());
+    this.router.use(requireAuth);
     this.router.post("/", (req: Request, res: Response) => this.createPublishJob(req, res));
     this.router.post("/metadata-suggestions", (req: Request, res: Response) => this.getMetadataSuggestions(req, res));
     this.router.get("/", (req: Request, res: Response) => this.listPublishJobs(req, res));

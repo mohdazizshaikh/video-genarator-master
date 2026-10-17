@@ -9,7 +9,7 @@ For local testing, a temporary tenant was registered through the existing public
 ## Authenticate locally
 
 ```sh
-curl -sS -X POST http://localhost:3123/api/system/auth/authenticate \
+curl -sS -X POST http://localhost:3123/api/system-engines/auth/authenticate \
   -H 'Content-Type: application/json' \
   --data '{"apiKey":"<temporary-local-api-key>"}'
 ```
@@ -20,14 +20,14 @@ Use the returned `data.token` as:
 Authorization: Bearer <token>
 ```
 
-The protected API should then be called with that header. Token verification is available through `POST /api/system/auth/verify`.
+The protected API should then be called with that header. Token verification is available through `POST /api/system-engines/auth/verify`.
 
 ## Rotate the temporary credential
 
 An administrator must rotate the tenant credential through the protected endpoint:
 
 ```sh
-curl -sS -X POST http://localhost:3123/api/system/auth/rotate/<tenant-id> \
+curl -sS -X POST http://localhost:3123/api/system-engines/auth/rotate/<tenant-id> \
   -H "X-Admin-Key: <admin-key>"
 ```
 

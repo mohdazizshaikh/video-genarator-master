@@ -243,7 +243,7 @@ Missing and invalid bearer probes on `/api/tenants` both returned HTTP 200 becau
 
 ## 14. Database and Storage Audit
 
-The promoted checkout has no PostgreSQL dependency in the current Compose or source contract and no MinIO/S3 service in Compose. Runtime data is file-backed under `data/`, with local artifacts, JSON stores, and generated videos. The data directory was approximately 532 MB at audit time; cache was empty and voice-analysis assets were approximately 4.3 MB.
+The promoted checkout has no PostgreSQL dependency in the current Compose or source contract and no MinIO/S3 service in Compose. PostgreSQL and MinIO services were removed from docker-compose.yml as they were not integrated in application code. Runtime data is file-backed under `data/`, with local artifacts, JSON stores, and generated videos. The data directory was approximately 532 MB at audit time; cache was empty and voice-analysis assets were approximately 4.3 MB.
 
 `AuthEngine` uses `data/auth-tenants.json`. Branding, credentials, analytics, reports, plans, queues, and other state are implemented through JSON/in-memory services or Redis rather than relational persistence. This makes single-node development practical but creates concurrency, corruption, backup, indexing, migration, and horizontal-scaling limitations.
 

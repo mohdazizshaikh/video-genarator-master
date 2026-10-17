@@ -2,7 +2,7 @@ import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, Chip, Button, Alert,
-  CircularProgress, Divider, LinearProgress, Tabs, Tab, TextField, Tooltip
+  CircularProgress, LinearProgress, Tabs, Tab, TextField
 } from '@mui/material';
 import RecyclingIcon from '@mui/icons-material/Recycling';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';

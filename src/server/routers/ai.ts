@@ -42,7 +42,9 @@ export class AiRouter {
     }
     const tenantId = getAuthenticatedTenantId(req);
     if (!tenantId) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
-    const { tenantId: _ignoredTenantId, ...eventPayload } = req.body;
+    const { tenantId: _tenantId, ...eventPayload } = req.body;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _ = _tenantId;
     const saved = await this.store.addEventForTenant(tenantId, eventPayload);
     res.status(201).json(saved);
   }

@@ -3,6 +3,8 @@ import type { Request as ExpressRequest, Response as ExpressResponse } from "exp
 import { TrendEngine } from "../../services/TrendEngine";
 import { ViralRadarEngine } from "../../services/ViralRadarEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
+
 
 const trendEngine = new TrendEngine();
 const viralRadar = new ViralRadarEngine(trendEngine);
@@ -17,6 +19,8 @@ export class TrendsRouter {
   }
 
   private setupRoutes() {
+    this.router.use(requireAuth);
+
     this.router.get("/", async (req: ExpressRequest, res: ExpressResponse) => {
       try {
         const categories = req.query.categories ? String(req.query.categories).split(",") : undefined;

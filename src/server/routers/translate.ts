@@ -2,6 +2,8 @@ import express from "express";
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import { TranslationEngine } from "../../services/TranslationEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
+
 
 const engine = new TranslationEngine(process.env.LIBRETRANSLATE_URL);
 
@@ -15,6 +17,8 @@ export class TranslateRouter {
   }
 
   private setupRoutes() {
+    this.router.use(requireAuth);
+
     this.router.get("/languages", (_req: ExpressRequest, res: ExpressResponse) => {
       res.json({ status: "ok", data: engine.getSupportedLanguages() });
     });

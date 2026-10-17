@@ -210,9 +210,9 @@ export class Server {
     this.app.use("/api/engines", requireAuth, enginesRouter.router);
     this.app.use("/api/abtesting", requireAuth, abTestingRouter.router);
     this.app.use("/api/approval", requireAuth, approvalRouter.router);
-    this.app.use("/api/system", systemEnginesRouter.router);
+    this.app.use("/api/system-engines", systemEnginesRouter.router);
     this.app.use("/api/job-events", requireAuth, jobEventsRouter.router);
-    this.app.use("/api/system/content-buckets", requireAuth, contentBucketsRouter.router);
+    this.app.use("/api/system-engines/content-buckets", requireAuth, contentBucketsRouter.router);
     this.app.use("/api/channel-configs", requireAuth, channelConfigRouter.router);
     this.app.use("/api/profiles", requireAuth, profilesRouter.router);
     this.app.use("/api/oauth", oauthRouter.router);

@@ -111,6 +111,12 @@ export class ReleaseStore {
     return this.read().releases.find((release) => release.workspaceId === workspaceId && release.id === releaseId);
   }
 
+  listReleases(workspaceId: string): ReleaseRecord[] {
+    return this.read()
+      .releases.filter((release) => release.workspaceId === workspaceId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
   listTargets(workspaceId: string, releaseId: string): ReleaseTargetRecord[] {
     return this.read().targets.filter((target) => target.workspaceId === workspaceId && target.releaseId === releaseId);
   }

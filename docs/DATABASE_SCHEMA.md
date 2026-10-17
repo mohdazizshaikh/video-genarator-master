@@ -379,26 +379,37 @@ Seeders live in `database/seeders/` and are numbered similarly.
 
 
 <!-- AUTO-GENERATED:store-inventory:BEGIN -->
-JSON-backed data stores in `src/db/` (18).
+JSON-backed data stores in `src/db/` (29).
 
 | File | Class | JSON File | Purpose |
 |------|-------|-----------|---------|
 | `src/db/ABVariantStore.ts` | ABVariantStore | `abVariants.json` | - |
-| `src/db/AiLearningStore.ts` | AiLearningStore | `ai-learning-events.json` | - |
-| `src/db/AnalyticsStore.ts` | AnalyticsStore | `analytics.json` | - |
+| `src/db/AiLearningStore.ts` | AiLearningStore | `ai-learning-events.json` | A legacy single model is deliberately quarantined and never returned to a tenant. |
+| `src/db/AnalyticsStore.ts` | AnalyticsStore | `analytics.json` | Auth-derived owner. Legacy analytics without this field are not tenant-visible. |
+| `src/db/ArtifactManifestStore.ts` | ArtifactManifestStore | `artifact-manifests.json` | - |
 | `src/db/AudienceStore.ts` | AudienceStore | `audienceTargets.json` | - |
-| `src/db/ChannelConfigStore.ts` | ChannelConfigStore | `channelConfigs.json` | - |
-| `src/db/CustomNewsSourceStore.ts` | CustomNewsSourceStore | `customNewsSources.json` | - |
-| `src/db/PipelineStore.ts` | PipelineStore | `pipeline-jobs.json` | - |
+| `src/db/ChannelConfigStore.ts` | ChannelConfigStore | `channelConfigs.json` | Auth-derived owner. Legacy records without this field are not tenant-visible. |
+| `src/db/ConnectorSecretStore.ts` | ConnectorSecretStore | `connector-secrets.json` | Encrypted connector secret storage. Metadata and secrets are deliberately separate. The secret file contains only encryp |
+| `src/db/ConnectorStore.ts` | ConnectorStore | `connectors.json` | Workspace-owned connector metadata store. This is the file-backed compatibility implementation of the target connector c |
+| `src/db/ContentAutomationRuleStore.ts` | ContentAutomationRuleStore | `contentAutomationRules.json` | - |
+| `src/db/ContentVersionStore.ts` | ContentVersionStore | `content-versions.json` | - |
+| `src/db/CustomNewsSourceStore.ts` | CustomNewsSourceStore | `customNewsSources.json` | Workspace owner; legacy records without this field are hidden from scoped reads. |
+| `src/db/DualWriteReadVerify.ts` | - | `` | Writes the file-backed authority first, then writes the durable shadow. The durable result is never promoted to a primar |
+| `src/db/JobEventOutboxStore.ts` | JobEventOutboxStore | `job-event-outbox.json` | - |
+| `src/db/JobEventStore.ts` | JobEventStore | `job-events.json` | - |
+| `src/db/MigrationCheckpointStore.ts` | MigrationCheckpointStore | `migration-checkpoints.json` | - |
+| `src/db/PipelineStore.ts` | PipelineStore | `pipeline-jobs.json` | Auth-derived owner. Legacy variations without this field are not tenant-visible. |
 | `src/db/ProfileAccountStore.ts` | ProfileAccountStore | `profileAccounts.json` | - |
 | `src/db/ProfileStore.ts` | ProfileStore | `profiles.json` | - |
 | `src/db/PublishJobStore.ts` | PublishJobStore | `publishJobs.json` | Idempotency check: same render output + platform + channel |
+| `src/db/ReleaseControlStore.ts` | ReleaseControlStore | `release-control.json` | - |
+| `src/db/ReleaseStore.ts` | ReleaseStore | `releases.json` | Workspace-owned release metadata store. A release is immutable with respect to its content version and destination ident |
 | `src/db/RenderJobStore.ts` | RenderJobStore | `renderJobs.json` | Find existing job with same idempotency key |
-| `src/db/ReportStore.ts` | ReportStore | `reports.json` | - |
-| `src/db/ScheduleStore.ts` | ScheduleStore | `schedules.json` | Calculate next run based on cron expression (simplified) |
-| `src/db/ScriptPlanStore.ts` | ScriptPlanStore | `scriptPlans.json` | - |
-| `src/db/TenantStore.ts` | TenantStore | `tenants.json` | - |
+| `src/db/ReportStore.ts` | ReportStore | `reports.json` | Auth-derived owner. Legacy reports without this field are not tenant-visible. |
+| `src/db/ScheduleStore.ts` | ScheduleStore | `schedules.json` | Auth-derived owner. Legacy schedules without this field are not tenant-visible. |
+| `src/db/ScriptPlanStore.ts` | ScriptPlanStore | `scriptPlans.json` | Auth-derived owner. Legacy plans without this field are not tenant-visible. |
+| `src/db/TenantStore.ts` | TenantStore | `tenants.json` | Return a tenant only when the requested resource belongs to the auth tenant. |
 | `src/db/TenantUsageStore.ts` | TenantUsageStore | `tenantUsage.json` | - |
-| `src/db/VideoLibraryStore.ts` | VideoLibraryStore | `videoLibrary.json` | - |
+| `src/db/VideoLibraryStore.ts` | VideoLibraryStore | `videoLibrary.json` | Auth-derived owner. Legacy records without this field are not tenant-visible. |
 | `src/db/VideoMetadataStore.ts` | VideoMetadataStore | `videoMetadata.json` | - |
 <!-- AUTO-GENERATED:store-inventory:END -->

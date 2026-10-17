@@ -1,7 +1,9 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import { AccountManagerEngine } from "../../services/AccountManagerEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
 
 export class AccountRouter {
   readonly router: Router;
@@ -14,7 +16,9 @@ export class AccountRouter {
   }
 
   private registerRoutes() {
-    this.router.post("/metrics", (req, res) => {
+    this.router.use(requireAuth);
+
+    this.router.post("/metrics", (req: Request, res: Response) => {
       try {
         const { totalVideos = 10, totalViews = 5000, totalEngagement = 250, followersGained = 50 } = req.body;
 

@@ -7,7 +7,7 @@ import { ContentBucketEngine } from "../../services/ContentBucketEngine";
 import { SeriesBuilderEngine } from "../../services/SeriesBuilderEngine";
 import { CommentCtaEngine } from "../../services/CommentCtaEngine";
 import { Config } from "../../config";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 export class StrategyRouter {
   public router: express.Router;
@@ -27,6 +27,8 @@ export class StrategyRouter {
   }
 
   private setupRoutes() {
+    this.router.use(requireAuth);
+
     // Platform psychology
     this.router.get("/platform/:platform", (req: ExpressRequest, res: ExpressResponse) => {
       try {

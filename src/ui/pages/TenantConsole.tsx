@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import crypto from "crypto";
 import { Alert, Grid, Stack, Typography } from "@mui/material";
 import WorkspaceSwitcher from "../components/tenant/WorkspaceSwitcher";
 import AuthBootstrap from "../components/AuthBootstrap";
@@ -51,7 +52,7 @@ const TenantConsole: React.FC = () => {
       .then(() => { if (!cancelled) void refetchTenants(); })
       .catch(() => { /* The visible console error remains fail-closed; no child request is sent without a tenant ID. */ });
     return () => { cancelled = true; };
-  }, [apiClient, authTenantId, authUserName, isAuthenticated, listLoading, refetchTenants, tenants.length]);
+  }, [authTenantId, authUserName, isAuthenticated, listLoading, refetchTenants, tenants.length]);
 
   const { tenant, refetch: refetchTenant } = useTenantDetails(selectedTenantId);
   const { keys, refetch: refetchKeys } = useTenantKeys(selectedTenantId);
@@ -70,7 +71,7 @@ const TenantConsole: React.FC = () => {
   const appendAudit = (action: string, target?: string) => {
     setAuditEntries((prev) => [
       {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
         actor: "current-user",
         action,
         target,

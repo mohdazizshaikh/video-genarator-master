@@ -242,7 +242,7 @@ export class ImageFiltersEngine {
 
   private async tryLoadCanvas() {
     try {
-      // @ts-ignore: canvas is an optional runtime dependency and may not be installed in all environments
+      // @ts-expect-error: canvas is an optional runtime dependency and may not be installed in all environments
       const canvasModule = await import("canvas");
       this.canvasLib = canvasModule;
     } catch {
@@ -439,7 +439,8 @@ export class ImageFiltersEngine {
       const w = outputWidth || img.width;
       const h = outputHeight || img.height;
       const canvas = createCanvas(w, h);
-      const ctx = canvas.getContext("2d") as any;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Failed to get canvas 2d context");
 
       // Build CSS-like filter string for canvas
       const cssFilter = this.buildCssFilter(options);

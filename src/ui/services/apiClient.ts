@@ -126,7 +126,7 @@ class ApiClientService {
         const requestUrl = error.config?.url || "";
         if (
           status === 401 &&
-          !requestUrl.includes("/api/system/auth/") &&
+          !requestUrl.includes("/api/system-engines/auth/") &&
           typeof window !== "undefined"
         ) {
           useAuthStore.getState().logout();

@@ -1,6 +1,9 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { AttentionOptimizerEngine } from "../../services/AttentionOptimizerEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
+
 
 export class AttentionRouter {
   readonly router: Router;
@@ -13,7 +16,9 @@ export class AttentionRouter {
   }
 
   private registerRoutes() {
-    this.router.post("/analyze", (req, res) => {
+    this.router.use(requireAuth);
+
+    this.router.post("/analyze", (req: Request, res: Response) => {
       try {
         const { duration = 30, platform = "tiktok" } = req.body;
         const span = this.engine.analyzeAttentionSpan(duration, platform);

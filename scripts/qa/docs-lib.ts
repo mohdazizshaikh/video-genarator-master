@@ -14,7 +14,7 @@ export interface Endpoint {
   handler?: string;
 }
 
-const MOUNT_RE = /this\.app\.use\(\s*["'`]([^"'`]+)["'`]\s*,\s*([A-Za-z0-9_]+)(?:\.router)?\)/g;
+const MOUNT_RE = /this\.app\.use\(\s*["'`]([^"'`]+)["'`]\s*(?:,\s*(?:requireAuth|requireAdminKey|validateTokenIfPresent|apiRateLimiter|[A-Za-z0-9_]+))*\s*(?:,\s*([A-Za-z0-9_]+)(?:\.router)?)?\s*\)/g;
 
 function normalizePath(p: string): string {
   return p.replace(/\/+$/, "") || "/";
@@ -70,8 +70,11 @@ function routesForClass(cls: RouterClass): Array<{ method: string; path: string;
 export function extractEndpoints(): Endpoint[] {
   const serverContent = readFile("src/server/server.ts");
   const mounts: Array<{ base: string; varName: string }> = [];
-  for (const m of serverContent.matchAll(MOUNT_RE)) {
-    mounts.push({ base: m[1], varName: m[2] });
+  let match;
+  while ((match = MOUNT_RE.exec(serverContent)) !== null) {
+    if (match[2] && match[2].endsWith("Router")) {
+      mounts.push({ base: match[1], varName: match[2] });
+    }
   }
 
   const endpoints: Endpoint[] = [];

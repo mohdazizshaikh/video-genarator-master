@@ -5,7 +5,7 @@ import fs from "fs-extra";
 import { logger } from "../../logger";
 import { Config } from "../../config";
 import { RepurposeEngine } from "../../services/RepurposeEngine";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 import { ArtifactManifestStore } from "../../db/ArtifactManifestStore";
 
 /**
@@ -61,6 +61,8 @@ export class RepurposeRouter {
   }
 
   private setupRoutes(): void {
+    this.router.use(requireAuth);
+
     this.router.post("/", async (req: ExpressRequest, res: ExpressResponse) => {
       const tenantId = getAuthenticatedTenantId(req);
       if (!tenantId) {

@@ -1,61 +1,4 @@
 services:
-  # ── PostgreSQL (Durable metadata authority; cutover remains gated) ──
-  postgres:
-    image: postgres:16-alpine
-    container_name: ace-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-content_factory_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-content_factory_db}
-    ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
-
-  # ── MinIO (Durable artifact authority; cutover remains gated) ──────
-  minio:
-    image: minio/minio:latest
-    container_name: ace-minio
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY in .env}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY in .env}
-    command: server /data --console-address ":9001"
-    ports:
-      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
-      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
-
-  minio-init:
-    image: minio/mc:latest
-    container_name: ace-minio-init
-    restart: "no"
-    environment:
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY in .env}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY in .env}
-      MINIO_BUCKET: ${MINIO_BUCKET:?Set MINIO_BUCKET in .env}
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
-    command: >-
-      "mc alias set local http://minio:9000 \"$$MINIO_ACCESS_KEY\" \"$$MINIO_SECRET_KEY\" &&
-      mc mb --ignore-existing local/\"$$MINIO_BUCKET\""
-
   # ── Redis (Job Queue) ──────────────────────────────────────────
   redis:
     image: redis:7-alpine
@@ -107,12 +50,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
     deploy:
       resources:
         limits:
@@ -142,10 +79,6 @@ services:
   #       condition: service_healthy
 
 volumes:
-  postgres_data:
-    driver: local
-  minio_data:
-    driver: local
   redis_data:
     driver: local
 

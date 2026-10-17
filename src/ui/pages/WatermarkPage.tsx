@@ -1,5 +1,5 @@
 import { authenticatedFetch } from "../services/authenticatedFetch";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Container, Paper, TextField, Button, FormControl, InputLabel,
   Select, MenuItem, Box, Typography, Alert, Stack, Chip,
@@ -47,8 +47,9 @@ function WatermarkPage() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setFfmpegFilter(data.filter);
-    } catch (err: any) {
-      setError(err?.message || "Failed to generate watermark filter");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to generate watermark filter";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -64,8 +65,9 @@ function WatermarkPage() {
         body: JSON.stringify(config),
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
-    } catch (err: any) {
-      setError(err?.message || "Failed to save default watermark");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save default watermark";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -139,7 +141,7 @@ function WatermarkPage() {
               <InputLabel>Position</InputLabel>
               <Select
                 value={config.position} label="Position"
-                onChange={(e) => setConfig((c) => ({ ...c, position: e.target.value as any }))}
+                onChange={(e) => setConfig((c) => ({ ...c, position: e.target.value as "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center" }))}
               >
                 {[
                   { value: "top-left", label: "Top Left" },

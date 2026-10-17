@@ -64,4 +64,17 @@ describe("ReleaseStore", () => {
     store.createTarget(target);
     expect(() => store.createTarget(target)).toThrow("Duplicate idempotency key");
   });
+
+  it("lists releases only for the owning workspace, newest first", () => {
+    const store = makeStore();
+    const first = store.createRelease({ ...baseRelease, contentVersionId: "content-v1" });
+    const second = store.createRelease({ ...baseRelease, contentVersionId: "content-v2" });
+    store.createRelease({ ...baseRelease, workspaceId: "workspace-b", contentVersionId: "content-v3" });
+
+    const listed = store.listReleases("workspace-a");
+    expect(listed.map((release) => release.id).sort()).toEqual([first.id, second.id].sort());
+    expect(listed.every((release) => release.workspaceId === "workspace-a")).toBe(true);
+    expect(store.listReleases("workspace-b")).toHaveLength(1);
+    expect(store.listReleases("workspace-c")).toEqual([]);
+  });
 });

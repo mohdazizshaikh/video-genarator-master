@@ -1,7 +1,10 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import { HumanizedContentEngine } from "../../services/HumanizedContentEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
+
 
 export class HumanizedRouter {
   readonly router: Router;
@@ -14,7 +17,9 @@ export class HumanizedRouter {
   }
 
   private registerRoutes() {
-    this.router.post("/humanize", (req, res) => {
+    this.router.use(requireAuth);
+
+    this.router.post("/humanize", (req: Request, res: Response) => {
       try {
         const { script, emotion = "excited" } = req.body;
         if (!script) return res.status(400).json({ error: "script is required" });

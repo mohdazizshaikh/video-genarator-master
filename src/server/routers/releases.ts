@@ -6,7 +6,7 @@ import { ReleaseStore } from "../../db/ReleaseStore";
 import { PublishJobStore } from "../../db/PublishJobStore";
 import { ContentVersionStore } from "../../db/ContentVersionStore";
 import { createQueue, QUEUE_NAMES } from "../../workers/QueueManager";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 interface ClaimsRequest extends Request {
   auth?: { tenantId?: string; permissions?: string[]; name?: string };
@@ -43,6 +43,12 @@ export class ReleasesRouter {
   }
 
   private register(): void {
+    this.router.use(requireAuth);
+
+    this.router.get("/", (req: ClaimsRequest, res: Response) => {
+      res.json({ releases: this.releases.listReleases(tenantIdFrom(req)) });
+    });
+
     this.router.post("/", (req: ClaimsRequest, res: Response) => {
       try {
         const workspaceId = tenantIdFrom(req);

@@ -53,8 +53,9 @@ function VisualEnhancementPage() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setEnhancement(data.enhancement);
-    } catch (err: any) {
-      setError(err?.message || "Failed to enhance video");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to enhance video";
+      setError(message);
     } finally {
       setLoading(false);
     }

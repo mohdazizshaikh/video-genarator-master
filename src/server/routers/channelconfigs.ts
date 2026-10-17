@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import { ChannelConfigStore } from "../../db/ChannelConfigStore";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 export class ChannelConfigRouter {
   public router: Router;
@@ -15,6 +15,7 @@ export class ChannelConfigRouter {
   }
 
   private registerRoutes(): void {
+    this.router.use(requireAuth);
     this.router.get("/", (_req: Request, res: Response) => this.list(_req, res));
     this.router.post("/", (req: Request, res: Response) => this.create(req, res));
     this.router.delete("/:id", (req: Request, res: Response) => this.remove(req, res));

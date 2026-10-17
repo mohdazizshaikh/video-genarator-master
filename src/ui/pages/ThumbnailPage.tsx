@@ -49,8 +49,9 @@ function ThumbnailPage() {
       const data = await res.json();
       setDirectives(data.directives);
       setScore(data.effectivenessScore);
-    } catch (err: any) {
-      setError(err?.message || "Failed to generate thumbnail");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to generate thumbnail";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -74,7 +75,7 @@ function ThumbnailPage() {
 
           <FormControl fullWidth sx={{ mb: 2 }}>
             <InputLabel>Emotional Trigger</InputLabel>
-            <Select value={emotion} label="Emotional Trigger" onChange={(e) => setEmotion(e.target.value as any)}>
+            <Select value={emotion} label="Emotional Trigger" onChange={(e) => setEmotion(e.target.value as "surprise" | "curiosity" | "urgency" | "humor" | "fear")}>
               <MenuItem value="surprise">Surprise</MenuItem>
               <MenuItem value="curiosity">Curiosity</MenuItem>
               <MenuItem value="urgency">Urgency</MenuItem>
@@ -85,7 +86,7 @@ function ThumbnailPage() {
 
           <FormControl fullWidth sx={{ mb: 2 }}>
             <InputLabel>Contrast Level</InputLabel>
-            <Select value={contrast} label="Contrast Level" onChange={(e) => setContrast(e.target.value as any)}>
+            <Select value={contrast} label="Contrast Level" onChange={(e) => setContrast(e.target.value as "low" | "medium" | "high")}>
               <MenuItem value="low">Low</MenuItem>
               <MenuItem value="medium">Medium</MenuItem>
               <MenuItem value="high">High</MenuItem>

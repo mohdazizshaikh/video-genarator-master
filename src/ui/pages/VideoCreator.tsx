@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useState } from "react";
+import React, { Suspense, lazy, useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Accordion,
@@ -142,7 +142,7 @@ const VideoCreator: React.FC = () => {
     setSources(newsResponse.data);
   };
 
-  const fetchTrendingTopics = async (sourceIds: string[], category: string): Promise<string[]> => {
+  const fetchTrendingTopics = useCallback(async (sourceIds: string[], category: string): Promise<string[]> => {
     setTopicsLoading(true);
     try {
       const res = await http.post("/api/auto-script/topics", { sourceIds, category, keywords: keywordList });
@@ -153,9 +153,9 @@ const VideoCreator: React.FC = () => {
     } finally {
       setTopicsLoading(false);
     }
-  };
+  }, [keywordList]);
 
-  const fetchHookOptions = async (
+  const fetchHookOptions = useCallback(async (
     sourceIds: string[],
     category: string,
     topic: string,
@@ -185,9 +185,9 @@ const VideoCreator: React.FC = () => {
     } finally {
       setHooksLoading(false);
     }
-  };
+  }, [keywordList]);
 
-  const refreshAutomationOptions = async () => {
+  const refreshAutomationOptions = useCallback(async () => {
     if (selectedSources.length === 0) return;
     setError(null);
     try {
@@ -197,7 +197,7 @@ const VideoCreator: React.FC = () => {
       console.error("Failed to fetch topics:", err);
       setError("Failed to load trending topics for this source.");
     }
-  };
+  }, [selectedSources, category, selectedTopic, selectedStyle, fetchTrendingTopics, fetchHookOptions]);
 
   useEffect(() => {
     if (selectedSources.length === 0) {
@@ -208,7 +208,7 @@ const VideoCreator: React.FC = () => {
       return;
     }
     void refreshAutomationOptions();
-  }, [selectedSources, category]);
+  }, [selectedSources, category, refreshAutomationOptions]);
 
   useEffect(() => {
     if (selectedSources.length === 0) return;
@@ -220,7 +220,7 @@ const VideoCreator: React.FC = () => {
         setError("Failed to load hook options.");
       }
     })();
-  }, [selectedSources, category, selectedTopic, selectedStyle]);
+  }, [selectedSources, category, selectedTopic, selectedStyle, fetchHookOptions]);
 
   const handleAddScene = () => {
     setScenes((current) => [...current, { text: "", searchTerms: "", keywords: "", subcategory: "", headline: "", visualPrompt: "" }]);
@@ -240,9 +240,11 @@ const VideoCreator: React.FC = () => {
       if (response.data?.source?.id) {
         setSelectedSources((current) => Array.from(new Set([...current, response.data.source.id])));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to create custom source:", err);
-      setError(err.response?.data?.error || err.message || "Failed to add custom source");
+      const message = err instanceof Error ? err.message : "Failed to add custom source";
+      const responseError = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
+      setError(responseError || message);
       throw err;
     } finally {
       setSourceSaving(false);
@@ -271,7 +273,7 @@ const VideoCreator: React.FC = () => {
         durationLimit: config.durationLimit,
       });
       if (res.data.scenes) {
-        setScenes(res.data.scenes.map((scene: any) => ({
+        setScenes(res.data.scenes.map((scene: Record<string, unknown>) => ({
           text: scene.text,
           searchTerms: Array.isArray(scene.searchTerms) ? scene.searchTerms.join(", ") : scene.searchTerms,
           keywords: Array.isArray(scene.keywords) ? scene.keywords.join(", ") : "",
@@ -280,11 +282,12 @@ const VideoCreator: React.FC = () => {
           visualPrompt: scene.visualPrompt || "",
         })));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("AI LLM auto-script error:", err);
-      const message = err.response?.data?.message || err.message || "Failed to generate script";
-      const rawOutput = err.response?.data?.rawAI_LLMOutput;
-      setError(`${message}${rawOutput ? ` | RAW OUTPUT: ${JSON.stringify(rawOutput)}` : ""}`);
+      const responseError = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      const message = err instanceof Error ? err.message : "Failed to generate script";
+      const rawOutput = (err as { response?: { data?: { rawAI_LLMOutput?: unknown } } }).response?.data?.rawAI_LLMOutput;
+      setError(`${responseError || message}${rawOutput ? ` | RAW OUTPUT: ${JSON.stringify(rawOutput)}` : ""}`);
     } finally {
       setAutoLoading(false);
     }

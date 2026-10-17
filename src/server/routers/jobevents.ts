@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import { JobEventStore } from "../../db/JobEventStore";
 import { JobEventOutboxStore } from "../../db/JobEventOutboxStore";
-import { getAuthenticatedTenantId, requireAdminKey } from "../auth";
+import { getAuthenticatedTenantId, requireAdminKey, requireAuth } from "../auth";
 
 export class JobEventsRouter {
   public readonly router: Router;
@@ -19,6 +19,8 @@ export class JobEventsRouter {
   }
 
   private registerRoutes(): void {
+    this.router.use(requireAuth);
+
     this.router.get("/events", (req, res) => this.listEvents(req, res));
     this.router.get("/outbox", (req, res) => this.listOutbox(req, res));
     this.router.get("/outbox/metrics", (req, res) => this.metrics(req, res));

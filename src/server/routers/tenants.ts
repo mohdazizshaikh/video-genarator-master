@@ -7,7 +7,7 @@ import { TenantUsageStore } from "../../db/TenantUsageStore";
 import { CryptoService } from "../../services/CryptoService";
 import { TenantQuotaService } from "../../services/TenantQuotaService";
 import { TenantLoggerService } from "../../services/TenantLoggerService";
-import { getAuthenticatedTenantId, isAdminRequest, requireAdminKey } from "../auth";
+import { getAuthenticatedTenantId, isAdminRequest, requireAdminKey, requireAuth } from "../auth";
 
 const INSECURE_SECRETS = new Set(["tenant-dev-secret", "change-me-in-production", "change_me", "secret", "password"]);
 
@@ -46,6 +46,8 @@ export class TenantRouter {
   }
 
   private registerRoutes(): void {
+    this.router.use(requireAuth);
+
     this.router.get("/", (req: Request, res: Response) => this.list(req, res));
     this.router.post("/", requireAdminKey, (req: Request, res: Response) => this.create(req, res));
     this.router.post("/bootstrap", (req: Request, res: Response) => this.bootstrap(req, res));

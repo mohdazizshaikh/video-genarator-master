@@ -12,7 +12,6 @@ import {
   Container,
   Divider,
   FormControl,
-  FormControlLabel,
   Grid,
   InputLabel,
   LinearProgress,
@@ -304,7 +303,6 @@ function ScoreRadar({ entries }: { entries: PlatformEntry[] }) {
   if (done.length === 0) return null;
 
   const maxScore = 100;
-  const dims = SCORE_DIMS.map((d) => d.key);
 
   return (
     <Box sx={{ mt: 3 }}>
@@ -391,10 +389,14 @@ export default function PipelineComparePage() {
             authenticatedFetch("/api/pipeline/comparisons?limit=5")
               .then((r2) => r2.json())
               .then((d2) => { if (d2.data) setHistory(d2.data); })
-              .catch(() => {});
+.catch(() => {
+          // Ignore fetch errors for history update
+        });
           }
         }
-      } catch {}
+      } catch {
+        // Intentionally ignored - error handled by loading state
+      }
     }, 600);
   };
 

@@ -148,7 +148,7 @@ The dry-run remediation planner is installed as `npm run db:migration:remediatio
 
 Final validation passed with 58 test files and 134 tests, typecheck, production build, `git diff --check`, Docker rebuild, `/api/health` HTTP 200, and protected job-event metrics HTTP 401 without authentication. Migration preflight correctly remains blocked because `DATABASE_URL` is absent and primary-read cutover is disabled; SQL was not applied.
 ## Local testing authentication — 2026-08-25
-The existing authentication flow does not use a user password; it uses a tenant-scoped generated API key to issue a bearer token. A temporary local test tenant was registered through `/api/system/auth/register`. The plaintext API key is kept outside the repository and is not present in GitHub or tracked environment files.
+The existing authentication flow does not use a user password; it uses a tenant-scoped generated API key to issue a bearer token. A temporary local test tenant was registered through the auth bootstrap register route (now canonical at `/api/system-engines/auth/register`). The plaintext API key is kept outside the repository and is not present in GitHub or tracked environment files.
 
 Authentication returned HTTP 200, token verification returned HTTP 200, the tenant-protected job-event metrics route returned HTTP 200 with the bearer token, and an invalid credential returned HTTP 401. Rotation/removal guidance is documented in `docs/LOCAL_TEST_AUTH.md`. The temporary credential must be rotated or removed before any shared or production deployment.
 
@@ -191,3 +191,16 @@ Container-local migration preflight completed with exit code 0 and reported only
 The local end-to-end test initially exposed two real defects: the queue accepted legacy string `sceneInput` while the render worker expected an array, and Remotion could not access protected `/api/tmp` and `/api/music` assets without renderer authorization. The queue boundary now normalizes legacy string input. Render media URLs now carry short-lived, filename-bound HMAC authorization, while invalid or unauthenticated external media requests remain HTTP 401. Signed media URLs are treated as video/image by the filename extension rather than the query string.
 
 The corrected local flow authenticated a tenant, enqueued a render job, processed it through the worker, emitted `processing` and `completed` tenant-scoped events, produced a rendered MP4 artifact, and persisted render status `rendered`. The final artifact was present at approximately 3 MB. Invalid media-token access returned HTTP 401. Provider-dependent publishing was not executed because no external publishing action or fabricated provider credentials are permitted; the publish API boundary remains available for separately approved provider acceptance.
+
+## Phase 0/1 acceptance and Phase 8 connector/release surfaces — 2026-10-18
+
+Phase 0 contracts are now enforced by a passing route-inventory gate (`npm run test:routes`) wired into `verify:production`. Canonical ownership vocabulary lives in `src/types/ownership.ts` (`workspaceId`, `connectorId`, `destinationId`, `releaseId`, `contentVersionId`) with focused regression coverage.
+
+Phase 1 authorization hardening made the remaining tenant-owned routers fail-closed with `requireAuth` (account, approval, webhooks, A/B testing, branding, and content/AI engine namespaces) and completed the browser migration to the shared authenticated client; the only remaining `fetch` call sites are the authenticated wrapper itself and one hook that already routes through `apiClient`. The two-tenant acceptance harness now uses the canonical `/api/system-engines/auth/*` bootstrap routes and performs read-only cross-tenant probes: distinct bearer claims, tenant-protected metrics (HTTP 200 for both tenants), workspace connector/release lists verified not to leak another workspace's records, and cross-tenant or missing tenant/release/content-version reads returning non-enumerating 404. The harness was executed locally against two registered acceptance tenants and **passed**.
+
+Phase 8 product surfaces started:
+- `GET /api/releases` now lists workspace releases (newest first), with store-level regression coverage.
+- New `/connectors` and `/releases` UI pages expose only tested server capabilities: connector metadata with managed-secret references, encrypted secret storage, destination creation, Telegram provider verification, release creation from a content version, approval, verified-destination targets, and queueing.
+- The Connectors page states explicitly that a connected account does not enable posting, and provider verification is labeled Telegram-only. No UI action is presented without a matching protected route and test.
+
+Validation: backend and UI typecheck passed; full regression suite passed with 73 files / 176 tests; route inventory passed; production build and documentation regeneration passed. The two-tenant acceptance gate executed successfully against the local stack. No provider credentials were fabricated, PostgreSQL and MinIO remain outside the Compose definition as unused, and migration/primary-read gates remain closed.

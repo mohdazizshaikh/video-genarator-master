@@ -4,7 +4,7 @@
  * Manages BullMQ queue instances backed by Redis.
  * Falls back gracefully when Redis is unavailable (dev mode).
  */
-import { Queue, Worker, QueueEvents } from "bullmq";
+import { Queue } from "bullmq";
 import IORedis from "ioredis";
 import { Config } from "../config";
 import { logger } from "../logger";

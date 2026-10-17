@@ -1,6 +1,9 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { EngagementPredictionEngine } from "../../services/EngagementPredictionEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
+
 
 export class EngagementRouter {
   readonly router: Router;
@@ -13,7 +16,9 @@ export class EngagementRouter {
   }
 
   private registerRoutes() {
-    this.router.post("/predict", (req, res) => {
+    this.router.use(requireAuth);
+
+    this.router.post("/predict", (req: Request, res: Response) => {
       try {
         const { views = 1000, hookQuality = "medium", topicTrend = "medium", postingTime = "medium" } = req.body;
 

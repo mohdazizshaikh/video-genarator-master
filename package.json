@@ -14,7 +14,7 @@
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "typecheck:ui": "tsc -p src/ui/tsconfig.json --noEmit",
     "verify:baseline": "npm run typecheck && npm exec vitest run",
-    "verify:production": "npm run typecheck && npm exec vitest run && npm run build",
+    "verify:production": "npm run typecheck && npm exec vitest run && npm run build && npm run test:routes",
     "qa": "npm run qa:check && npm run qa:generate && npm run qa:check",
     "qa:check": "ts-node scripts/qa/check-ai-mistakes.ts && ts-node scripts/qa/check-test-existence.ts && ts-node scripts/qa/check-docs-consistency.ts",
     "qa:generate": "ts-node scripts/qa/generate-index.ts && ts-node scripts/qa/generate-docs.ts",
@@ -39,7 +39,8 @@
     "db:backup:verify": "node scripts/migrations/backup.mjs --verify",
     "qa:two-tenant-acceptance": "node scripts/qa/two-tenant-acceptance.mjs",
     "db:migration:reconciliation-decision": "node scripts/migrations/reconciliation-decision.mjs",
-    "db:migration:evidence": "node scripts/migrations/evidence.mjs"
+    "db:migration:evidence": "node scripts/migrations/evidence.mjs",
+    "test:routes": "ts-node scripts/qa/route-inventory.test.ts"
   },
   "bin": {
     "short-video-maker": "dist/index.js"
@@ -67,7 +68,6 @@
   "author": "David Gyori",
   "license": "MIT",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.859.0",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -100,7 +100,6 @@
     "kokoro-js": "^1.2.0",
     "nock": "^14.0.3",
     "node-cron": "^4.2.1",
-    "pg": "^8.16.3",
     "pino": "^9.6.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -122,7 +121,6 @@
     "@types/fs-extra": "^11.0.4",
     "@types/nock": "^11.1.0",
     "@types/node": "^22.14.0",
-    "@types/pg": "^8.15.5",
     "@types/react": "^19.1.0",
     "@types/swagger-ui-express": "^4.1.8",
     "@vitejs/plugin-react": "^4.4.1",

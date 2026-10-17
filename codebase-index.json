@@ -1,10 +1,10 @@
 {
-  "commit": "721e765",
+  "commit": "720a119",
   "summary": {
-    "files": 316,
-    "endpoints": 312,
-    "pages": 44,
-    "stores": 18
+    "files": 353,
+    "endpoints": 315,
+    "pages": 46,
+    "stores": 29
   },
   "files": [
     {
@@ -74,6 +74,36 @@
       ]
     },
     {
+      "path": "src/components/videos/AdvancedKnowledgeOverlay.tsx",
+      "type": "module",
+      "responsibility": "Advanced knowledge overlay for trends, technology, gyan, quotes, and motivation. Flexible enough for facts, explainers, short quotes, and reflective copy without borrowing newsroom ticker/headline tre",
+      "exports": [
+        "AdvancedKnowledgeOverlay"
+      ]
+    },
+    {
+      "path": "src/components/videos/CategoryOverlay.tsx",
+      "type": "module",
+      "responsibility": "Generic category-aware overlay for non-news, non-marketing content. It intentionally avoids ticker bars, breaking labels, and newsroom chrome.",
+      "exports": [
+        "CategoryOverlay"
+      ]
+    },
+    {
+      "path": "src/components/videos/CategoryPipelineProfiles.ts",
+      "type": "module",
+      "responsibility": "Canonical category pipeline profiles. This is the contract between classification, media search, rendering, and QA. News is the only profile allowed to use newsroom chrome.",
+      "exports": [
+        "CATEGORY_PIPELINE_PROFILES",
+        "CanonicalCategory",
+        "CaptionCase",
+        "CategoryOverlayMode",
+        "CategoryPipelineProfile",
+        "normalizePipelineCategory",
+        "resolveCategoryPipeline"
+      ]
+    },
+    {
       "path": "src/components/videos/ContentTemplateEngine.ts",
       "type": "engine",
       "responsibility": "ContentTemplateEngine – content-driven layout/structure templates. Pairs with ThemeEngine (which picks the \"look\": palette, fonts, music). This engine picks the \"layout\": how scenes are structured and",
@@ -86,6 +116,14 @@
         "listContentTemplates",
         "pickTemplateChrome",
         "resolveContentTemplate"
+      ]
+    },
+    {
+      "path": "src/components/videos/ITProductShowcaseOverlay.tsx",
+      "type": "module",
+      "responsibility": "IT Product & Services Showcase overlay. Product-led composition for software, SaaS, websites, automation, AI, cloud, cybersecurity, ERP/CRM, hosting, support, and custom development. Never invents cus",
+      "exports": [
+        "ITProductShowcaseOverlay"
       ]
     },
     {
@@ -105,6 +143,14 @@
       ]
     },
     {
+      "path": "src/components/videos/MarketingOverlay.tsx",
+      "type": "module",
+      "responsibility": "Marketing treatment: calm brand storytelling, not a newsroom overlay. Use warm accent rules, restrained metadata, and a stable lower-third hierarchy.",
+      "exports": [
+        "MarketingOverlay"
+      ]
+    },
+    {
       "path": "src/components/videos/NewsOverlay.tsx",
       "type": "module",
       "responsibility": "",
@@ -118,6 +164,14 @@
       "responsibility": "",
       "exports": [
         "PortraitVideo"
+      ]
+    },
+    {
+      "path": "src/components/videos/SportsOverlay.tsx",
+      "type": "module",
+      "responsibility": "Advanced sports overlay for cricket, football, basketball, and other sports. It presents event context and scores only when supplied by the scene metadata; it never invents teams, scores, dates, or pl",
+      "exports": [
+        "SportsOverlay"
       ]
     },
     {
@@ -159,7 +213,7 @@
     {
       "path": "src/config.ts",
       "type": "config",
-      "responsibility": "Create the global logger",
+      "responsibility": "Legacy compatibility only; production connector publishing must keep this false.",
       "exports": [
         "Config",
         "KOKORO_MODEL",
@@ -233,7 +287,7 @@
     {
       "path": "src/db/AiLearningStore.ts",
       "type": "db",
-      "responsibility": "",
+      "responsibility": "A legacy single model is deliberately quarantined and never returned to a tenant.",
       "exports": [
         "AiLearningStore",
         "LearningEvent",
@@ -244,10 +298,21 @@
     {
       "path": "src/db/AnalyticsStore.ts",
       "type": "db",
-      "responsibility": "",
+      "responsibility": "Auth-derived owner. Legacy analytics without this field are not tenant-visible.",
       "exports": [
         "AnalyticsRecord",
         "AnalyticsStore"
+      ]
+    },
+    {
+      "path": "src/db/ArtifactManifestStore.ts",
+      "type": "db",
+      "responsibility": "",
+      "exports": [
+        "ArtifactKind",
+        "ArtifactLifecycle",
+        "ArtifactManifest",
+        "ArtifactManifestStore"
       ]
     },
     {
@@ -262,25 +327,103 @@
     {
       "path": "src/db/ChannelConfigStore.ts",
       "type": "db",
-      "responsibility": "",
+      "responsibility": "Auth-derived owner. Legacy records without this field are not tenant-visible.",
       "exports": [
         "ChannelConfigRecord",
         "ChannelConfigStore"
       ]
     },
     {
-      "path": "src/db/CustomNewsSourceStore.ts",
+      "path": "src/db/ConnectorSecretStore.ts",
+      "type": "db",
+      "responsibility": "Encrypted connector secret storage. Metadata and secrets are deliberately separate. The secret file contains only encrypted values keyed by workspace and connector identity. Callers must provide the w",
+      "exports": [
+        "ConnectorSecretStore"
+      ]
+    },
+    {
+      "path": "src/db/ConnectorStore.ts",
+      "type": "db",
+      "responsibility": "Workspace-owned connector metadata store. This is the file-backed compatibility implementation of the target connector contract. It stores only credential references and provider metadata; secret valu",
+      "exports": [
+        "ConnectorDestinationRecord",
+        "ConnectorRecord",
+        "ConnectorStore"
+      ]
+    },
+    {
+      "path": "src/db/ContentAutomationRuleStore.ts",
       "type": "db",
       "responsibility": "",
+      "exports": [
+        "AutomationVideoType",
+        "ContentAutomationRule",
+        "ContentAutomationRuleStore"
+      ]
+    },
+    {
+      "path": "src/db/ContentVersionStore.ts",
+      "type": "db",
+      "responsibility": "",
+      "exports": [
+        "ContentVersionRecord",
+        "ContentVersionStatus",
+        "ContentVersionStore"
+      ]
+    },
+    {
+      "path": "src/db/CustomNewsSourceStore.ts",
+      "type": "db",
+      "responsibility": "Workspace owner; legacy records without this field are hidden from scoped reads.",
       "exports": [
         "CustomNewsSourceRecord",
         "CustomNewsSourceStore"
       ]
     },
     {
-      "path": "src/db/PipelineStore.ts",
+      "path": "src/db/DualWriteReadVerify.ts",
+      "type": "db",
+      "responsibility": "Writes the file-backed authority first, then writes the durable shadow. The durable result is never promoted to a primary read by this helper. A durable write failure is surfaced to the caller; it is ",
+      "exports": [
+        "DualWritePorts",
+        "DualWriteResult",
+        "ReadVerifyResult",
+        "compareReadModels",
+        "shadowWriteAndReadVerify"
+      ]
+    },
+    {
+      "path": "src/db/JobEventOutboxStore.ts",
       "type": "db",
       "responsibility": "",
+      "exports": [
+        "JobEventOutboxStore",
+        "OutboxEvent",
+        "OutboxState"
+      ]
+    },
+    {
+      "path": "src/db/JobEventStore.ts",
+      "type": "db",
+      "responsibility": "",
+      "exports": [
+        "JobEvent",
+        "JobEventStore"
+      ]
+    },
+    {
+      "path": "src/db/MigrationCheckpointStore.ts",
+      "type": "db",
+      "responsibility": "",
+      "exports": [
+        "MigrationCheckpoint",
+        "MigrationCheckpointStore"
+      ]
+    },
+    {
+      "path": "src/db/PipelineStore.ts",
+      "type": "db",
+      "responsibility": "Auth-derived owner. Legacy variations without this field are not tenant-visible.",
       "exports": [
         "AIScores",
         "ComparisonRun",
@@ -316,6 +459,26 @@
       ]
     },
     {
+      "path": "src/db/ReleaseControlStore.ts",
+      "type": "db",
+      "responsibility": "",
+      "exports": [
+        "ReleaseControlStore",
+        "ReleaseRecord",
+        "ReleaseState"
+      ]
+    },
+    {
+      "path": "src/db/ReleaseStore.ts",
+      "type": "db",
+      "responsibility": "Workspace-owned release metadata store. A release is immutable with respect to its content version and destination identity. Provider credentials are never stored here. A target can only be created fo",
+      "exports": [
+        "ReleaseRecord",
+        "ReleaseStore",
+        "ReleaseTargetRecord"
+      ]
+    },
+    {
       "path": "src/db/RenderJobStore.ts",
       "type": "db",
       "responsibility": "Find existing job with same idempotency key",
@@ -326,7 +489,7 @@
     {
       "path": "src/db/ReportStore.ts",
       "type": "db",
-      "responsibility": "",
+      "responsibility": "Auth-derived owner. Legacy reports without this field are not tenant-visible.",
       "exports": [
         "ReportRecord",
         "ReportStatus",
@@ -336,7 +499,7 @@
     {
       "path": "src/db/ScheduleStore.ts",
       "type": "db",
-      "responsibility": "Calculate next run based on cron expression (simplified)",
+      "responsibility": "Auth-derived owner. Legacy schedules without this field are not tenant-visible.",
       "exports": [
         "ScheduleRecord",
         "ScheduleStore"
@@ -345,7 +508,7 @@
     {
       "path": "src/db/ScriptPlanStore.ts",
       "type": "db",
-      "responsibility": "",
+      "responsibility": "Auth-derived owner. Legacy plans without this field are not tenant-visible.",
       "exports": [
         "ScriptPlanItem",
         "ScriptPlanStore"
@@ -354,7 +517,7 @@
     {
       "path": "src/db/TenantStore.ts",
       "type": "db",
-      "responsibility": "",
+      "responsibility": "Return a tenant only when the requested resource belongs to the auth tenant.",
       "exports": [
         "TenantRecord",
         "TenantStore",
@@ -373,7 +536,7 @@
     {
       "path": "src/db/VideoLibraryStore.ts",
       "type": "db",
-      "responsibility": "",
+      "responsibility": "Auth-derived owner. Legacy records without this field are not tenant-visible.",
       "exports": [
         "VideoLibraryStore",
         "VideoRecord"
@@ -617,9 +780,13 @@
       "type": "server",
       "responsibility": "Fail-closed admin guard. Requires the X-Admin-Key header to match ADMIN_API_KEY. If the server has no ADMIN_API_KEY configured, the endpoint is disabled (403).",
       "exports": [
+        "AuthClaims",
         "adminKeyConfigured",
+        "getAuthenticatedTenantId",
+        "isAdminRequest",
         "logAdminKeyStatus",
         "requireAdminKey",
+        "requireAuth",
         "validateTokenIfPresent"
       ]
     },
@@ -658,7 +825,7 @@
     {
       "path": "src/server/routers/ai.ts",
       "type": "router",
-      "responsibility": "eslint-disable-next-line @typescript-eslint/no-require-imports",
+      "responsibility": "eslint-disable-next-line @typescript-eslint/no-unused-vars",
       "exports": [
         "AiRouter"
       ]
@@ -712,6 +879,14 @@
       ]
     },
     {
+      "path": "src/server/routers/connectors.ts",
+      "type": "router",
+      "responsibility": "Workspace-owned connector metadata routes. This compatibility API deliberately accepts credential references only. It does not accept or return provider tokens, and it never marks a destination verifi",
+      "exports": [
+        "ConnectorsRouter"
+      ]
+    },
+    {
       "path": "src/server/routers/content.ts",
       "type": "router",
       "responsibility": "eslint-disable-next-line @typescript-eslint/no-require-imports",
@@ -725,6 +900,14 @@
       "responsibility": "",
       "exports": [
         "ContentBucketsRouter"
+      ]
+    },
+    {
+      "path": "src/server/routers/contentversions.ts",
+      "type": "router",
+      "responsibility": "",
+      "exports": [
+        "ContentVersionsRouter"
       ]
     },
     {
@@ -800,9 +983,17 @@
       ]
     },
     {
+      "path": "src/server/routers/jobevents.ts",
+      "type": "router",
+      "responsibility": "",
+      "exports": [
+        "JobEventsRouter"
+      ]
+    },
+    {
       "path": "src/server/routers/marketing.ts",
       "type": "router",
-      "responsibility": "eslint-disable-next-line @typescript-eslint/no-require-imports",
+      "responsibility": "eslint-disable-next-line @typescript-eslint/no-unused-vars",
       "exports": [
         "MarketingRouter"
       ]
@@ -865,6 +1056,22 @@
       ]
     },
     {
+      "path": "src/server/routers/releases.ts",
+      "type": "router",
+      "responsibility": "",
+      "exports": [
+        "ReleasesRouter"
+      ]
+    },
+    {
+      "path": "src/server/routers/repurpose.ts",
+      "type": "router",
+      "responsibility": "RepurposeRouter – long-form video → short clips (OpusClip-style, OSS). POST /api/repurpose { videoPath, clipSeconds?, maxClips? } GET /api/repurpose list clips for a source (query: videoPath) The heav",
+      "exports": [
+        "RepurposeRouter"
+      ]
+    },
+    {
       "path": "src/server/routers/rest.ts",
       "type": "router",
       "responsibility": "Resolve a user-supplied file name safely inside a base directory,",
@@ -907,7 +1114,7 @@
     {
       "path": "src/server/routers/tenants.ts",
       "type": "router",
-      "responsibility": "API-key read/rotation is admin-only.",
+      "responsibility": "Provider credential updates remain admin-only.",
       "exports": [
         "TenantRouter"
       ]
@@ -998,7 +1205,7 @@
     {
       "path": "src/services/ABTestingEngine.ts",
       "type": "engine",
-      "responsibility": "Simple conservative fallback for unsupported degrees of freedom",
+      "responsibility": "Newly-created experiments must belong to exactly one workspace.",
       "exports": [
         "ABTest",
         "ABTestingEngine",
@@ -1065,7 +1272,7 @@
     {
       "path": "src/services/ApprovalEngine.ts",
       "type": "engine",
-      "responsibility": "",
+      "responsibility": "Workspace ownership is mandatory for all newly-created records.",
       "exports": [
         "ApprovalEngine",
         "ApprovalItem",
@@ -1176,6 +1383,7 @@
       "responsibility": "",
       "exports": [
         "CompetitorAnalysisEngine",
+        "CompetitorRecord",
         "CompetitorStrategy",
         "CreatorProfile",
         "ViralPattern"
@@ -1234,6 +1442,16 @@
         "ContentFreshnessEngine",
         "FreshnessCheckResult",
         "FreshnessRecord"
+      ]
+    },
+    {
+      "path": "src/services/ContentIntelligenceEngine.ts",
+      "type": "engine",
+      "responsibility": "",
+      "exports": [
+        "ContentIntelligenceEngine",
+        "IntelligenceBrief",
+        "IntelligenceBriefInput"
       ]
     },
     {
@@ -1366,6 +1584,18 @@
       ]
     },
     {
+      "path": "src/services/HumanEditorialEngine.ts",
+      "type": "engine",
+      "responsibility": "",
+      "exports": [
+        "EditorialDecision",
+        "EditorialReview",
+        "EditorialSource",
+        "HumanEditorialEngine",
+        "HumanEditorialInput"
+      ]
+    },
+    {
       "path": "src/services/HumanMimicryEngine.ts",
       "type": "engine",
       "responsibility": "",
@@ -1415,12 +1645,20 @@
     {
       "path": "src/services/ImageGenerationEngine.ts",
       "type": "engine",
-      "responsibility": "eslint-disable-next-line @typescript-eslint/no-require-imports",
+      "responsibility": "Auth-derived owner used only for local artifact isolation.",
       "exports": [
         "GeneratedImage",
         "ImageGenerationEngine",
         "ImageGenerationOptions",
         "ImageType"
+      ]
+    },
+    {
+      "path": "src/services/JobLifecycleEventService.ts",
+      "type": "service",
+      "responsibility": "",
+      "exports": [
+        "JobLifecycleEventService"
       ]
     },
     {
@@ -1512,6 +1750,26 @@
       "exports": [
         "QualityMetrics",
         "QualityScoringEngine"
+      ]
+    },
+    {
+      "path": "src/services/RenderMediaToken.ts",
+      "type": "module",
+      "responsibility": "",
+      "exports": [
+        "createRenderMediaToken",
+        "renderMediaTokenTtlSeconds",
+        "verifyRenderMediaToken"
+      ]
+    },
+    {
+      "path": "src/services/RepurposeEngine.ts",
+      "type": "engine",
+      "responsibility": "Auth-derived owner for generated artifacts.",
+      "exports": [
+        "RepurposeClip",
+        "RepurposeEngine",
+        "RepurposeOptions"
       ]
     },
     {
@@ -1719,7 +1977,7 @@
     {
       "path": "src/services/WebhookNotificationEngine.ts",
       "type": "engine",
-      "responsibility": "Telegram",
+      "responsibility": "Workspace owner; legacy records without this field are quarantined.",
       "exports": [
         "NotificationEvent",
         "NotificationLog",
@@ -1736,6 +1994,27 @@
       "responsibility": "todo add a semaphore",
       "exports": [
         "ShortCreator"
+      ]
+    },
+    {
+      "path": "src/short-creator/libraries/Chatterbox.ts",
+      "type": "module",
+      "responsibility": "Voice -> (language_id, reference clip) mapping for Chatterbox. The reference clip is cloned by Chatterbox to produce the voice timbre.",
+      "exports": [
+        "CHATTERBOX_VOICE_MAP",
+        "Chatterbox",
+        "shutdownChatterbox"
+      ]
+    },
+    {
+      "path": "src/short-creator/libraries/EdgeTts.ts",
+      "type": "module",
+      "responsibility": "Split scene narration into speakable clauses at sentence and comma boundaries, preserving each clause as its own prosody unit. Recognizes Devanagari danda (।) / double-danda (॥) so real Hindi narratio",
+      "exports": [
+        "EDGE_VOICE_MAP",
+        "EdgeTts",
+        "buildProsodyChunks",
+        "splitClauses"
       ]
     },
     {
@@ -1798,6 +2077,17 @@
       ]
     },
     {
+      "path": "src/short-creator/libraries/VideoSegmenter.ts",
+      "type": "module",
+      "responsibility": "VideoSegmenter – pure, deterministic short-clip scoring logic. Turns a Whisper word-level transcript into candidate clips and picks the most \"short-form worthy\" segments without any paid/cloud process",
+      "exports": [
+        "ClipWindow",
+        "SegmentOptions",
+        "scoreWindow",
+        "selectTopClips"
+      ]
+    },
+    {
       "path": "src/short-creator/libraries/Whisper.ts",
       "type": "module",
       "responsibility": "Mirror @remotion/install-whisper-cpp getWhisperExecutablePath logic",
@@ -1815,9 +2105,30 @@
       ]
     },
     {
+      "path": "src/types/ownership.ts",
+      "type": "types",
+      "responsibility": "Canonical ownership vocabulary for the Content Factory. Design contract: - workspaceId is the authenticated tenant boundary. - connectorId identifies one provider account owned by exactly one workspac",
+      "exports": [
+        "ConnectorId",
+        "ConnectorPlatform",
+        "ConnectorReference",
+        "ConnectorStatus",
+        "ContentVersionId",
+        "DestinationId",
+        "DestinationReference",
+        "DestinationStatus",
+        "ReleaseId",
+        "ReleaseStatus",
+        "ReleaseTargetReference",
+        "WorkspaceId",
+        "WorkspaceOwnedReference",
+        "requireNonEmptyOwnershipId"
+      ]
+    },
+    {
       "path": "src/types/profiles.ts",
       "type": "types",
-      "responsibility": "OAuth / token payload. Stored ENCRYPTED at rest (AES-256-GCM).",
+      "responsibility": "Auth-derived owner. Legacy records without this field are not tenant-visible.",
       "exports": [
         "ProfileAccountCredentials",
         "ProfileAccountRecord",
@@ -1830,7 +2141,7 @@
     {
       "path": "src/types/shorts.ts",
       "type": "types",
-      "responsibility": "Business logic validation: ensure total text length is reasonable for video duration",
+      "responsibility": "Auth-derived owner. Legacy records without this field are not tenant-visible.",
       "exports": [
         "Caption",
         "CaptionLine",
@@ -1876,6 +2187,12 @@
     },
     {
       "path": "src/ui/App.tsx",
+      "type": "ui",
+      "responsibility": "",
+      "exports": []
+    },
+    {
+      "path": "src/ui/components/AuthBootstrap.tsx",
       "type": "ui",
       "responsibility": "",
       "exports": []
@@ -2227,6 +2544,12 @@
       "exports": [
         "AuditLogEntry"
       ]
+    },
+    {
+      "path": "src/ui/components/tenant/AutomationRules.tsx",
+      "type": "ui",
+      "responsibility": "",
+      "exports": []
     },
     {
       "path": "src/ui/components/tenant/BillingPage.tsx",
@@ -2586,6 +2909,12 @@
       "exports": []
     },
     {
+      "path": "src/ui/pages/ConnectorsPage.tsx",
+      "type": "page",
+      "responsibility": "Connectors — workspace-owned provider account management. Backed only by tested server capabilities: GET /api/connectors POST /api/connectors PATCH /api/connectors/:connectorId PUT /api/connectors/:co",
+      "exports": []
+    },
+    {
       "path": "src/ui/pages/ContentTools.tsx",
       "type": "page",
       "responsibility": "Old components (kept for backward compatibility)",
@@ -2668,7 +2997,7 @@
     {
       "path": "src/ui/pages/PipelineComparePage.tsx",
       "type": "page",
-      "responsibility": "",
+      "responsibility": "Ignore fetch errors for history update",
       "exports": [
         "PipelineComparePage"
       ]
@@ -2703,6 +3032,12 @@
       "exports": [
         "RecycleDashboard"
       ]
+    },
+    {
+      "path": "src/ui/pages/ReleasesPage.tsx",
+      "type": "page",
+      "responsibility": "Releases — approved content versions to verified destinations. Backed only by tested server capabilities: GET /api/content-versions GET /api/releases (workspace-scoped list) POST /api/releases (create",
+      "exports": []
     },
     {
       "path": "src/ui/pages/SchedulePersistPage.tsx",
@@ -2817,6 +3152,25 @@
         "ApiResponse",
         "api",
         "apiClient"
+      ]
+    },
+    {
+      "path": "src/ui/services/authenticatedFetch.ts",
+      "type": "ui",
+      "responsibility": "Authenticated fetch boundary for protected UI routes. All workspace-owned browser requests should use this helper rather than raw fetch(). It does not invent credentials and it does not bypass fail-cl",
+      "exports": [
+        "authenticatedFetch"
+      ]
+    },
+    {
+      "path": "src/ui/services/authenticatedJson.ts",
+      "type": "ui",
+      "responsibility": "Authenticated JSON helper for protected UI routes. Wraps `authenticatedFetch` with consistent JSON parsing and error surfaces so workspace-owned pages do not re-implement response handling. Errors car",
+      "exports": [
+        "authenticatedJson",
+        "jsonPatch",
+        "jsonPost",
+        "jsonPut"
       ]
     },
     {
@@ -3278,30 +3632,6 @@
       ]
     },
     {
-      "method": "POST",
-      "path": "/api/auto-script",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/auto-script/hooks",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/auto-script/topics",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/auto-script/translate",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
       "method": "GET",
       "path": "/api/branding",
       "router": "brandingRouter",
@@ -3389,6 +3719,147 @@
       "router": "competitorRouter",
       "referenced": [
         "CompetitorAnalysisEngine"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/connectors",
+      "router": "connectorsRouter",
+      "referenced": [
+        "ConnectorPlatform",
+        "ConnectorSecretStore",
+        "ConnectorStatus",
+        "ConnectorStore",
+        "Date",
+        "String"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/connectors",
+      "router": "connectorsRouter",
+      "referenced": [
+        "ConnectorPlatform",
+        "ConnectorSecretStore",
+        "ConnectorStatus",
+        "ConnectorStore",
+        "Date",
+        "String"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/connectors/:connectorId",
+      "router": "connectorsRouter",
+      "referenced": [
+        "ConnectorPlatform",
+        "ConnectorSecretStore",
+        "ConnectorStatus",
+        "ConnectorStore",
+        "Date",
+        "String"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/connectors/:connectorId/destinations",
+      "router": "connectorsRouter",
+      "referenced": [
+        "ConnectorPlatform",
+        "ConnectorSecretStore",
+        "ConnectorStatus",
+        "ConnectorStore",
+        "Date",
+        "String"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/connectors/:connectorId/destinations",
+      "router": "connectorsRouter",
+      "referenced": [
+        "ConnectorPlatform",
+        "ConnectorSecretStore",
+        "ConnectorStatus",
+        "ConnectorStore",
+        "Date",
+        "String"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/connectors/:connectorId/destinations/:destinationId/verify",
+      "router": "connectorsRouter",
+      "referenced": [
+        "ConnectorPlatform",
+        "ConnectorSecretStore",
+        "ConnectorStatus",
+        "ConnectorStore",
+        "Date",
+        "String"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/connectors/:connectorId/secret",
+      "router": "connectorsRouter",
+      "referenced": [
+        "ConnectorPlatform",
+        "ConnectorSecretStore",
+        "ConnectorStatus",
+        "ConnectorStore",
+        "Date",
+        "String"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/content-versions",
+      "router": "contentVersionsRouter",
+      "referenced": [
+        "ContentVersionStatus",
+        "ContentVersionStore",
+        "String"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/content-versions",
+      "router": "contentVersionsRouter",
+      "referenced": [
+        "ContentVersionStatus",
+        "ContentVersionStore",
+        "String"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/content-versions/:contentVersionId",
+      "router": "contentVersionsRouter",
+      "referenced": [
+        "ContentVersionStatus",
+        "ContentVersionStore",
+        "String"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/content-versions/:contentVersionId",
+      "router": "contentVersionsRouter",
+      "referenced": [
+        "ContentVersionStatus",
+        "ContentVersionStore",
+        "String"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/content-versions/:contentVersionId/render",
+      "router": "contentVersionsRouter",
+      "referenced": [
+        "ContentVersionStatus",
+        "ContentVersionStore",
+        "String"
       ]
     },
     {
@@ -3959,6 +4430,7 @@
       "path": "/api/image/announcement",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -3969,6 +4441,7 @@
       "path": "/api/image/file/:fileName",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -3979,6 +4452,7 @@
       "path": "/api/image/filtered/:fileName",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -3989,6 +4463,7 @@
       "path": "/api/image/filters",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -3999,6 +4474,7 @@
       "path": "/api/image/filters/:filterId",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -4009,6 +4485,7 @@
       "path": "/api/image/filters/apply",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -4019,6 +4496,7 @@
       "path": "/api/image/filters/batch",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -4029,6 +4507,7 @@
       "path": "/api/image/filters/css",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -4039,6 +4518,7 @@
       "path": "/api/image/filters/preview",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -4049,6 +4529,7 @@
       "path": "/api/image/filters/preview/file/:fileName",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -4059,6 +4540,7 @@
       "path": "/api/image/generate",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -4069,6 +4551,7 @@
       "path": "/api/image/quote-card",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
@@ -4079,9 +4562,46 @@
       "path": "/api/image/thumbnail",
       "router": "imageRouter",
       "referenced": [
+        "ArtifactManifestStore",
         "FilterOptions",
         "ImageFiltersEngine",
         "ImageGenerationEngine"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/job-events/events",
+      "router": "jobEventsRouter",
+      "referenced": [
+        "JobEventOutboxStore",
+        "JobEventStore"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/job-events/outbox",
+      "router": "jobEventsRouter",
+      "referenced": [
+        "JobEventOutboxStore",
+        "JobEventStore"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/job-events/outbox/:id/requeue",
+      "router": "jobEventsRouter",
+      "referenced": [
+        "JobEventOutboxStore",
+        "JobEventStore"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/job-events/outbox/metrics",
+      "router": "jobEventsRouter",
+      "referenced": [
+        "JobEventOutboxStore",
+        "JobEventStore"
       ]
     },
     {
@@ -4191,30 +4711,6 @@
         "SeoOptimizerService",
         "ViralStrategyService"
       ]
-    },
-    {
-      "method": "GET",
-      "path": "/api/music-tags",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/music/:fileName",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/news-sources",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/news-sources/custom",
-      "router": "deferredApiRouter",
-      "referenced": []
     },
     {
       "method": "GET",
@@ -4486,12 +4982,6 @@
       ]
     },
     {
-      "method": "POST",
-      "path": "/api/queue/bulk",
-      "router": "deferredQueueRouter",
-      "referenced": []
-    },
-    {
       "method": "PATCH",
       "path": "/api/recycle/:videoId/metrics",
       "router": "recycleRouter",
@@ -4583,27 +5073,87 @@
     },
     {
       "method": "GET",
-      "path": "/api/reports",
-      "router": "deferredApiRouter",
-      "referenced": []
+      "path": "/api/releases",
+      "router": "releasesRouter",
+      "referenced": [
+        "ConnectorStore",
+        "ContentVersionStore",
+        "PublishJobStore",
+        "ReleaseStore"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/releases",
+      "router": "releasesRouter",
+      "referenced": [
+        "ConnectorStore",
+        "ContentVersionStore",
+        "PublishJobStore",
+        "ReleaseStore"
+      ]
     },
     {
       "method": "GET",
-      "path": "/api/reports/:reportId",
-      "router": "deferredApiRouter",
-      "referenced": []
+      "path": "/api/releases/:releaseId",
+      "router": "releasesRouter",
+      "referenced": [
+        "ConnectorStore",
+        "ContentVersionStore",
+        "PublishJobStore",
+        "ReleaseStore"
+      ]
     },
     {
       "method": "POST",
-      "path": "/api/reports/fetch",
-      "router": "deferredApiRouter",
-      "referenced": []
+      "path": "/api/releases/:releaseId/approve",
+      "router": "releasesRouter",
+      "referenced": [
+        "ConnectorStore",
+        "ContentVersionStore",
+        "PublishJobStore",
+        "ReleaseStore"
+      ]
     },
     {
       "method": "POST",
-      "path": "/api/reports/merge",
-      "router": "deferredApiRouter",
-      "referenced": []
+      "path": "/api/releases/:releaseId/queue",
+      "router": "releasesRouter",
+      "referenced": [
+        "ConnectorStore",
+        "ContentVersionStore",
+        "PublishJobStore",
+        "ReleaseStore"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/releases/:releaseId/targets",
+      "router": "releasesRouter",
+      "referenced": [
+        "ConnectorStore",
+        "ContentVersionStore",
+        "PublishJobStore",
+        "ReleaseStore"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/repurpose",
+      "router": "repurposeRouter",
+      "referenced": [
+        "ArtifactManifestStore",
+        "RepurposeEngine"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/repurpose",
+      "router": "repurposeRouter",
+      "referenced": [
+        "ArtifactManifestStore",
+        "RepurposeEngine"
+      ]
     },
     {
       "method": "GET",
@@ -4860,12 +5410,6 @@
     },
     {
       "method": "GET",
-      "path": "/api/script-plans",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "GET",
       "path": "/api/shadowban",
       "router": "shadowbanRouter",
       "referenced": [
@@ -5006,48 +5550,6 @@
         "ShadowbanDetectionEngine",
         "SkipAnalysisEngine"
       ]
-    },
-    {
-      "method": "POST",
-      "path": "/api/short-video",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/short-video/:videoId",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/short-video/:videoId",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/short-video/:videoId/metadata",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/short-video/:videoId/render-path",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/short-video/:videoId/status",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/short-videos",
-      "router": "deferredApiRouter",
-      "referenced": []
     },
     {
       "method": "GET",
@@ -5216,7 +5718,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/assets",
+      "path": "/api/system-engines/assets",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5236,7 +5738,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/assets",
+      "path": "/api/system-engines/assets",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5256,7 +5758,7 @@
     },
     {
       "method": "DELETE",
-      "path": "/api/system/assets/:id",
+      "path": "/api/system-engines/assets/:id",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5276,7 +5778,7 @@
     },
     {
       "method": "PATCH",
-      "path": "/api/system/assets/:id/tags",
+      "path": "/api/system-engines/assets/:id/tags",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5296,7 +5798,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/assets/stats",
+      "path": "/api/system-engines/assets/stats",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5316,7 +5818,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/auth/authenticate",
+      "path": "/api/system-engines/auth/authenticate",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5336,7 +5838,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/auth/register",
+      "path": "/api/system-engines/auth/register",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5356,7 +5858,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/auth/rotate/:tenantId",
+      "path": "/api/system-engines/auth/rotate/:tenantId",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5376,7 +5878,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/auth/tenants",
+      "path": "/api/system-engines/auth/tenants",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5396,7 +5898,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/auth/verify",
+      "path": "/api/system-engines/auth/verify",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5416,7 +5918,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/compliance/critical",
+      "path": "/api/system-engines/compliance/critical",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5436,7 +5938,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/compliance/log",
+      "path": "/api/system-engines/compliance/log",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5456,7 +5958,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/compliance/logs",
+      "path": "/api/system-engines/compliance/logs",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5476,7 +5978,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/compliance/report",
+      "path": "/api/system-engines/compliance/report",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5496,7 +5998,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/content-buckets/add",
+      "path": "/api/system-engines/content-buckets/add",
       "router": "contentBucketsRouter",
       "referenced": [
         "ContentBucketEngine"
@@ -5504,7 +6006,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/content-buckets/detect",
+      "path": "/api/system-engines/content-buckets/detect",
       "router": "contentBucketsRouter",
       "referenced": [
         "ContentBucketEngine"
@@ -5512,7 +6014,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/content-buckets/next",
+      "path": "/api/system-engines/content-buckets/next",
       "router": "contentBucketsRouter",
       "referenced": [
         "ContentBucketEngine"
@@ -5520,7 +6022,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/content-buckets/stats",
+      "path": "/api/system-engines/content-buckets/stats",
       "router": "contentBucketsRouter",
       "referenced": [
         "ContentBucketEngine"
@@ -5528,7 +6030,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/credentials",
+      "path": "/api/system-engines/credentials",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5548,7 +6050,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/credentials",
+      "path": "/api/system-engines/credentials",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5568,7 +6070,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/credentials/:id/rotate",
+      "path": "/api/system-engines/credentials/:id/rotate",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5588,7 +6090,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/credentials/expiring",
+      "path": "/api/system-engines/credentials/expiring",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5608,7 +6110,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/credentials/schedule",
+      "path": "/api/system-engines/credentials/schedule",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5628,7 +6130,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/errorrecovery",
+      "path": "/api/system-engines/errorrecovery",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5648,7 +6150,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/errorrecovery/:id/dead",
+      "path": "/api/system-engines/errorrecovery/:id/dead",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5668,7 +6170,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/errorrecovery/:id/recover",
+      "path": "/api/system-engines/errorrecovery/:id/recover",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5688,7 +6190,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/errorrecovery/clear",
+      "path": "/api/system-engines/errorrecovery/clear",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5708,7 +6210,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/errorrecovery/deadletter",
+      "path": "/api/system-engines/errorrecovery/deadletter",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5728,7 +6230,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/errorrecovery/process",
+      "path": "/api/system-engines/errorrecovery/process",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5748,7 +6250,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/errorrecovery/record",
+      "path": "/api/system-engines/errorrecovery/record",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5768,7 +6270,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/errorrecovery/stats",
+      "path": "/api/system-engines/errorrecovery/stats",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5788,7 +6290,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/export",
+      "path": "/api/system-engines/export",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5808,7 +6310,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/export/backup",
+      "path": "/api/system-engines/export/backup",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5828,7 +6330,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/export/list",
+      "path": "/api/system-engines/export/list",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5848,7 +6350,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/export/restore",
+      "path": "/api/system-engines/export/restore",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5868,7 +6370,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/knowledgebase",
+      "path": "/api/system-engines/knowledgebase",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5888,7 +6390,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/knowledgebase",
+      "path": "/api/system-engines/knowledgebase",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5908,7 +6410,7 @@
     },
     {
       "method": "DELETE",
-      "path": "/api/system/knowledgebase/:id",
+      "path": "/api/system-engines/knowledgebase/:id",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5928,7 +6430,7 @@
     },
     {
       "method": "PATCH",
-      "path": "/api/system/knowledgebase/:id",
+      "path": "/api/system-engines/knowledgebase/:id",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5948,7 +6450,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/knowledgebase/categories",
+      "path": "/api/system-engines/knowledgebase/categories",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5968,7 +6470,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/knowledgebase/top",
+      "path": "/api/system-engines/knowledgebase/top",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -5988,7 +6490,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/marketing-engine/banners",
+      "path": "/api/system-engines/marketing-engine/banners",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6008,7 +6510,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/marketing-engine/campaign",
+      "path": "/api/system-engines/marketing-engine/campaign",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6028,7 +6530,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/marketing-engine/scrape",
+      "path": "/api/system-engines/marketing-engine/scrape",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6048,7 +6550,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/resource/history",
+      "path": "/api/system-engines/resource/history",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6068,7 +6570,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/resource/optimize",
+      "path": "/api/system-engines/resource/optimize",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6088,7 +6590,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/resource/predict",
+      "path": "/api/system-engines/resource/predict",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6108,7 +6610,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/resource/snapshot",
+      "path": "/api/system-engines/resource/snapshot",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6128,7 +6630,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/throttle/check",
+      "path": "/api/system-engines/throttle/check",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6148,7 +6650,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/throttle/plan",
+      "path": "/api/system-engines/throttle/plan",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6168,7 +6670,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/throttle/quotas",
+      "path": "/api/system-engines/throttle/quotas",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6188,7 +6690,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/system/throttle/quotas/:tenantId",
+      "path": "/api/system-engines/throttle/quotas/:tenantId",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6208,7 +6710,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/system/throttle/reset",
+      "path": "/api/system-engines/throttle/reset",
       "router": "systemEnginesRouter",
       "referenced": [
         "AssetLibraryEngine",
@@ -6245,6 +6747,12 @@
       "referenced": []
     },
     {
+      "method": "PUT",
+      "path": "/api/tenants/:tenantId",
+      "router": "tenantRouter",
+      "referenced": []
+    },
+    {
       "method": "GET",
       "path": "/api/tenants/:tenantId/billing",
       "router": "tenantRouter",
@@ -6257,8 +6765,20 @@
       "referenced": []
     },
     {
+      "method": "GET",
+      "path": "/api/tenants/:tenantId/keys",
+      "router": "tenantRouter",
+      "referenced": []
+    },
+    {
       "method": "POST",
       "path": "/api/tenants/:tenantId/keys",
+      "router": "tenantRouter",
+      "referenced": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/tenants/:tenantId/keys/:keyId",
       "router": "tenantRouter",
       "referenced": []
     },
@@ -6271,6 +6791,12 @@
     {
       "method": "POST",
       "path": "/api/tenants/:tenantId/quotas",
+      "router": "tenantRouter",
+      "referenced": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tenants/bootstrap",
       "router": "tenantRouter",
       "referenced": []
     },
@@ -6297,12 +6823,6 @@
       "referenced": [
         "ThumbnailEngine"
       ]
-    },
-    {
-      "method": "GET",
-      "path": "/api/tmp/:tmpFile",
-      "router": "deferredApiRouter",
-      "referenced": []
     },
     {
       "method": "POST",
@@ -6462,12 +6982,6 @@
     },
     {
       "method": "GET",
-      "path": "/api/voices",
-      "router": "deferredApiRouter",
-      "referenced": []
-    },
-    {
-      "method": "GET",
       "path": "/api/watermark/default",
       "router": "watermarkRouter",
       "referenced": [
@@ -6561,18 +7075,6 @@
       "referenced": [
         "WebhookNotificationEngine"
       ]
-    },
-    {
-      "method": "POST",
-      "path": "/mcp/messages",
-      "router": "deferredMcpRouter",
-      "referenced": []
-    },
-    {
-      "method": "GET",
-      "path": "/mcp/sse",
-      "router": "deferredMcpRouter",
-      "referenced": []
     }
   ],
   "pages": [
@@ -6580,10 +7082,7 @@
       "route": "/",
       "component": "VideoList",
       "file": "src/ui/pages/VideoList.tsx",
-      "apiCalls": [
-        "/api/short-videos",
-        "/api/short-video/:p"
-      ]
+      "apiCalls": []
     },
     {
       "route": "/create",
@@ -6664,7 +7163,9 @@
       "route": "/tenants",
       "component": "TenantConsole",
       "file": "src/ui/pages/TenantConsole.tsx",
-      "apiCalls": []
+      "apiCalls": [
+        "/api/tenants/bootstrap"
+      ]
     },
     {
       "route": "/content-tools",
@@ -6930,7 +7431,10 @@
       "route": "/engines-dashboard",
       "component": "EnginesDashboard",
       "file": "src/ui/pages/EnginesDashboard.tsx",
-      "apiCalls": []
+      "apiCalls": [
+        "/api/system-engines/auth/tenants",
+        "/api/system-engines/auth/register"
+      ]
     },
     {
       "route": "/profiles",
@@ -6943,6 +7447,33 @@
         "/api/profiles/:p/accounts/:p",
         "/api/oauth/:p/connect",
         "/api/profiles/resolve"
+      ]
+    },
+    {
+      "route": "/connectors",
+      "component": "ConnectorsPage",
+      "file": "src/ui/pages/ConnectorsPage.tsx",
+      "apiCalls": [
+        "/api/connectors",
+        "/api/connectors/:p/destinations",
+        "/api/connectors/:p",
+        "/api/connectors/:p/secret",
+        "/api/connectors/:p/destinations/:p/verify"
+      ]
+    },
+    {
+      "route": "/releases",
+      "component": "ReleasesPage",
+      "file": "src/ui/pages/ReleasesPage.tsx",
+      "apiCalls": [
+        "/api/content-versions",
+        "/api/releases",
+        "/api/connectors",
+        "/api/releases/:p",
+        "/api/releases/:p/approve",
+        "/api/connectors/:p/destinations",
+        "/api/releases/:p/targets",
+        "/api/releases/:p/queue"
       ]
     },
     {
@@ -6963,12 +7494,18 @@
       "file": "src/db/AiLearningStore.ts",
       "class": "AiLearningStore",
       "jsonFile": "ai-learning-events.json",
-      "purpose": ""
+      "purpose": "A legacy single model is deliberately quarantined and never returned to a tenant."
     },
     {
       "file": "src/db/AnalyticsStore.ts",
       "class": "AnalyticsStore",
       "jsonFile": "analytics.json",
+      "purpose": "Auth-derived owner. Legacy analytics without this field are not tenant-visible."
+    },
+    {
+      "file": "src/db/ArtifactManifestStore.ts",
+      "class": "ArtifactManifestStore",
+      "jsonFile": "artifact-manifests.json",
       "purpose": ""
     },
     {
@@ -6981,19 +7518,67 @@
       "file": "src/db/ChannelConfigStore.ts",
       "class": "ChannelConfigStore",
       "jsonFile": "channelConfigs.json",
+      "purpose": "Auth-derived owner. Legacy records without this field are not tenant-visible."
+    },
+    {
+      "file": "src/db/ConnectorSecretStore.ts",
+      "class": "ConnectorSecretStore",
+      "jsonFile": "connector-secrets.json",
+      "purpose": "Encrypted connector secret storage. Metadata and secrets are deliberately separate. The secret file contains only encrypted values keyed by workspace and connector identity. Callers must provide the w"
+    },
+    {
+      "file": "src/db/ConnectorStore.ts",
+      "class": "ConnectorStore",
+      "jsonFile": "connectors.json",
+      "purpose": "Workspace-owned connector metadata store. This is the file-backed compatibility implementation of the target connector contract. It stores only credential references and provider metadata; secret valu"
+    },
+    {
+      "file": "src/db/ContentAutomationRuleStore.ts",
+      "class": "ContentAutomationRuleStore",
+      "jsonFile": "contentAutomationRules.json",
+      "purpose": ""
+    },
+    {
+      "file": "src/db/ContentVersionStore.ts",
+      "class": "ContentVersionStore",
+      "jsonFile": "content-versions.json",
       "purpose": ""
     },
     {
       "file": "src/db/CustomNewsSourceStore.ts",
       "class": "CustomNewsSourceStore",
       "jsonFile": "customNewsSources.json",
+      "purpose": "Workspace owner; legacy records without this field are hidden from scoped reads."
+    },
+    {
+      "file": "src/db/DualWriteReadVerify.ts",
+      "class": "",
+      "jsonFile": "",
+      "purpose": "Writes the file-backed authority first, then writes the durable shadow. The durable result is never promoted to a primary read by this helper. A durable write failure is surfaced to the caller; it is "
+    },
+    {
+      "file": "src/db/JobEventOutboxStore.ts",
+      "class": "JobEventOutboxStore",
+      "jsonFile": "job-event-outbox.json",
+      "purpose": ""
+    },
+    {
+      "file": "src/db/JobEventStore.ts",
+      "class": "JobEventStore",
+      "jsonFile": "job-events.json",
+      "purpose": ""
+    },
+    {
+      "file": "src/db/MigrationCheckpointStore.ts",
+      "class": "MigrationCheckpointStore",
+      "jsonFile": "migration-checkpoints.json",
       "purpose": ""
     },
     {
       "file": "src/db/PipelineStore.ts",
       "class": "PipelineStore",
       "jsonFile": "pipeline-jobs.json",
-      "purpose": ""
+      "purpose": "Auth-derived owner. Legacy variations without this field are not tenant-visible."
     },
     {
       "file": "src/db/ProfileAccountStore.ts",
@@ -7014,6 +7599,18 @@
       "purpose": "Idempotency check: same render output + platform + channel"
     },
     {
+      "file": "src/db/ReleaseControlStore.ts",
+      "class": "ReleaseControlStore",
+      "jsonFile": "release-control.json",
+      "purpose": ""
+    },
+    {
+      "file": "src/db/ReleaseStore.ts",
+      "class": "ReleaseStore",
+      "jsonFile": "releases.json",
+      "purpose": "Workspace-owned release metadata store. A release is immutable with respect to its content version and destination identity. Provider credentials are never stored here. A target can only be created fo"
+    },
+    {
       "file": "src/db/RenderJobStore.ts",
       "class": "RenderJobStore",
       "jsonFile": "renderJobs.json",
@@ -7023,25 +7620,25 @@
       "file": "src/db/ReportStore.ts",
       "class": "ReportStore",
       "jsonFile": "reports.json",
-      "purpose": ""
+      "purpose": "Auth-derived owner. Legacy reports without this field are not tenant-visible."
     },
     {
       "file": "src/db/ScheduleStore.ts",
       "class": "ScheduleStore",
       "jsonFile": "schedules.json",
-      "purpose": "Calculate next run based on cron expression (simplified)"
+      "purpose": "Auth-derived owner. Legacy schedules without this field are not tenant-visible."
     },
     {
       "file": "src/db/ScriptPlanStore.ts",
       "class": "ScriptPlanStore",
       "jsonFile": "scriptPlans.json",
-      "purpose": ""
+      "purpose": "Auth-derived owner. Legacy plans without this field are not tenant-visible."
     },
     {
       "file": "src/db/TenantStore.ts",
       "class": "TenantStore",
       "jsonFile": "tenants.json",
-      "purpose": ""
+      "purpose": "Return a tenant only when the requested resource belongs to the auth tenant."
     },
     {
       "file": "src/db/TenantUsageStore.ts",
@@ -7053,7 +7650,7 @@
       "file": "src/db/VideoLibraryStore.ts",
       "class": "VideoLibraryStore",
       "jsonFile": "videoLibrary.json",
-      "purpose": ""
+      "purpose": "Auth-derived owner. Legacy records without this field are not tenant-visible."
     },
     {
       "file": "src/db/VideoMetadataStore.ts",

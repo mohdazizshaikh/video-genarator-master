@@ -35,6 +35,8 @@ import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import TuneIcon from '@mui/icons-material/Tune';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
+import CableIcon from '@mui/icons-material/Cable';
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -79,6 +81,8 @@ const NAV_SECTIONS = [
     title: 'Publishing & Growth',
     items: [
       { path: '/publish', label: 'Publish', icon: <PublishIcon /> },
+      { path: '/connectors', label: 'Connectors', icon: <CableIcon />, badge: 'NEW' },
+      { path: '/releases', label: 'Releases', icon: <RocketLaunchIcon />, badge: 'NEW' },
       { path: '/profiles', label: 'Client Profiles', icon: <BusinessIcon />, badge: 'NEW' },
       { path: '/scheduler', label: 'Scheduler (Queue)', icon: <ScheduleIcon /> },
       { path: '/schedule-manager', label: 'Schedule Manager', icon: <EventRepeatIcon />, badge: 'NEW' },

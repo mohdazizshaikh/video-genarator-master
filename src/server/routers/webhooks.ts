@@ -3,7 +3,7 @@ import type { Request } from "express";
 import type { Config } from "../../config";
 import { WebhookNotificationEngine } from "../../services/WebhookNotificationEngine";
 import { logger } from "../../logger";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 function tenantIdFrom(req: Request): string {
   const tenantId = getAuthenticatedTenantId(req);
@@ -22,6 +22,8 @@ export class WebhooksRouter {
   }
 
   private registerRoutes() {
+    this.router.use(requireAuth);
+
     // GET /api/webhooks — list all webhooks
     this.router.get("/", (req, res) => {
       try {

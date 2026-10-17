@@ -1,10 +1,6 @@
 # Codebase Index (auto-generated)
 
-> For commit: `721e765` · 316 source files · 312 API endpoints · 44 pages · 18 stores
-
-## Current documentation authority
-
-For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md) as the consolidated source of truth. It explicitly separates the current `ProfileAccountStore`/`ChannelConfigStore` implementation from the planned workspace-owned connector/destination model and links to the authoritative migration, local-setup, authentication, pipeline, and schema documents. It does not imply that PostgreSQL/MinIO cutover or multi-bot publishing is already complete.
+> For commit: `720a119` · 353 source files · 315 API endpoints · 46 pages · 29 stores
 
 ## Files
 
@@ -17,38 +13,55 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/components/root/index.ts` | module | - | - |
 | `src/components/types.ts` | module | - | AvailableComponentsEnum, OrientationConfig |
 | `src/components/utils.ts` | module | Check if we need to start a new page due to time gap | calculateVolume, createCaptionPages, getOrientationConfig, shortVideoSchema |
+| `src/components/videos/AdvancedKnowledgeOverlay.tsx` | module | Advanced knowledge overlay for trends, technology, gyan, quotes, and motivation. Flexible enough for facts, explainers,  | AdvancedKnowledgeOverlay |
+| `src/components/videos/CategoryOverlay.tsx` | module | Generic category-aware overlay for non-news, non-marketing content. It intentionally avoids ticker bars, breaking labels | CategoryOverlay |
+| `src/components/videos/CategoryPipelineProfiles.ts` | module | Canonical category pipeline profiles. This is the contract between classification, media search, rendering, and QA. News | CATEGORY_PIPELINE_PROFILES, CanonicalCategory, CaptionCase, CategoryOverlayMode, CategoryPipelineProfile, normalizePipelineCategory, resolveCategoryPipeline |
 | `src/components/videos/ContentTemplateEngine.ts` | engine | ContentTemplateEngine – content-driven layout/structure templates. Pairs with ThemeEngine (which picks the "look": palet | ChromeAnchor, ContentStructure, ContentTemplate, TemplateChromeKind, TemplateScene, listContentTemplates, pickTemplateChrome, resolveContentTemplate |
+| `src/components/videos/ITProductShowcaseOverlay.tsx` | module | IT Product & Services Showcase overlay. Product-led composition for software, SaaS, websites, automation, AI, cloud, cyb | ITProductShowcaseOverlay |
 | `src/components/videos/LandscapeVideo.tsx` | module | - | LandscapeVideo |
 | `src/components/videos/LongFormVideo.tsx` | module | LongFormVideo – Phase 3.2 Remotion component for 16:9 landscape long-form video (YouTube standard). Supports chapters de | LongFormVideo |
+| `src/components/videos/MarketingOverlay.tsx` | module | Marketing treatment: calm brand storytelling, not a newsroom overlay. Use warm accent rules, restrained metadata, and a  | MarketingOverlay |
 | `src/components/videos/NewsOverlay.tsx` | module | - | NewsOverlay |
 | `src/components/videos/PortraitVideo.tsx` | module | - | PortraitVideo |
+| `src/components/videos/SportsOverlay.tsx` | module | Advanced sports overlay for cricket, football, basketball, and other sports. It presents event context and scores only w | SportsOverlay |
 | `src/components/videos/TemplateChrome.tsx` | module | Intro flash: full-frame accent flash for ~16 frames on scene 0. | TemplateChrome |
 | `src/components/videos/Test.tsx` | module | - | TestVideo |
 | `src/components/videos/ThemeEngine.ts` | engine | ThemeEngine – genre-aware visual + audio theming for rendered videos. Maps a content category (plus optional per-scene s | TemplateVariantName, VideoTheme, pickTemplateVariant, resolveTheme, stableHash |
 | `src/components/videos/fontStacks.ts` | module | - | videoUiFontFamily |
-| `src/config.ts` | config | Create the global logger | Config, KOKORO_MODEL, isDevMode, logger |
+| `src/config.ts` | config | Legacy compatibility only; production connector publishing must keep this false. | Config, KOKORO_MODEL, isDevMode, logger |
 | `src/config/categories.ts` | config | - | CONTENT_CATEGORIES, ContentCategory, SOURCE_CATEGORIES, isContentCategory, normalizeCategory |
 | `src/config/channelRules.ts` | config | - | defaultCategoryRules, getCategoryRule |
 | `src/config/featureFlags.ts` | config | Feature Flags - Control experimental features safely All new features are behind flags to maintain backward compatibilit | DEFAULT_FEATURE_FLAGS, FeatureFlags, SAFE_PRODUCTION_FLAGS, getFeatureFlags |
 | `src/config/languageSupport.ts` | config | - | SupportedLanguageOption, defaultVoiceForLanguage, labelForLanguage, supportedCreateLanguages, supportedLanguageCodes, toSpeechSynthesisLocale |
 | `src/config/validate.ts` | config | Environment Variables Validation Call validateEnvironment() early in startup to: 1. Catch missing required vars before t | runEnvironmentValidation, validateEnvironment |
 | `src/db/ABVariantStore.ts` | db | - | ABVariantRecord, ABVariantStore |
-| `src/db/AiLearningStore.ts` | db | - | AiLearningStore, LearningEvent, LearningModelState, LearningOutcome |
-| `src/db/AnalyticsStore.ts` | db | - | AnalyticsRecord, AnalyticsStore |
+| `src/db/AiLearningStore.ts` | db | A legacy single model is deliberately quarantined and never returned to a tenant. | AiLearningStore, LearningEvent, LearningModelState, LearningOutcome |
+| `src/db/AnalyticsStore.ts` | db | Auth-derived owner. Legacy analytics without this field are not tenant-visible. | AnalyticsRecord, AnalyticsStore |
+| `src/db/ArtifactManifestStore.ts` | db | - | ArtifactKind, ArtifactLifecycle, ArtifactManifest, ArtifactManifestStore |
 | `src/db/AudienceStore.ts` | db | - | AudienceStore, AudienceTargetRecord |
-| `src/db/ChannelConfigStore.ts` | db | - | ChannelConfigRecord, ChannelConfigStore |
-| `src/db/CustomNewsSourceStore.ts` | db | - | CustomNewsSourceRecord, CustomNewsSourceStore |
-| `src/db/PipelineStore.ts` | db | - | AIScores, ComparisonRun, GeneratedVariation, PipelineJob, PipelineStatus, PipelineStore, PlatformComparisonEntry |
+| `src/db/ChannelConfigStore.ts` | db | Auth-derived owner. Legacy records without this field are not tenant-visible. | ChannelConfigRecord, ChannelConfigStore |
+| `src/db/ConnectorSecretStore.ts` | db | Encrypted connector secret storage. Metadata and secrets are deliberately separate. The secret file contains only encryp | ConnectorSecretStore |
+| `src/db/ConnectorStore.ts` | db | Workspace-owned connector metadata store. This is the file-backed compatibility implementation of the target connector c | ConnectorDestinationRecord, ConnectorRecord, ConnectorStore |
+| `src/db/ContentAutomationRuleStore.ts` | db | - | AutomationVideoType, ContentAutomationRule, ContentAutomationRuleStore |
+| `src/db/ContentVersionStore.ts` | db | - | ContentVersionRecord, ContentVersionStatus, ContentVersionStore |
+| `src/db/CustomNewsSourceStore.ts` | db | Workspace owner; legacy records without this field are hidden from scoped reads. | CustomNewsSourceRecord, CustomNewsSourceStore |
+| `src/db/DualWriteReadVerify.ts` | db | Writes the file-backed authority first, then writes the durable shadow. The durable result is never promoted to a primar | DualWritePorts, DualWriteResult, ReadVerifyResult, compareReadModels, shadowWriteAndReadVerify |
+| `src/db/JobEventOutboxStore.ts` | db | - | JobEventOutboxStore, OutboxEvent, OutboxState |
+| `src/db/JobEventStore.ts` | db | - | JobEvent, JobEventStore |
+| `src/db/MigrationCheckpointStore.ts` | db | - | MigrationCheckpoint, MigrationCheckpointStore |
+| `src/db/PipelineStore.ts` | db | Auth-derived owner. Legacy variations without this field are not tenant-visible. | AIScores, ComparisonRun, GeneratedVariation, PipelineJob, PipelineStatus, PipelineStore, PlatformComparisonEntry |
 | `src/db/ProfileAccountStore.ts` | db | - | ProfileAccountStore |
 | `src/db/ProfileStore.ts` | db | - | ProfileStore |
 | `src/db/PublishJobStore.ts` | db | Idempotency check: same render output + platform + channel | PublishJobStore |
+| `src/db/ReleaseControlStore.ts` | db | - | ReleaseControlStore, ReleaseRecord, ReleaseState |
+| `src/db/ReleaseStore.ts` | db | Workspace-owned release metadata store. A release is immutable with respect to its content version and destination ident | ReleaseRecord, ReleaseStore, ReleaseTargetRecord |
 | `src/db/RenderJobStore.ts` | db | Find existing job with same idempotency key | RenderJobStore |
-| `src/db/ReportStore.ts` | db | - | ReportRecord, ReportStatus, ReportStore |
-| `src/db/ScheduleStore.ts` | db | Calculate next run based on cron expression (simplified) | ScheduleRecord, ScheduleStore |
-| `src/db/ScriptPlanStore.ts` | db | - | ScriptPlanItem, ScriptPlanStore |
-| `src/db/TenantStore.ts` | db | - | TenantRecord, TenantStore, TenantTier |
+| `src/db/ReportStore.ts` | db | Auth-derived owner. Legacy reports without this field are not tenant-visible. | ReportRecord, ReportStatus, ReportStore |
+| `src/db/ScheduleStore.ts` | db | Auth-derived owner. Legacy schedules without this field are not tenant-visible. | ScheduleRecord, ScheduleStore |
+| `src/db/ScriptPlanStore.ts` | db | Auth-derived owner. Legacy plans without this field are not tenant-visible. | ScriptPlanItem, ScriptPlanStore |
+| `src/db/TenantStore.ts` | db | Return a tenant only when the requested resource belongs to the auth tenant. | TenantRecord, TenantStore, TenantTier |
 | `src/db/TenantUsageStore.ts` | db | - | TenantUsageStore, UsageRecord |
-| `src/db/VideoLibraryStore.ts` | db | - | VideoLibraryStore, VideoRecord |
+| `src/db/VideoLibraryStore.ts` | db | Auth-derived owner. Legacy records without this field are not tenant-visible. | VideoLibraryStore, VideoRecord |
 | `src/db/VideoMetadataStore.ts` | db | - | VideoMetadataStore |
 | `src/enhanced-types.ts` | module | Enhanced Features Types & Interfaces Import from here for full TypeScript support with new services | ALL_FEATURES, AgentLoopConfig, AgentResult, AssetSource, AssetSourceType, AssetStats, BeatSyncConfig, EXPERIMENTAL_FEATURES, EngagementPrediction, EnhancedFeature, EnhancedPlatform, EnhancedRecommendation, EnhancedServicesRegistry, EnhancedStyle, FallbackAsset, FeatureFlag, FeedbackContext, GenerationAttempt, GenerationContext, HookOption, IssueSeverity, IssueType, MemoryStats, PLATFORMS, PatternQuery, PlatformLimits, PlatformMetadata, PlatformType, REQUIRES_FEEDBACK, REQUIRES_MEMORY, SAFE_PRODUCTION_FEATURES, STYLES, ScriptQualityIssue, StoredPattern, StoredPatternStyle, SyncStats, SyncedScene, ViabilityAssessment, ViabilityRecommendation |
 | `src/feedback/feedback.service.ts` | module | Feedback Service - Improve scripts based on scoring feedback Enables self-improving script generation within retry budge | FeedbackContext, FeedbackService, ScriptQualityIssue |
@@ -71,20 +84,22 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/scripts/fetchReports.ts` | module | run immediately once | fetchReports |
 | `src/scripts/install.ts` | module | runs in docker | install |
 | `src/scripts/normalizeMusic.ts` | module | - | normalizeMusic |
-| `src/server/auth.ts` | server | Fail-closed admin guard. Requires the X-Admin-Key header to match ADMIN_API_KEY. If the server has no ADMIN_API_KEY conf | adminKeyConfigured, logAdminKeyStatus, requireAdminKey, validateTokenIfPresent |
+| `src/server/auth.ts` | server | Fail-closed admin guard. Requires the X-Admin-Key header to match ADMIN_API_KEY. If the server has no ADMIN_API_KEY conf | AuthClaims, adminKeyConfigured, getAuthenticatedTenantId, isAdminRequest, logAdminKeyStatus, requireAdminKey, requireAuth, validateTokenIfPresent |
 | `src/server/rateLimit.ts` | server | - | apiRateLimiter |
 | `src/server/readiness.ts` | server | Shared readiness state so health checks can report the true status of the heavy video pipeline (ShortCreator) which init | readiness |
 | `src/server/routers/abtesting.ts` | router | - | ABTestingRouter |
 | `src/server/routers/account.ts` | router | - | AccountRouter |
-| `src/server/routers/ai.ts` | router | eslint-disable-next-line @typescript-eslint/no-require-imports | AiRouter |
+| `src/server/routers/ai.ts` | router | eslint-disable-next-line @typescript-eslint/no-unused-vars | AiRouter |
 | `src/server/routers/approval.ts` | router | Approval queue | ApprovalRouter |
 | `src/server/routers/attention.ts` | router | - | AttentionRouter |
 | `src/server/routers/audio.ts` | router | - | AudioRouter |
 | `src/server/routers/branding.ts` | router | GET /api/branding/:tenantId — get branding config | BrandingRouter |
 | `src/server/routers/channelconfigs.ts` | router | - | ChannelConfigRouter |
 | `src/server/routers/competitor.ts` | router | - | CompetitorRouter |
+| `src/server/routers/connectors.ts` | router | Workspace-owned connector metadata routes. This compatibility API deliberately accepts credential references only. It do | ConnectorsRouter |
 | `src/server/routers/content.ts` | router | eslint-disable-next-line @typescript-eslint/no-require-imports | ContentRouter |
 | `src/server/routers/contentbuckets.ts` | router | - | ContentBucketsRouter |
+| `src/server/routers/contentversions.ts` | router | - | ContentVersionsRouter |
 | `src/server/routers/costs.ts` | router | - | CostsRouter |
 | `src/server/routers/editing.ts` | router | - | EditingRouter |
 | `src/server/routers/emotional.ts` | router | - | EmotionalRouter |
@@ -94,7 +109,8 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/server/routers/hooks.ts` | router | - | HooksRouter |
 | `src/server/routers/humanized.ts` | router | - | HumanizedRouter |
 | `src/server/routers/image.ts` | router | GET /api/image/filters Returns all available filter presets | ImageRouter |
-| `src/server/routers/marketing.ts` | router | eslint-disable-next-line @typescript-eslint/no-require-imports | MarketingRouter |
+| `src/server/routers/jobevents.ts` | router | - | JobEventsRouter |
+| `src/server/routers/marketing.ts` | router | eslint-disable-next-line @typescript-eslint/no-unused-vars | MarketingRouter |
 | `src/server/routers/mcp.ts` | router | - | MCPRouter |
 | `src/server/routers/pipeline.ts` | router | Run all platforms in parallel — each updates the comparison entry as it completes | PipelineRouter |
 | `src/server/routers/profiles.ts` | router | Accounts | OAuthRouter, ProfilesRouter |
@@ -102,12 +118,14 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/server/routers/quality.ts` | router | - | QualityRouter |
 | `src/server/routers/queue.ts` | router | eslint-disable-next-line @typescript-eslint/no-require-imports | QueueRouter |
 | `src/server/routers/recycle.ts` | router | - | RecycleRouter |
+| `src/server/routers/releases.ts` | router | - | ReleasesRouter |
+| `src/server/routers/repurpose.ts` | router | RepurposeRouter – long-form video → short clips (OpusClip-style, OSS). POST /api/repurpose { videoPath, clipSeconds?, ma | RepurposeRouter |
 | `src/server/routers/rest.ts` | router | Resolve a user-supplied file name safely inside a base directory, | APIRouter |
 | `src/server/routers/schedule.ts` | router | ScheduleRouter – Full schedule persistence with cron-like runner GET /api/schedule – list schedules POST /api/schedule – | ScheduleRouter |
 | `src/server/routers/shadowban.ts` | router | Shadowban | ShadowbanRouter |
 | `src/server/routers/strategy.ts` | router | Platform psychology | StrategyRouter |
 | `src/server/routers/systemengines.ts` | router | ─── Resource Engine ─── | SystemEnginesRouter |
-| `src/server/routers/tenants.ts` | router | API-key read/rotation is admin-only. | TenantRouter |
+| `src/server/routers/tenants.ts` | router | Provider credential updates remain admin-only. | TenantRouter |
 | `src/server/routers/thumbnail.ts` | router | - | ThumbnailRouter |
 | `src/server/routers/translate.ts` | router | - | TranslateRouter |
 | `src/server/routers/trends.ts` | router | - | TrendsRouter |
@@ -118,14 +136,14 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/server/server.ts` | server | Trust proxies only when explicitly enabled (behind a reverse proxy). | Server |
 | `src/server/swagger.ts` | server | OpenAPI 3.0 Specification for AI Viral Content Empire SaaS Platform Served at GET /api/docs (Swagger UI) and GET /api/do | swaggerSpec |
 | `src/server/validator.ts` | server | Process the validation errors | ValidationErrorResult, validateCreateShortInput, validateStatusRequest, validateVideoId |
-| `src/services/ABTestingEngine.ts` | engine | Simple conservative fallback for unsupported degrees of freedom | ABTest, ABTestingEngine, ABVariant, StatResult |
+| `src/services/ABTestingEngine.ts` | engine | Newly-created experiments must belong to exactly one workspace. | ABTest, ABTestingEngine, ABVariant, StatResult |
 | `src/services/AccountManagerEngine.ts` | engine | - | AccountGoal, AccountManagerEngine, AccountMetrics |
 | `src/services/AiMonitoringService.ts` | service | - | AiMonitoringService, MonitoringResult |
 | `src/services/AiPredictionService.ts` | service | - | AiPredictionService, AiSuggestion, SuggestionContext |
 | `src/services/AiTrainingService.ts` | service | - | AiTrainingService |
 | `src/services/AlertingService.ts` | service | - | AlertPayload, AlertingService |
 | `src/services/AntiDuplicationEngine.ts` | engine | - | AntiDuplicationEngine, ContentFingerprint, DuplicationCheckResult |
-| `src/services/ApprovalEngine.ts` | engine | - | ApprovalEngine, ApprovalItem, ApprovalStatus, ChecklistItem |
+| `src/services/ApprovalEngine.ts` | engine | Workspace ownership is mandatory for all newly-created records. | ApprovalEngine, ApprovalItem, ApprovalStatus, ChecklistItem |
 | `src/services/AssetLibraryEngine.ts` | engine | - | Asset, AssetLibraryEngine, AssetSearchQuery, AssetType, ImportResult |
 | `src/services/AttentionOptimizerEngine.ts` | engine | - | AttentionOptimization, AttentionOptimizerEngine, AttentionSpan |
 | `src/services/AudioQualityEngine.ts` | engine | - | AudioEnhancement, AudioQualityEngine, AudioSettings |
@@ -135,12 +153,13 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/services/CaptionEngine.ts` | engine | - | CaptionEngine, CaptionOptions, CaptionResult |
 | `src/services/CategoryEngine.ts` | engine | - | CategoryEngine, CategoryResult, ContentCategory |
 | `src/services/CommentCtaEngine.ts` | engine | - | CommentCtaEngine, CtaOption, CtaPlacement, CtaPlatform |
-| `src/services/CompetitorAnalysisEngine.ts` | engine | - | CompetitorAnalysisEngine, CompetitorStrategy, CreatorProfile, ViralPattern |
+| `src/services/CompetitorAnalysisEngine.ts` | engine | - | CompetitorAnalysisEngine, CompetitorRecord, CompetitorStrategy, CreatorProfile, ViralPattern |
 | `src/services/ComplianceEngine.ts` | engine | - | ComplianceAction, ComplianceEngine, ComplianceLog, ComplianceReport |
 | `src/services/ContentBucketEngine.ts` | engine | - | BucketRecord, BucketType, ContentBucket, ContentBucketEngine |
 | `src/services/ContentEngine.ts` | engine | - | ContentEngine, ContentRequest, ScriptOutput |
 | `src/services/ContentEnhancementService.ts` | service | - | AccessibilityResult, ContentEnhancementService, EditingOptions, IdeationInput, ModerationResult, PersonalizationInput |
 | `src/services/ContentFreshnessEngine.ts` | engine | - | ContentFreshnessEngine, FreshnessCheckResult, FreshnessRecord |
+| `src/services/ContentIntelligenceEngine.ts` | engine | - | ContentIntelligenceEngine, IntelligenceBrief, IntelligenceBriefInput |
 | `src/services/ContentRecycleEngine.ts` | engine | - | ContentRecycleEngine, RecycleAction, RecycleCandidate |
 | `src/services/CostTrackingEngine.ts` | engine | - | CostCategory, CostRecord, CostSummary, CostTrackingEngine |
 | `src/services/CreatorKnowledgeBase.ts` | module | - | CreatorKnowledgeBase, KnowledgeRule, RuleCategory, SearchResult |
@@ -153,11 +172,13 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/services/ExportEngine.ts` | engine | - | ExportEngine, ExportFile, ExportFormat, ExportManifest, RestoreResult |
 | `src/services/HashtagLearningEngine.ts` | engine | - | HashtagLearningEngine, HashtagPerformance, HashtagRecommendation |
 | `src/services/HookLibraryEngine.ts` | engine | - | Hook, HookEmotion, HookLibraryEngine, HookType |
+| `src/services/HumanEditorialEngine.ts` | engine | - | EditorialDecision, EditorialReview, EditorialSource, HumanEditorialEngine, HumanEditorialInput |
 | `src/services/HumanMimicryEngine.ts` | engine | - | HumanMimicryEngine, HumanizedSchedule |
 | `src/services/HumanizedContentEngine.ts` | engine | - | HumanizationConfig, HumanizedContentEngine, HumanizedOutput |
 | `src/services/ImageEngine.ts` | engine | - | BannerOptions, CarouselOptions, CarouselSlide, ImageEngine, ImageRenderResult, ImageTemplate, PosterOptions, QuoteCardOptions |
 | `src/services/ImageFiltersEngine.ts` | engine | ImageFiltersEngine – Advanced image filters and processing pipeline Supports 20+ filter types: color grading, cinematic, | CanvasOp, FilterOptions, FilterPreset, FilterResult, FilterType, ImageFiltersEngine |
-| `src/services/ImageGenerationEngine.ts` | engine | eslint-disable-next-line @typescript-eslint/no-require-imports | GeneratedImage, ImageGenerationEngine, ImageGenerationOptions, ImageType |
+| `src/services/ImageGenerationEngine.ts` | engine | Auth-derived owner used only for local artifact isolation. | GeneratedImage, ImageGenerationEngine, ImageGenerationOptions, ImageType |
+| `src/services/JobLifecycleEventService.ts` | service | - | JobLifecycleEventService |
 | `src/services/LlmGenerator.ts` | module | - | LlmConfig, LlmGenerator |
 | `src/services/MarketingEngine.ts` | engine | - | BannerVariant, CampaignPlan, MarketingEngine, MockWebsiteData |
 | `src/services/MetadataGenerator.ts` | module | - | MetadataGenerator, VideoMetadata |
@@ -167,6 +188,8 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/services/PlatformPsychologyEngine.ts` | engine | - | Platform, PlatformProfile, PlatformPsychologyEngine |
 | `src/services/ProfileService.ts` | service | Resolve the active accounts that should receive a video of `category` on `platform`. | ProfileService |
 | `src/services/QualityScoringEngine.ts` | engine | Deterministic proxy for engagement potential (no randomness). | QualityMetrics, QualityScoringEngine |
+| `src/services/RenderMediaToken.ts` | module | - | createRenderMediaToken, renderMediaTokenTtlSeconds, verifyRenderMediaToken |
+| `src/services/RepurposeEngine.ts` | engine | Auth-derived owner for generated artifacts. | RepurposeClip, RepurposeEngine, RepurposeOptions |
 | `src/services/ResourceEngine.ts` | engine | - | CpuSnapshot, DiskSnapshot, MemorySnapshot, ResourceEngine, ResourceOptimization, ResourcePrediction, ResourceSnapshot |
 | `src/services/RuleBasedGenerator.ts` | module | - | RuleBasedGenerator |
 | `src/services/SchedulerService.ts` | service | SchedulerService – Phase 6.1 node-cron job that periodically: 1. Fetches new RSS reports 2. Creates ScriptPlan entries 3 | SchedulerService |
@@ -187,8 +210,10 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/services/VisualEnhancementEngine.ts` | engine | - | EnhancementResult, EnhancementSettings, VisualEnhancementEngine |
 | `src/services/VoiceEngine.ts` | engine | - | TTSProvider, TTSRequest, TTSResult, VoiceEngine, VoiceGender, VoiceProfile, VoiceSpeed |
 | `src/services/WatermarkEngine.ts` | engine | - | WatermarkConfig, WatermarkEngine |
-| `src/services/WebhookNotificationEngine.ts` | engine | Telegram | NotificationEvent, NotificationLog, NotificationPayload, NotificationResult, WebhookChannel, WebhookConfig, WebhookNotificationEngine |
+| `src/services/WebhookNotificationEngine.ts` | engine | Workspace owner; legacy records without this field are quarantined. | NotificationEvent, NotificationLog, NotificationPayload, NotificationResult, WebhookChannel, WebhookConfig, WebhookNotificationEngine |
 | `src/short-creator/ShortCreator.ts` | module | todo add a semaphore | ShortCreator |
+| `src/short-creator/libraries/Chatterbox.ts` | module | Voice -> (language_id, reference clip) mapping for Chatterbox. The reference clip is cloned by Chatterbox to produce the | CHATTERBOX_VOICE_MAP, Chatterbox, shutdownChatterbox |
+| `src/short-creator/libraries/EdgeTts.ts` | module | Split scene narration into speakable clauses at sentence and comma boundaries, preserving each clause as its own prosody | EDGE_VOICE_MAP, EdgeTts, buildProsodyChunks, splitClauses |
 | `src/short-creator/libraries/FFmpeg.ts` | module | A video with barely any luma change across sampled frames is | FFMpeg |
 | `src/short-creator/libraries/Kokoro.ts` | module | - | Kokoro |
 | `src/short-creator/libraries/Pexels.ts` | module | - | PexelsAPI |
@@ -196,11 +221,14 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/short-creator/libraries/Remotion.ts` | module | Long-form always uses the LongFormVideo composition (16:9 landscape) | Remotion |
 | `src/short-creator/libraries/SubtitleBuilder.ts` | module | SubtitleBuilder – Phase 2.5 Generates subtitle files from Whisper transcription captions. Supports multiple languages, S | SubtitleBuilder, SubtitleOptions, SubtitleResult |
 | `src/short-creator/libraries/TtsAdapter.ts` | module | - | TtsAdapter |
+| `src/short-creator/libraries/VideoSegmenter.ts` | module | VideoSegmenter – pure, deterministic short-clip scoring logic. Turns a Whisper word-level transcript into candidate clip | ClipWindow, SegmentOptions, scoreWindow, selectTopClips |
 | `src/short-creator/libraries/Whisper.ts` | module | Mirror @remotion/install-whisper-cpp getWhisperExecutablePath logic | ErrorWhisper, Whisper |
 | `src/short-creator/music.ts` | module | - | MusicManager |
-| `src/types/profiles.ts` | types | OAuth / token payload. Stored ENCRYPTED at rest (AES-256-GCM). | ProfileAccountCredentials, ProfileAccountRecord, ProfileAccountStatus, ProfileAccountSummary, ProfileRecord, ProfileSummary |
-| `src/types/shorts.ts` | types | Business logic validation: ensure total text length is reasonable for video duration | Caption, CaptionLine, CaptionPage, CaptionPositionEnum, CategoryRule, ChannelConfig, CreateShortInput, LanguageEnum, LanguageProfile, Music, MusicForVideo, MusicMoodEnum, MusicTag, MusicVolumeEnum, OrientationEnum, PlatformType, PublishAttemptRecord, PublishJobRecord, PublishJobStatus, RenderConfig, RenderJobRecord, RenderJobStatus, Scene, SceneInput, StatusRequest, TextModeEnum, Video, VideoMetadataRecord, VideoStatus, VideoType, VideoTypeEnum, VoiceEnum, Voices, createShortInput, kokoroModelPrecision, renderConfig, sceneInput, statusRequestSchema, videoIdSchema, whisperModels |
+| `src/types/ownership.ts` | types | Canonical ownership vocabulary for the Content Factory. Design contract: - workspaceId is the authenticated tenant bound | ConnectorId, ConnectorPlatform, ConnectorReference, ConnectorStatus, ContentVersionId, DestinationId, DestinationReference, DestinationStatus, ReleaseId, ReleaseStatus, ReleaseTargetReference, WorkspaceId, WorkspaceOwnedReference, requireNonEmptyOwnershipId |
+| `src/types/profiles.ts` | types | Auth-derived owner. Legacy records without this field are not tenant-visible. | ProfileAccountCredentials, ProfileAccountRecord, ProfileAccountStatus, ProfileAccountSummary, ProfileRecord, ProfileSummary |
+| `src/types/shorts.ts` | types | Auth-derived owner. Legacy records without this field are not tenant-visible. | Caption, CaptionLine, CaptionPage, CaptionPositionEnum, CategoryRule, ChannelConfig, CreateShortInput, LanguageEnum, LanguageProfile, Music, MusicForVideo, MusicMoodEnum, MusicTag, MusicVolumeEnum, OrientationEnum, PlatformType, PublishAttemptRecord, PublishJobRecord, PublishJobStatus, RenderConfig, RenderJobRecord, RenderJobStatus, Scene, SceneInput, StatusRequest, TextModeEnum, Video, VideoMetadataRecord, VideoStatus, VideoType, VideoTypeEnum, VoiceEnum, Voices, createShortInput, kokoroModelPrecision, renderConfig, sceneInput, statusRequestSchema, videoIdSchema, whisperModels |
 | `src/ui/App.tsx` | ui | - | - |
+| `src/ui/components/AuthBootstrap.tsx` | ui | - | - |
 | `src/ui/components/ErrorBoundary.tsx` | ui | Error Boundary - React error boundary component for graceful error handling | ErrorBoundary, ErrorBoundaryProps, ErrorBoundaryState |
 | `src/ui/components/Layout.tsx` | ui | - | - |
 | `src/ui/components/ab-testing/ActiveTestsList.tsx` | ui | ActiveTestsList – list all variants for the selected video with live stats | ActiveTestsList |
@@ -245,6 +273,7 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/ui/components/shared/Toast.tsx` | ui | Toast Component - Notification displayer with Snackbar | Toast, ToastProps |
 | `src/ui/components/tenant/APIKeys.tsx` | ui | - | - |
 | `src/ui/components/tenant/AuditLog.tsx` | ui | - | AuditLogEntry |
+| `src/ui/components/tenant/AutomationRules.tsx` | ui | - | - |
 | `src/ui/components/tenant/BillingPage.tsx` | ui | - | BillingData |
 | `src/ui/components/tenant/Integrations.tsx` | ui | - | IntegrationRecord |
 | `src/ui/components/tenant/QuotaUsage.tsx` | ui | - | - |
@@ -283,6 +312,7 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/ui/pages/BulkQueue.tsx` | page | - | - |
 | `src/ui/pages/CategoryMapping.tsx` | page | - | - |
 | `src/ui/pages/CommentCtaPage.tsx` | page | - | - |
+| `src/ui/pages/ConnectorsPage.tsx` | page | Connectors — workspace-owned provider account management. Backed only by tested server capabilities: GET /api/connectors | - |
 | `src/ui/pages/ContentTools.tsx` | page | Old components (kept for backward compatibility) | - |
 | `src/ui/pages/CostTracker.tsx` | page | - | CostTracker |
 | `src/ui/pages/EditingPage.tsx` | page | - | - |
@@ -295,11 +325,12 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/ui/pages/ImageFilterPage.tsx` | page | ImageFilterPage – Advanced image filters with 20+ presets, live preview, and batch apply | ImageFilterPage |
 | `src/ui/pages/ImageGenerator.tsx` | page | - | ImageGenerator |
 | `src/ui/pages/OAuthSuccessPage.tsx` | page | - | - |
-| `src/ui/pages/PipelineComparePage.tsx` | page | - | PipelineComparePage |
+| `src/ui/pages/PipelineComparePage.tsx` | page | Ignore fetch errors for history update | PipelineComparePage |
 | `src/ui/pages/ProfilesPage.tsx` | page | Create profile form | - |
 | `src/ui/pages/PublishDashboard.tsx` | page | Publish Dashboard Page - Main publishing interface Allows users to select videos, choose platforms, set metadata, and pu | PlatformMetadata, PublishDashboard, ScheduleConfig, SelectedVideo |
 | `src/ui/pages/QualityScoringPage.tsx` | page | - | - |
 | `src/ui/pages/RecycleDashboard.tsx` | page | - | RecycleDashboard |
+| `src/ui/pages/ReleasesPage.tsx` | page | Releases — approved content versions to verified destinations. Backed only by tested server capabilities: GET /api/conte | - |
 | `src/ui/pages/SchedulePersistPage.tsx` | page | SchedulePersistPage – Full schedule management with persistence Create, list, pause/resume, and monitor scheduled publis | SchedulePersistPage |
 | `src/ui/pages/SchedulerDashboard.tsx` | page | SchedulerDashboard – Phase F3 Manage automated video creation scheduling, queue health, and job history. | - |
 | `src/ui/pages/SeriesBuilderPage.tsx` | page | - | - |
@@ -317,6 +348,8 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `src/ui/pages/WatermarkPage.tsx` | page | - | - |
 | `src/ui/pages/WebhookDashboard.tsx` | page | - | - |
 | `src/ui/services/apiClient.ts` | ui | API Client Service Centralized HTTP client for all backend API calls with error handling, caching, and retry logic | ApiError, ApiResponse, api, apiClient |
+| `src/ui/services/authenticatedFetch.ts` | ui | Authenticated fetch boundary for protected UI routes. All workspace-owned browser requests should use this helper rather | authenticatedFetch |
+| `src/ui/services/authenticatedJson.ts` | ui | Authenticated JSON helper for protected UI routes. Wraps `authenticatedFetch` with consistent JSON parsing and error sur | authenticatedJson, jsonPatch, jsonPost, jsonPut |
 | `src/ui/store/authStore.ts` | ui | Auth Store - Zustand state management for authentication | AuthState, AuthUser, useAuthStore |
 | `src/ui/store/uiStore.ts` | ui | UI Store - Zustand state management for UI state | Notification, NotificationType, UIState, useNotification, useUIStore |
 | `src/video/beat-sync.service.ts` | module | Beat Sync Service - Align video scenes with music beats Adjusts scene durations to create rhythm-matched editing | BeatSyncConfig, BeatSyncService, SyncedScene |
@@ -369,10 +402,6 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `POST` | `/api/audio/detect-levels` | audioRouter |
 | `GET` | `/api/audio/ffmpeg-chain` | audioRouter |
 | `POST` | `/api/audio/process` | audioRouter |
-| `POST` | `/api/auto-script` | deferredApiRouter |
-| `POST` | `/api/auto-script/hooks` | deferredApiRouter |
-| `POST` | `/api/auto-script/topics` | deferredApiRouter |
-| `POST` | `/api/auto-script/translate` | deferredApiRouter |
 | `GET` | `/api/branding` | brandingRouter |
 | `GET` | `/api/branding/:tenantId` | brandingRouter |
 | `PUT` | `/api/branding/:tenantId` | brandingRouter |
@@ -385,6 +414,18 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `GET` | `/api/competitor/history` | competitorRouter |
 | `GET` | `/api/competitor/patterns` | competitorRouter |
 | `POST` | `/api/competitor/strategy` | competitorRouter |
+| `GET` | `/api/connectors` | connectorsRouter |
+| `POST` | `/api/connectors` | connectorsRouter |
+| `PATCH` | `/api/connectors/:connectorId` | connectorsRouter |
+| `GET` | `/api/connectors/:connectorId/destinations` | connectorsRouter |
+| `POST` | `/api/connectors/:connectorId/destinations` | connectorsRouter |
+| `POST` | `/api/connectors/:connectorId/destinations/:destinationId/verify` | connectorsRouter |
+| `PUT` | `/api/connectors/:connectorId/secret` | connectorsRouter |
+| `GET` | `/api/content-versions` | contentVersionsRouter |
+| `POST` | `/api/content-versions` | contentVersionsRouter |
+| `GET` | `/api/content-versions/:contentVersionId` | contentVersionsRouter |
+| `PATCH` | `/api/content-versions/:contentVersionId` | contentVersionsRouter |
+| `PATCH` | `/api/content-versions/:contentVersionId/render` | contentVersionsRouter |
 | `POST` | `/api/content/accessibility` | contentRouter |
 | `POST` | `/api/content/editing-primitives` | contentRouter |
 | `POST` | `/api/content/ideation` | contentRouter |
@@ -448,6 +489,10 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `POST` | `/api/image/generate` | imageRouter |
 | `POST` | `/api/image/quote-card` | imageRouter |
 | `POST` | `/api/image/thumbnail` | imageRouter |
+| `GET` | `/api/job-events/events` | jobEventsRouter |
+| `GET` | `/api/job-events/outbox` | jobEventsRouter |
+| `POST` | `/api/job-events/outbox/:id/requeue` | jobEventsRouter |
+| `GET` | `/api/job-events/outbox/metrics` | jobEventsRouter |
 | `POST` | `/api/marketing/ab/assign/:videoId` | marketingRouter |
 | `POST` | `/api/marketing/ab/variants` | marketingRouter |
 | `GET` | `/api/marketing/ab/variants/:videoId` | marketingRouter |
@@ -457,10 +502,6 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `POST` | `/api/marketing/audience` | marketingRouter |
 | `GET` | `/api/marketing/dashboard` | marketingRouter |
 | `POST` | `/api/marketing/seo/optimize` | marketingRouter |
-| `GET` | `/api/music-tags` | deferredApiRouter |
-| `GET` | `/api/music/:fileName` | deferredApiRouter |
-| `GET` | `/api/news-sources` | deferredApiRouter |
-| `POST` | `/api/news-sources/custom` | deferredApiRouter |
 | `GET` | `/api/oauth/:provider/callback` | oauthRouter |
 | `POST` | `/api/oauth/:provider/connect` | oauthRouter |
 | `POST` | `/api/pipeline/compare` | pipelineRouter |
@@ -485,7 +526,6 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `GET` | `/api/publish/:id` | publishRouter |
 | `POST` | `/api/publish/metadata-suggestions` | publishRouter |
 | `POST` | `/api/quality/score` | qualityRouter |
-| `POST` | `/api/queue/bulk` | deferredQueueRouter |
 | `PATCH` | `/api/recycle/:videoId/metrics` | recycleRouter |
 | `POST` | `/api/recycle/:videoId/recycle` | recycleRouter |
 | `GET` | `/api/recycle/candidates` | recycleRouter |
@@ -495,10 +535,14 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `POST` | `/api/recycle/freshness/record` | recycleRouter |
 | `POST` | `/api/recycle/register` | recycleRouter |
 | `GET` | `/api/recycle/stats` | recycleRouter |
-| `GET` | `/api/reports` | deferredApiRouter |
-| `GET` | `/api/reports/:reportId` | deferredApiRouter |
-| `POST` | `/api/reports/fetch` | deferredApiRouter |
-| `POST` | `/api/reports/merge` | deferredApiRouter |
+| `GET` | `/api/releases` | releasesRouter |
+| `POST` | `/api/releases` | releasesRouter |
+| `GET` | `/api/releases/:releaseId` | releasesRouter |
+| `POST` | `/api/releases/:releaseId/approve` | releasesRouter |
+| `POST` | `/api/releases/:releaseId/queue` | releasesRouter |
+| `POST` | `/api/releases/:releaseId/targets` | releasesRouter |
+| `GET` | `/api/repurpose` | repurposeRouter |
+| `POST` | `/api/repurpose` | repurposeRouter |
 | `GET` | `/api/schedule` | scheduleRouter |
 | `POST` | `/api/schedule` | scheduleRouter |
 | `DELETE` | `/api/schedule/:id` | scheduleRouter |
@@ -510,7 +554,6 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `GET` | `/api/schedule/due` | scheduleRouter |
 | `GET` | `/api/schedule/stats` | scheduleRouter |
 | `GET` | `/api/schedule/upcoming` | scheduleRouter |
-| `GET` | `/api/script-plans` | deferredApiRouter |
 | `GET` | `/api/shadowban` | shadowbanRouter |
 | `GET` | `/api/shadowban/analyze/:platform/:accountId` | shadowbanRouter |
 | `GET` | `/api/shadowban/best-time/:platform` | shadowbanRouter |
@@ -522,13 +565,6 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `POST` | `/api/shadowban/metrics` | shadowbanRouter |
 | `GET` | `/api/shadowban/skip/:platform/:category` | shadowbanRouter |
 | `POST` | `/api/shadowban/skip/record` | shadowbanRouter |
-| `POST` | `/api/short-video` | deferredApiRouter |
-| `DELETE` | `/api/short-video/:videoId` | deferredApiRouter |
-| `GET` | `/api/short-video/:videoId` | deferredApiRouter |
-| `GET` | `/api/short-video/:videoId/metadata` | deferredApiRouter |
-| `GET` | `/api/short-video/:videoId/render-path` | deferredApiRouter |
-| `GET` | `/api/short-video/:videoId/status` | deferredApiRouter |
-| `GET` | `/api/short-videos` | deferredApiRouter |
 | `GET` | `/api/strategy/buckets` | strategyRouter |
 | `POST` | `/api/strategy/buckets/add` | strategyRouter |
 | `GET` | `/api/strategy/buckets/next` | strategyRouter |
@@ -544,71 +580,74 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `GET` | `/api/strategy/series/:id/cliffhanger/:episode` | strategyRouter |
 | `PATCH` | `/api/strategy/series/:id/episode/:ep` | strategyRouter |
 | `GET` | `/api/strategy/series/:id/next-episode` | strategyRouter |
-| `GET` | `/api/system/assets` | systemEnginesRouter |
-| `POST` | `/api/system/assets` | systemEnginesRouter |
-| `DELETE` | `/api/system/assets/:id` | systemEnginesRouter |
-| `PATCH` | `/api/system/assets/:id/tags` | systemEnginesRouter |
-| `GET` | `/api/system/assets/stats` | systemEnginesRouter |
-| `POST` | `/api/system/auth/authenticate` | systemEnginesRouter |
-| `POST` | `/api/system/auth/register` | systemEnginesRouter |
-| `POST` | `/api/system/auth/rotate/:tenantId` | systemEnginesRouter |
-| `GET` | `/api/system/auth/tenants` | systemEnginesRouter |
-| `POST` | `/api/system/auth/verify` | systemEnginesRouter |
-| `GET` | `/api/system/compliance/critical` | systemEnginesRouter |
-| `POST` | `/api/system/compliance/log` | systemEnginesRouter |
-| `GET` | `/api/system/compliance/logs` | systemEnginesRouter |
-| `POST` | `/api/system/compliance/report` | systemEnginesRouter |
-| `POST` | `/api/system/content-buckets/add` | contentBucketsRouter |
-| `POST` | `/api/system/content-buckets/detect` | contentBucketsRouter |
-| `GET` | `/api/system/content-buckets/next` | contentBucketsRouter |
-| `GET` | `/api/system/content-buckets/stats` | contentBucketsRouter |
-| `GET` | `/api/system/credentials` | systemEnginesRouter |
-| `POST` | `/api/system/credentials` | systemEnginesRouter |
-| `POST` | `/api/system/credentials/:id/rotate` | systemEnginesRouter |
-| `GET` | `/api/system/credentials/expiring` | systemEnginesRouter |
-| `POST` | `/api/system/credentials/schedule` | systemEnginesRouter |
-| `GET` | `/api/system/errorrecovery` | systemEnginesRouter |
-| `POST` | `/api/system/errorrecovery/:id/dead` | systemEnginesRouter |
-| `POST` | `/api/system/errorrecovery/:id/recover` | systemEnginesRouter |
-| `POST` | `/api/system/errorrecovery/clear` | systemEnginesRouter |
-| `GET` | `/api/system/errorrecovery/deadletter` | systemEnginesRouter |
-| `POST` | `/api/system/errorrecovery/process` | systemEnginesRouter |
-| `POST` | `/api/system/errorrecovery/record` | systemEnginesRouter |
-| `GET` | `/api/system/errorrecovery/stats` | systemEnginesRouter |
-| `POST` | `/api/system/export` | systemEnginesRouter |
-| `POST` | `/api/system/export/backup` | systemEnginesRouter |
-| `GET` | `/api/system/export/list` | systemEnginesRouter |
-| `POST` | `/api/system/export/restore` | systemEnginesRouter |
-| `GET` | `/api/system/knowledgebase` | systemEnginesRouter |
-| `POST` | `/api/system/knowledgebase` | systemEnginesRouter |
-| `DELETE` | `/api/system/knowledgebase/:id` | systemEnginesRouter |
-| `PATCH` | `/api/system/knowledgebase/:id` | systemEnginesRouter |
-| `GET` | `/api/system/knowledgebase/categories` | systemEnginesRouter |
-| `GET` | `/api/system/knowledgebase/top` | systemEnginesRouter |
-| `POST` | `/api/system/marketing-engine/banners` | systemEnginesRouter |
-| `POST` | `/api/system/marketing-engine/campaign` | systemEnginesRouter |
-| `POST` | `/api/system/marketing-engine/scrape` | systemEnginesRouter |
-| `GET` | `/api/system/resource/history` | systemEnginesRouter |
-| `GET` | `/api/system/resource/optimize` | systemEnginesRouter |
-| `POST` | `/api/system/resource/predict` | systemEnginesRouter |
-| `GET` | `/api/system/resource/snapshot` | systemEnginesRouter |
-| `POST` | `/api/system/throttle/check` | systemEnginesRouter |
-| `POST` | `/api/system/throttle/plan` | systemEnginesRouter |
-| `GET` | `/api/system/throttle/quotas` | systemEnginesRouter |
-| `GET` | `/api/system/throttle/quotas/:tenantId` | systemEnginesRouter |
-| `POST` | `/api/system/throttle/reset` | systemEnginesRouter |
+| `GET` | `/api/system-engines/assets` | systemEnginesRouter |
+| `POST` | `/api/system-engines/assets` | systemEnginesRouter |
+| `DELETE` | `/api/system-engines/assets/:id` | systemEnginesRouter |
+| `PATCH` | `/api/system-engines/assets/:id/tags` | systemEnginesRouter |
+| `GET` | `/api/system-engines/assets/stats` | systemEnginesRouter |
+| `POST` | `/api/system-engines/auth/authenticate` | systemEnginesRouter |
+| `POST` | `/api/system-engines/auth/register` | systemEnginesRouter |
+| `POST` | `/api/system-engines/auth/rotate/:tenantId` | systemEnginesRouter |
+| `GET` | `/api/system-engines/auth/tenants` | systemEnginesRouter |
+| `POST` | `/api/system-engines/auth/verify` | systemEnginesRouter |
+| `GET` | `/api/system-engines/compliance/critical` | systemEnginesRouter |
+| `POST` | `/api/system-engines/compliance/log` | systemEnginesRouter |
+| `GET` | `/api/system-engines/compliance/logs` | systemEnginesRouter |
+| `POST` | `/api/system-engines/compliance/report` | systemEnginesRouter |
+| `POST` | `/api/system-engines/content-buckets/add` | contentBucketsRouter |
+| `POST` | `/api/system-engines/content-buckets/detect` | contentBucketsRouter |
+| `GET` | `/api/system-engines/content-buckets/next` | contentBucketsRouter |
+| `GET` | `/api/system-engines/content-buckets/stats` | contentBucketsRouter |
+| `GET` | `/api/system-engines/credentials` | systemEnginesRouter |
+| `POST` | `/api/system-engines/credentials` | systemEnginesRouter |
+| `POST` | `/api/system-engines/credentials/:id/rotate` | systemEnginesRouter |
+| `GET` | `/api/system-engines/credentials/expiring` | systemEnginesRouter |
+| `POST` | `/api/system-engines/credentials/schedule` | systemEnginesRouter |
+| `GET` | `/api/system-engines/errorrecovery` | systemEnginesRouter |
+| `POST` | `/api/system-engines/errorrecovery/:id/dead` | systemEnginesRouter |
+| `POST` | `/api/system-engines/errorrecovery/:id/recover` | systemEnginesRouter |
+| `POST` | `/api/system-engines/errorrecovery/clear` | systemEnginesRouter |
+| `GET` | `/api/system-engines/errorrecovery/deadletter` | systemEnginesRouter |
+| `POST` | `/api/system-engines/errorrecovery/process` | systemEnginesRouter |
+| `POST` | `/api/system-engines/errorrecovery/record` | systemEnginesRouter |
+| `GET` | `/api/system-engines/errorrecovery/stats` | systemEnginesRouter |
+| `POST` | `/api/system-engines/export` | systemEnginesRouter |
+| `POST` | `/api/system-engines/export/backup` | systemEnginesRouter |
+| `GET` | `/api/system-engines/export/list` | systemEnginesRouter |
+| `POST` | `/api/system-engines/export/restore` | systemEnginesRouter |
+| `GET` | `/api/system-engines/knowledgebase` | systemEnginesRouter |
+| `POST` | `/api/system-engines/knowledgebase` | systemEnginesRouter |
+| `DELETE` | `/api/system-engines/knowledgebase/:id` | systemEnginesRouter |
+| `PATCH` | `/api/system-engines/knowledgebase/:id` | systemEnginesRouter |
+| `GET` | `/api/system-engines/knowledgebase/categories` | systemEnginesRouter |
+| `GET` | `/api/system-engines/knowledgebase/top` | systemEnginesRouter |
+| `POST` | `/api/system-engines/marketing-engine/banners` | systemEnginesRouter |
+| `POST` | `/api/system-engines/marketing-engine/campaign` | systemEnginesRouter |
+| `POST` | `/api/system-engines/marketing-engine/scrape` | systemEnginesRouter |
+| `GET` | `/api/system-engines/resource/history` | systemEnginesRouter |
+| `GET` | `/api/system-engines/resource/optimize` | systemEnginesRouter |
+| `POST` | `/api/system-engines/resource/predict` | systemEnginesRouter |
+| `GET` | `/api/system-engines/resource/snapshot` | systemEnginesRouter |
+| `POST` | `/api/system-engines/throttle/check` | systemEnginesRouter |
+| `POST` | `/api/system-engines/throttle/plan` | systemEnginesRouter |
+| `GET` | `/api/system-engines/throttle/quotas` | systemEnginesRouter |
+| `GET` | `/api/system-engines/throttle/quotas/:tenantId` | systemEnginesRouter |
+| `POST` | `/api/system-engines/throttle/reset` | systemEnginesRouter |
 | `GET` | `/api/tenants` | tenantRouter |
 | `POST` | `/api/tenants` | tenantRouter |
 | `GET` | `/api/tenants/:tenantId` | tenantRouter |
+| `PUT` | `/api/tenants/:tenantId` | tenantRouter |
 | `GET` | `/api/tenants/:tenantId/billing` | tenantRouter |
 | `POST` | `/api/tenants/:tenantId/engines` | tenantRouter |
+| `GET` | `/api/tenants/:tenantId/keys` | tenantRouter |
 | `POST` | `/api/tenants/:tenantId/keys` | tenantRouter |
+| `DELETE` | `/api/tenants/:tenantId/keys/:keyId` | tenantRouter |
 | `POST` | `/api/tenants/:tenantId/logs/:engine` | tenantRouter |
 | `POST` | `/api/tenants/:tenantId/quotas` | tenantRouter |
+| `POST` | `/api/tenants/bootstrap` | tenantRouter |
 | `GET` | `/api/thumbnail/curiosity-gap/:topic` | thumbnailRouter |
 | `POST` | `/api/thumbnail/generate` | thumbnailRouter |
 | `POST` | `/api/thumbnail/validate-contrast` | thumbnailRouter |
-| `GET` | `/api/tmp/:tmpFile` | deferredApiRouter |
 | `POST` | `/api/translate` | translateRouter |
 | `POST` | `/api/translate/batch` | translateRouter |
 | `GET` | `/api/translate/languages` | translateRouter |
@@ -628,7 +667,6 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `GET` | `/api/videolibrary/tags` | videoLibraryRouter |
 | `POST` | `/api/visual/enhance` | visualRouter |
 | `GET` | `/api/visual/ffmpeg-filters` | visualRouter |
-| `GET` | `/api/voices` | deferredApiRouter |
 | `GET` | `/api/watermark/default` | watermarkRouter |
 | `PUT` | `/api/watermark/default` | watermarkRouter |
 | `POST` | `/api/watermark/filter` | watermarkRouter |
@@ -641,14 +679,12 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `GET` | `/api/webhooks/logs` | webhooksRouter |
 | `POST` | `/api/webhooks/notify` | webhooksRouter |
 | `GET` | `/api/webhooks/stats` | webhooksRouter |
-| `POST` | `/mcp/messages` | deferredMcpRouter |
-| `GET` | `/mcp/sse` | deferredMcpRouter |
 
 ## UI Pages
 
 | Route | Component | File | API Calls |
 |-------|-----------|------|-----------|
-| `/` | VideoList | `src/ui/pages/VideoList.tsx` | `/api/short-videos` · `/api/short-video/:p` |
+| `/` | VideoList | `src/ui/pages/VideoList.tsx` | - |
 | `/create` | VideoCreator | `src/ui/pages/VideoCreator.tsx` | `/api/voices` · `/api/music-tags` · `/api/news-sources` · `/api/auto-script/topics` · `/api/auto-script/hooks` · `/api/news-sources/custom` · `/api/auto-script` · `/api/short-video` |
 | `/video/:videoId` | VideoDetails | `src/ui/pages/VideoDetails.tsx` | `/api/short-video/:p/status` · `/api/short-video/:p` |
 | `/queue` | BulkQueue | `src/ui/pages/BulkQueue.tsx` | `/api/health/queue/states` · `/api/queue/bulk` |
@@ -659,7 +695,7 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `/ab-testing` | ABTestingDashboard | `src/ui/pages/ABTestingDashboard.tsx` | - |
 | `/ai` | AIDashboard | `src/ui/pages/AIDashboard.tsx` | - |
 | `/health` | HealthDashboard | `src/ui/pages/HealthDashboard.tsx` | - |
-| `/tenants` | TenantConsole | `src/ui/pages/TenantConsole.tsx` | - |
+| `/tenants` | TenantConsole | `src/ui/pages/TenantConsole.tsx` | `/api/tenants/bootstrap` |
 | `/content-tools` | ContentTools | `src/ui/pages/ContentTools.tsx` | - |
 | `/trends` | TrendDashboard | `src/ui/pages/TrendDashboard.tsx` | `/api/trends` · `/api/trends/viral-radar` · `/api/trends/refresh` |
 | `/hooks` | HookLibrary | `src/ui/pages/HookLibrary.tsx` | `/api/hooks` · `/api/hooks/generate` · `/api/hooks/:p` |
@@ -689,8 +725,10 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | `/image-filters` | ImageFilterPage | `src/ui/pages/ImageFilterPage.tsx` | `/api/image/filters` · `/api/image/filters/css` · `/api/image/filters/preview` · `/api/image/filters/preview/file/:p` |
 | `/auto-mode` | AutoModePage | `?` | - |
 | `/compare` | PipelineComparePage | `?` | - |
-| `/engines-dashboard` | EnginesDashboard | `src/ui/pages/EnginesDashboard.tsx` | - |
+| `/engines-dashboard` | EnginesDashboard | `src/ui/pages/EnginesDashboard.tsx` | `/api/system-engines/auth/tenants` · `/api/system-engines/auth/register` |
 | `/profiles` | ProfilesPage | `src/ui/pages/ProfilesPage.tsx` | `/api/profiles` · `/api/profiles/:p` · `/api/profiles/:p/accounts` · `/api/profiles/:p/accounts/:p` · `/api/oauth/:p/connect` · `/api/profiles/resolve` |
+| `/connectors` | ConnectorsPage | `src/ui/pages/ConnectorsPage.tsx` | `/api/connectors` · `/api/connectors/:p/destinations` · `/api/connectors/:p` · `/api/connectors/:p/secret` · `/api/connectors/:p/destinations/:p/verify` |
+| `/releases` | ReleasesPage | `src/ui/pages/ReleasesPage.tsx` | `/api/content-versions` · `/api/releases` · `/api/connectors` · `/api/releases/:p` · `/api/releases/:p/approve` · `/api/connectors/:p/destinations` · `/api/releases/:p/targets` · `/api/releases/:p/queue` |
 | `/oauth/success` | OAuthSuccessPage | `src/ui/pages/OAuthSuccessPage.tsx` | - |
 
 ## Data Stores
@@ -698,20 +736,31 @@ For connector architecture, use [`MULTI_WORKSPACE_CONNECTOR_ARCHITECTURE.md`](./
 | File | Class | JSON File | Purpose |
 |------|-------|-----------|---------|
 | `src/db/ABVariantStore.ts` | ABVariantStore | `abVariants.json` | - |
-| `src/db/AiLearningStore.ts` | AiLearningStore | `ai-learning-events.json` | - |
-| `src/db/AnalyticsStore.ts` | AnalyticsStore | `analytics.json` | - |
+| `src/db/AiLearningStore.ts` | AiLearningStore | `ai-learning-events.json` | A legacy single model is deliberately quarantined and never returned to a tenant. |
+| `src/db/AnalyticsStore.ts` | AnalyticsStore | `analytics.json` | Auth-derived owner. Legacy analytics without this field are not tenant-visible. |
+| `src/db/ArtifactManifestStore.ts` | ArtifactManifestStore | `artifact-manifests.json` | - |
 | `src/db/AudienceStore.ts` | AudienceStore | `audienceTargets.json` | - |
-| `src/db/ChannelConfigStore.ts` | ChannelConfigStore | `channelConfigs.json` | - |
-| `src/db/CustomNewsSourceStore.ts` | CustomNewsSourceStore | `customNewsSources.json` | - |
-| `src/db/PipelineStore.ts` | PipelineStore | `pipeline-jobs.json` | - |
+| `src/db/ChannelConfigStore.ts` | ChannelConfigStore | `channelConfigs.json` | Auth-derived owner. Legacy records without this field are not tenant-visible. |
+| `src/db/ConnectorSecretStore.ts` | ConnectorSecretStore | `connector-secrets.json` | Encrypted connector secret storage. Metadata and secrets are deliberately separate. The secret file contains only encryp |
+| `src/db/ConnectorStore.ts` | ConnectorStore | `connectors.json` | Workspace-owned connector metadata store. This is the file-backed compatibility implementation of the target connector c |
+| `src/db/ContentAutomationRuleStore.ts` | ContentAutomationRuleStore | `contentAutomationRules.json` | - |
+| `src/db/ContentVersionStore.ts` | ContentVersionStore | `content-versions.json` | - |
+| `src/db/CustomNewsSourceStore.ts` | CustomNewsSourceStore | `customNewsSources.json` | Workspace owner; legacy records without this field are hidden from scoped reads. |
+| `src/db/DualWriteReadVerify.ts` | - | `` | Writes the file-backed authority first, then writes the durable shadow. The durable result is never promoted to a primar |
+| `src/db/JobEventOutboxStore.ts` | JobEventOutboxStore | `job-event-outbox.json` | - |
+| `src/db/JobEventStore.ts` | JobEventStore | `job-events.json` | - |
+| `src/db/MigrationCheckpointStore.ts` | MigrationCheckpointStore | `migration-checkpoints.json` | - |
+| `src/db/PipelineStore.ts` | PipelineStore | `pipeline-jobs.json` | Auth-derived owner. Legacy variations without this field are not tenant-visible. |
 | `src/db/ProfileAccountStore.ts` | ProfileAccountStore | `profileAccounts.json` | - |
 | `src/db/ProfileStore.ts` | ProfileStore | `profiles.json` | - |
 | `src/db/PublishJobStore.ts` | PublishJobStore | `publishJobs.json` | Idempotency check: same render output + platform + channel |
+| `src/db/ReleaseControlStore.ts` | ReleaseControlStore | `release-control.json` | - |
+| `src/db/ReleaseStore.ts` | ReleaseStore | `releases.json` | Workspace-owned release metadata store. A release is immutable with respect to its content version and destination ident |
 | `src/db/RenderJobStore.ts` | RenderJobStore | `renderJobs.json` | Find existing job with same idempotency key |
-| `src/db/ReportStore.ts` | ReportStore | `reports.json` | - |
-| `src/db/ScheduleStore.ts` | ScheduleStore | `schedules.json` | Calculate next run based on cron expression (simplified) |
-| `src/db/ScriptPlanStore.ts` | ScriptPlanStore | `scriptPlans.json` | - |
-| `src/db/TenantStore.ts` | TenantStore | `tenants.json` | - |
+| `src/db/ReportStore.ts` | ReportStore | `reports.json` | Auth-derived owner. Legacy reports without this field are not tenant-visible. |
+| `src/db/ScheduleStore.ts` | ScheduleStore | `schedules.json` | Auth-derived owner. Legacy schedules without this field are not tenant-visible. |
+| `src/db/ScriptPlanStore.ts` | ScriptPlanStore | `scriptPlans.json` | Auth-derived owner. Legacy plans without this field are not tenant-visible. |
+| `src/db/TenantStore.ts` | TenantStore | `tenants.json` | Return a tenant only when the requested resource belongs to the auth tenant. |
 | `src/db/TenantUsageStore.ts` | TenantUsageStore | `tenantUsage.json` | - |
-| `src/db/VideoLibraryStore.ts` | VideoLibraryStore | `videoLibrary.json` | - |
+| `src/db/VideoLibraryStore.ts` | VideoLibraryStore | `videoLibrary.json` | Auth-derived owner. Legacy records without this field are not tenant-visible. |
 | `src/db/VideoMetadataStore.ts` | VideoMetadataStore | `videoMetadata.json` | - |

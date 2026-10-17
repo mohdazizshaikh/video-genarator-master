@@ -2,7 +2,7 @@ import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, Button, TextField, MenuItem,
-  Select, FormControl, InputLabel, Alert, CircularProgress, Chip, Divider, Tabs, Tab
+  Select, FormControl, InputLabel, Alert, CircularProgress, Chip, Tabs, Tab
 } from '@mui/material';
 import ImageIcon from '@mui/icons-material/Image';
 import DownloadIcon from '@mui/icons-material/Download';

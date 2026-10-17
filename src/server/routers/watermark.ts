@@ -2,6 +2,8 @@ import express from "express";
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import { WatermarkEngine } from "../../services/WatermarkEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
+
 
 const engine = new WatermarkEngine();
 
@@ -15,6 +17,8 @@ export class WatermarkRouter {
   }
 
   private setupRoutes() {
+    this.router.use(requireAuth);
+
     this.router.post("/filter", (req: ExpressRequest, res: ExpressResponse) => {
       try {
         const filter = engine.buildFfmpegFilter(req.body);

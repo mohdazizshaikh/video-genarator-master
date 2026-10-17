@@ -285,17 +285,27 @@ function AuthTab() {
   const [plan, setPlan] = useState('free');
   const [newKey, setNewKey] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const loadTenants = async () => {
-    const res = await API.get('/system/auth/tenants');
-    setTenants(res.data.data || []);
+    try {
+      const res = await API.get('/api/system-engines/auth/tenants');
+      setTenants(res.data.data || []);
+    } catch (err) {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status === 401 || status === 403) {
+        setError('Admin access required to list tenants');
+      } else {
+        setError('Failed to load tenants');
+      }
+    }
   };
 
   const register = async () => {
     if (!name || !email) return;
     setLoading(true);
     try {
-      const res = await API.post('/system/auth/register', { name, email, plan });
+      const res = await API.post('/api/system-engines/auth/register', { name, email, plan });
       setNewKey(res.data.data?.plainApiKey || '');
       setName(''); setEmail('');
       await loadTenants();
@@ -317,6 +327,7 @@ function AuthTab() {
           {loading ? <CircularProgress size={20} /> : 'Register Tenant'}
         </Button>
       </Box>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {newKey && (
         <Alert severity="success" sx={{ mb: 2 }}>
           New API Key (save it now): <strong style={{ fontFamily: 'monospace' }}>{newKey}</strong>
@@ -577,6 +588,7 @@ function ApprovalTab() {
   const [items, setItems] = useState<unknown[]>([]);
   const [title, setTitle] = useState('');
   const [submittedBy, setSubmittedBy] = useState('admin');
+  const [reviewComments, setReviewComments] = useState('');
   const [loading, setLoading] = useState(false);
 
   const load = async () => {

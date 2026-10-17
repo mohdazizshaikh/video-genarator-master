@@ -1,6 +1,9 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { ExpertEditingEngine } from "../../services/ExpertEditingEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
+
 
 export class EditingRouter {
   readonly router: Router;
@@ -13,7 +16,9 @@ export class EditingRouter {
   }
 
   private registerRoutes() {
-    this.router.post("/plan", (req, res) => {
+    this.router.use(requireAuth);
+
+    this.router.post("/plan", (req: Request, res: Response) => {
       try {
         const { videoDuration, emotionalIntensity = 3 } = req.body;
         if (videoDuration === undefined) return res.status(400).json({ error: "videoDuration required" });

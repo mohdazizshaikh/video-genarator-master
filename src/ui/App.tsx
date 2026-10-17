@@ -48,6 +48,8 @@ const PipelineComparePage = lazy(() => import('./pages/PipelineComparePage'));
 const EnginesDashboard = lazy(() => import('./pages/EnginesDashboard'));
 const ProfilesPage = lazy(() => import('./pages/ProfilesPage'));
 const OAuthSuccessPage = lazy(() => import('./pages/OAuthSuccessPage'));
+const ConnectorsPage = lazy(() => import('./pages/ConnectorsPage'));
+const ReleasesPage = lazy(() => import('./pages/ReleasesPage'));
 
 const App: React.FC = () => {
   return (
@@ -99,6 +101,8 @@ const App: React.FC = () => {
               <Route path="/compare" element={<PipelineComparePage />} />
               <Route path="/engines-dashboard" element={<EnginesDashboard />} />
               <Route path="/profiles" element={<ProfilesPage />} />
+              <Route path="/connectors" element={<ConnectorsPage />} />
+              <Route path="/releases" element={<ReleasesPage />} />
               <Route path="/oauth/success" element={<OAuthSuccessPage />} />
             </Routes>
           </Suspense>

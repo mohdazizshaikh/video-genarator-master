@@ -6,7 +6,7 @@ import { ABVariantStore } from "../../db/ABVariantStore";
 import { AnalyticsStore } from "../../db/AnalyticsStore";
 import { SeoOptimizerService } from "../../services/SeoOptimizerService";
 import { ViralStrategyService } from "../../services/ViralStrategyService";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 export class MarketingRouter {
   public router: Router;
@@ -28,6 +28,8 @@ export class MarketingRouter {
   }
 
   private registerRoutes(): void {
+    this.router.use(requireAuth);
+
     this.router.post("/audience", (req, res) => this.createAudienceTarget(req, res));
     this.router.get("/audience", (req, res) => this.listAudienceTargets(req, res));
 
@@ -87,7 +89,8 @@ export class MarketingRouter {
   }
 
   private async upsertAnalytics(req: Request, res: Response): Promise<void> {
-    const { tenantId: _ignoredTenantId, ...analytics } = req.body;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { tenantId: _tenantId, ...analytics } = req.body;
     const saved = await this.analyticsStore.upsertForTenant(getAuthenticatedTenantId(req) ?? "", analytics);
     res.status(201).json(saved);
   }

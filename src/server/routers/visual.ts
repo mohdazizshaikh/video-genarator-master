@@ -1,6 +1,9 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { VisualEnhancementEngine } from "../../services/VisualEnhancementEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
+
 
 export class VisualRouter {
   readonly router: Router;
@@ -13,7 +16,9 @@ export class VisualRouter {
   }
 
   private registerRoutes() {
-    this.router.post("/enhance", (req, res) => {
+    this.router.use(requireAuth);
+
+    this.router.post("/enhance", (req: Request, res: Response) => {
       try {
         const { width = 1920, height = 1080, autoSharpen = true, contrastOptimize = true } = req.body;
 

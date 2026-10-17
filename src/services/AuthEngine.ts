@@ -36,29 +36,32 @@ export interface AuthResult {
   error?: string;
 }
 
-const jwtSecretCandidate = process.env.JWT_SECRET || "";
-const insecureDefaults = new Set([
-  "change-this-to-a-random-secret-at-least-32-chars",
-  "change-me-in-production",
-  "change_me",
-  "secret",
-  "password",
-]);
-if (
-  !jwtSecretCandidate ||
-  jwtSecretCandidate.length < 32 ||
-  insecureDefaults.has(jwtSecretCandidate.toLowerCase())
-) {
-  throw new Error(
-    "JWT_SECRET environment variable is required and must be a unique secret at least 32 characters long. " +
-      "Generate one with: openssl rand -hex 32",
-  );
-}
-const JWT_SECRET = jwtSecretCandidate;
 const TOKEN_TTL_SEC = 3600;
 
+function getJwtSecret(): string {
+  const jwtSecretCandidate = process.env.JWT_SECRET || "";
+  const insecureDefaults = new Set([
+    "change-this-to-a-random-secret-at-least-32-chars",
+    "change-me-in-production",
+    "change_me",
+    "secret",
+    "password",
+  ]);
+  if (
+    !jwtSecretCandidate ||
+    jwtSecretCandidate.length < 32 ||
+    insecureDefaults.has(jwtSecretCandidate.toLowerCase())
+  ) {
+    throw new Error(
+      "JWT_SECRET environment variable is required and must be a unique secret at least 32 characters long. " +
+        "Generate one with: openssl rand -hex 32",
+    );
+  }
+  return jwtSecretCandidate;
+}
+
 export function verifyJwtToken(token: string): AuthToken | null {
-  return verifyJwt(token, JWT_SECRET);
+  return verifyJwt(token, getJwtSecret());
 }
 
 function generateApiKey(): string {
@@ -150,7 +153,7 @@ export class AuthEngine {
         expiresAt: Math.floor(Date.now() / 1000) + TOKEN_TTL_SEC,
       };
 
-      const token = signJwt(payload, JWT_SECRET);
+      const token = signJwt(payload, getJwtSecret());
       const safeTenant = { ...tenant } as Omit<Tenant, "apiKey" | "apiKeyHash"> & Record<string, unknown>;
       delete safeTenant.apiKey;
       delete safeTenant.apiKeyHash;
@@ -163,7 +166,7 @@ export class AuthEngine {
   }
 
   verifyToken(token: string): AuthToken | null {
-    return verifyJwt(token, JWT_SECRET);
+    return verifyJwt(token, getJwtSecret());
   }
 
   rotateCredentials(tenantId: string): { plainApiKey: string } {

@@ -1,6 +1,9 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { QualityScoringEngine } from "../../services/QualityScoringEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
+
 
 export class QualityRouter {
   readonly router: Router;
@@ -13,7 +16,9 @@ export class QualityRouter {
   }
 
   private registerRoutes() {
-    this.router.post("/score", (req, res) => {
+    this.router.use(requireAuth);
+
+    this.router.post("/score", (req: Request, res: Response) => {
       try {
         const {
           hasAudio = true,

@@ -2,6 +2,8 @@ import express from "express";
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import { CostTrackingEngine } from "../../services/CostTrackingEngine";
 import { Config } from "../../config";
+import { requireAuth } from "../auth";
+
 
 export class CostsRouter {
   public router: express.Router;
@@ -15,6 +17,8 @@ export class CostsRouter {
   }
 
   private setupRoutes() {
+    this.router.use(requireAuth);
+
     this.router.get("/summary", (req: ExpressRequest, res: ExpressResponse) => {
       const { from, to } = req.query;
       const fromDate = from ? new Date(String(from)) : new Date(Date.now() - 30 * 86400000);

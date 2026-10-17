@@ -25,7 +25,7 @@ interface QualityMetrics {
 }
 
 function QualityScoringPage() {
-  const [hasAudio, setHasAudio] = useState(true);
+  const [hasAudio] = useState(true);
   const [audioLUFS, setAudioLUFS] = useState(-14);
   const [visualResolution, setVisualResolution] = useState(1920);
   const [frameRate, setFrameRate] = useState(30);
@@ -46,8 +46,9 @@ function QualityScoringPage() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setMetrics(data.metrics);
-    } catch (err: any) {
-      setError(err?.message || "Failed to score quality");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to score quality";
+      setError(message);
     } finally {
       setLoading(false);
     }

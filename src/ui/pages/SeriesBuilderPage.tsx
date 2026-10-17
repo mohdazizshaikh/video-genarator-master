@@ -3,14 +3,13 @@ import React, { useState, useEffect } from "react";
 import {
   Container, Paper, TextField, Button, FormControl, InputLabel,
   Select, MenuItem, Box, Typography, Alert, Stack, Chip,
-  Grid, Card, CardContent, CardActions, Divider, Dialog,
+  Grid, Card, CardContent, CardActions, Dialog,
   DialogTitle, DialogContent, DialogActions, LinearProgress,
   IconButton, Tooltip,
 } from "@mui/material";
 import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
-import EpisodeIcon from "@mui/icons-material/OndemandVideo";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { CONTENT_CATEGORIES } from "../../config/categories";
 
@@ -61,7 +60,7 @@ function SeriesBuilderPage() {
     category: "Technology",
     platform: ["youtube"],
     totalEpisodes: 7,
-    style: "daily" as const,
+    style: "daily" as "daily" | "weekly" | "mini",
     autoCliffhanger: true,
   });
 
@@ -72,8 +71,9 @@ function SeriesBuilderPage() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setSeries(Array.isArray(data.data) ? data.data : []);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load series");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load series";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -95,8 +95,9 @@ function SeriesBuilderPage() {
       setCreateOpen(false);
       setNewSeries({ title: "", category: "Technology", platform: ["youtube"], totalEpisodes: 7, style: "daily", autoCliffhanger: true });
       await loadSeries();
-    } catch (err: any) {
-      setError(err?.message || "Failed to create series");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create series";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -107,8 +108,9 @@ function SeriesBuilderPage() {
       const res = await authenticatedFetch(`/api/strategy/series/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       await loadSeries();
-    } catch (err: any) {
-      setError(err?.message || "Failed to delete series");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to delete series";
+      setError(message);
     }
   };
 
@@ -281,7 +283,7 @@ function SeriesBuilderPage() {
                   <InputLabel>Style</InputLabel>
                   <Select
                     value={newSeries.style} label="Style"
-                    onChange={(e) => setNewSeries((s) => ({ ...s, style: e.target.value as any }))}
+                    onChange={(e) => setNewSeries((s) => ({ ...s, style: e.target.value as "daily" | "weekly" | "mini" }))}
                   >
                     {STYLES.map((st) => <MenuItem key={st.value} value={st.value}>{st.label}</MenuItem>)}
                   </Select>

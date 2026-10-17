@@ -1,6 +1,9 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { AudioQualityEngine } from "../../services/AudioQualityEngine";
 import { logger } from "../../logger";
+import { requireAuth } from "../auth";
+
 
 export class AudioRouter {
   readonly router: Router;
@@ -13,7 +16,9 @@ export class AudioRouter {
   }
 
   private registerRoutes() {
-    this.router.post("/process", (req, res) => {
+    this.router.use(requireAuth);
+
+    this.router.post("/process", (req: Request, res: Response) => {
       try {
         const { currentLUFS = -18, targetLUFS = -14 } = req.body;
 

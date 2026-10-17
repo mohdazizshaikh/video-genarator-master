@@ -2,7 +2,7 @@ import { Router, json } from "express";
 import type { Request, Response } from "express";
 import { ABTestingEngine } from "../../services/ABTestingEngine";
 import type { Config } from "../../config";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 function tenantIdFrom(req: Request): string {
   const tenantId = getAuthenticatedTenantId(req);
@@ -22,6 +22,8 @@ export class ABTestingRouter {
   }
 
   private register() {
+    this.router.use(requireAuth);
+
     this.router.get("/", (req: Request, res: Response) => {
       res.json({ status: "ok", data: this.engine.getAllTests(tenantIdFrom(req)) });
     });

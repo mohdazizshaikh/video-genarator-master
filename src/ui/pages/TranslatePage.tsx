@@ -56,7 +56,7 @@ function TranslatePage() {
       .then((d) => {
         if (d.data && Array.isArray(d.data)) {
           setLanguages(
-            d.data.map((l: any) => ({ code: l.code || l, name: l.name || l }))
+            d.data.map((l: Record<string, unknown>) => ({ code: String(l.code || l), name: String(l.name || l) }))
           );
         }
       })
@@ -77,8 +77,9 @@ function TranslatePage() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setResult(data.data);
-    } catch (err: any) {
-      setError(err?.message || "Translation failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Translation failed";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -99,8 +100,9 @@ function TranslatePage() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setBatchResults(data.data || []);
-    } catch (err: any) {
-      setError(err?.message || "Batch translation failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Batch translation failed";
+      setError(message);
     } finally {
       setBatchLoading(false);
     }

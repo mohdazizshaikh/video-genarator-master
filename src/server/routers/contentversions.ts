@@ -1,7 +1,7 @@
 import express, { type Request, type Response, type Router } from "express";
 import path from "node:path";
 import { ContentVersionStore } from "../../db/ContentVersionStore";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 import type { ContentVersionStatus } from "../../db/ContentVersionStore";
 
 function workspaceIdFrom(req: Request): string {
@@ -32,6 +32,7 @@ export class ContentVersionsRouter {
   constructor(dataDirPath: string) {
     this.router = express.Router();
     this.store = new ContentVersionStore(dataDirPath);
+    this.router.use(requireAuth);
     this.router.get("/", (req, res) => this.list(req, res));
     this.router.post("/", (req, res) => this.create(req, res));
     this.router.get("/:contentVersionId", (req, res) => this.get(req, res));

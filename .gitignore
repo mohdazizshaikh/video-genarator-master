@@ -11,6 +11,14 @@ lint_output.txt
 server.log
 .roo/
 
+# Local QA sample media (large generated overlay renders)
+qa/overlay-samples/
+
+# Root-level runtime state when DATA_DIR_PATH is unset or points at the repo root
+/contentAutomationRules.json
+/customNewsSources.json
+data/installation-successful
+
 # Runtime media (never commit large video/audio artifacts)
 data/videos/
 data/temp/

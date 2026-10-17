@@ -7,7 +7,7 @@ import { logger } from "../../logger";
 import { Config } from "../../config";
 import { ImageFiltersEngine } from "../../services/ImageFiltersEngine";
 import type { FilterType, FilterOptions } from "../../services/ImageFiltersEngine";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 import { ArtifactManifestStore } from "../../db/ArtifactManifestStore";
 
 function safePathInDir(dirPath: string, fileName: string): string | null {
@@ -46,6 +46,8 @@ export class ImageRouter {
   }
 
   private setupRoutes() {
+    this.router.use(requireAuth);
+
     const tenantPrefix = (req: ExpressRequest): string | null => {
       const tenantId = getAuthenticatedTenantId(req);
       return tenantId ? `${tenantId.replace(/[^a-zA-Z0-9_-]/g, "-")}__` : null;

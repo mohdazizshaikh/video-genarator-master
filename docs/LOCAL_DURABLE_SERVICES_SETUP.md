@@ -104,7 +104,7 @@ A non-zero result is expected until all owner-approved infrastructure and reconc
 Tenant authentication uses an API key, not a password. Use the existing tenant bootstrap/rotation flow to create or rotate a local test API key. Exchange it for a bearer token through:
 
 ```bash
-curl -X POST http://localhost:3123/api/system/auth/authenticate \
+curl -X POST http://localhost:3123/api/system-engines/auth/authenticate \
   -H 'Content-Type: application/json' \
   -d '{"apiKey":"YOUR_LOCAL_TENANT_API_KEY"}'
 ```

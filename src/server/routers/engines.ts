@@ -7,6 +7,8 @@ import { CaptionEngine } from "../../services/CaptionEngine";
 import { VoiceEngine } from "../../services/VoiceEngine";
 import { ImageEngine } from "../../services/ImageEngine";
 import type { Config } from "../../config";
+import { requireAuth } from "../auth";
+
 
 export class EnginesRouter {
   public router: Router;
@@ -30,6 +32,8 @@ export class EnginesRouter {
   }
 
   private register() {
+    this.router.use(requireAuth);
+
     // Trend Hijacking
     this.router.post("/trend-hijack", (req: Request, res: Response) => {
       const { topic, niche = "general", platform } = req.body;

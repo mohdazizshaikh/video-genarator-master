@@ -89,7 +89,7 @@ const ENGINE_TOOLTIPS: Record<string, string> = {
   enableEngagementOptimization: "Optimize caption length and CTAs for max engagement",
 };
 
-const STATUS_CONFIG: Record<string, { color: "default" | "primary" | "success" | "error" | "warning"; icon: React.ReactNode }> = {
+const STATUS_CONFIG: Record<ScheduleRecord["status"], { color: "default" | "primary" | "success" | "error" | "warning"; icon: React.ReactNode }> = {
   active: { color: "success", icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> },
   paused: { color: "warning", icon: <PauseIcon sx={{ fontSize: 14 }} /> },
   completed: { color: "primary", icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> },
@@ -209,7 +209,9 @@ export const SchedulePersistPage: React.FC = () => {
         body: JSON.stringify({ status }),
       });
       fetchAll();
-    } catch {}
+    } catch {
+      // Intentionally ignored - fetchAll will handle error state
+    }
   };
 
   const triggerRun = async (id: string) => {
@@ -218,7 +220,9 @@ export const SchedulePersistPage: React.FC = () => {
       const res = await authenticatedFetch(`/api/schedule/${id}/run`, { method: "POST" });
       const data = await res.json();
       if (data.status === "ok") fetchAll();
-    } catch {}
+    } catch {
+      // Intentionally ignored - error handled by triggering state
+    }
     setTriggering(null);
   };
 
@@ -226,7 +230,9 @@ export const SchedulePersistPage: React.FC = () => {
     try {
       await authenticatedFetch(`/api/schedule/${id}`, { method: "DELETE" });
       fetchAll();
-    } catch {}
+    } catch {
+      // Intentionally ignored - fetchAll will handle error state
+    }
   };
 
   const toggleEngine = (key: keyof typeof form.engines) => {
@@ -308,7 +314,7 @@ export const SchedulePersistPage: React.FC = () => {
                         sx={{ fontSize: "0.6rem" }}
                       />
                       <Chip
-                        icon={STATUS_CONFIG[sched.status]?.icon as any}
+                        icon={STATUS_CONFIG[sched.status]?.icon as React.ReactElement}
                         label={sched.status}
                         size="small"
                         color={STATUS_CONFIG[sched.status]?.color}

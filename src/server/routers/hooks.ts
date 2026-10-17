@@ -3,6 +3,8 @@ import type { Request as ExpressRequest, Response as ExpressResponse } from "exp
 import { HookLibraryEngine, type HookEmotion } from "../../services/HookLibraryEngine";
 import { logger } from "../../logger";
 import { Config } from "../../config";
+import { requireAuth } from "../auth";
+
 
 export class HooksRouter {
   public router: express.Router;
@@ -16,6 +18,8 @@ export class HooksRouter {
   }
 
   private setupRoutes() {
+    this.router.use(requireAuth);
+
     this.router.get("/", (req: ExpressRequest, res: ExpressResponse) => {
       const type = typeof req.query.type === "string" ? req.query.type : undefined;
       const category = typeof req.query.category === "string" ? req.query.category : undefined;

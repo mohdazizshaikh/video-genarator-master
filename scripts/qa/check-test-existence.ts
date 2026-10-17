@@ -47,7 +47,8 @@ function main(): void {
   const findings: Finding[] = [];
 
   const testCandidates = new Set<string>();
-  for (const abs of walk(SRC_DIR, [".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx"])) {
+  for (const abs of walk(SRC_DIR, [".ts", ".tsx"])) {
+    if (!/(\.test|\.spec)\.(ts|tsx)$/.test(abs)) continue;
     testCandidates.add(rel(abs));
   }
 

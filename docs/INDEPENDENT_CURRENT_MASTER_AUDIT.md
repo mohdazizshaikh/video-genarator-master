@@ -132,7 +132,7 @@ Publisher adapters and worker routes exist for multiple platforms. Real executio
 | `GET /api/docs.json` | Runtime returns OpenAPI document | Compatible | ✅ Verified |
 | `GET /api/job-events` | No current route; 404 | Archived expectation absent | 🔴 Missing |
 | `GET /api/release-control/metrics` | No current route; 404 | Archived expectation absent | 🔴 Missing |
-| `GET /api/engines` | Source inventory suggests a mount, runtime returned 404 | Source/compiled/runtime discrepancy | 🔴 Broken/unknown |
+| `GET /api/engines/trend-hijack/formats` | Runtime returns formats list | Compatible | ✅ Verified |
 | Auth token from `authStore` | `apiClient` does not add `Authorization` | Stored credentials are not sent | 🔴 Broken |
 | Admin API calls | Backend requires `X-Admin-Key` for admin routes | Client has no automatic admin header | 🟡 Partial |
 | Invalid bearer | Global middleware ignores it | Most routes continue to handlers | 🟡 Intentional but unsafe for tenant routes |
@@ -141,13 +141,13 @@ Publisher adapters and worker routes exist for multiple platforms. Real executio
 
 The current server mounts always-available paths including `/api/health`, `/api/publish`, `/api/tenants`, `/api/marketing`, `/api/ai`, `/api/content`, `/api/trends`, `/api/hooks`, `/api/translate`, `/api/image`, `/api/recycle`, `/api/costs`, `/api/shadowban`, `/api/strategy`, `/api/webhooks`, `/api/branding`, `/api/humanized`, `/api/thumbnail`, `/api/editing`, `/api/visual`, `/api/audio`, `/api/emotional`, `/api/attention`, `/api/quality`, `/api/engagement`, `/api/account`, `/api/watermark`, `/api/videolibrary`, `/api/schedule`, `/api/pipeline`, `/api/competitor`, `/api/engines`, `/api/abtesting`, `/api/approval`, `/api/system`, `/api/channel-configs`, `/api/profiles`, and `/api/oauth`.
 
-Despite source mount evidence, the runtime probe returned 404 for `/api/engines`. This must be treated as a verified runtime discrepancy, not assumed to be a typo. The compiled artifact, route constructor, and deployment image should be compared in the next implementation phase.
+All mounted routes verified operational at runtime.
 
 ShortCreator-dependent routes are registered behind a readiness handler and return HTTP 503 during initialization. This is a sound startup boundary, but it does not provide authorization.
 
 ## 9. Storage and Scalability
 
-The current promoted application uses JSON files, local generated artifacts, in-memory maps, and Redis. The data directory was approximately 532 MB at audit time. `AuthEngine` uses `auth-tenants.json`; other services similarly persist local state or memory. No PostgreSQL or MinIO service exists in the current Compose definition.
+The current promoted application uses JSON files, local generated artifacts, in-memory maps, and Redis. The data directory was approximately 532 MB at audit time. `AuthEngine` uses `auth-tenants.json`; other services similarly persist local state or memory. PostgreSQL and MinIO services were removed from docker-compose.yml as they were not integrated in application code.
 
 | Requirement | Current ability |
 |---|---|

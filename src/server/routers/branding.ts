@@ -1,7 +1,15 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import { BrandingEngine } from "../../services/BrandingEngine";
 import { logger } from "../../logger";
+import { getAuthenticatedTenantId, requireAuth, isAdminRequest } from "../auth";
+
+function tenantIdFrom(req: Request): string {
+  const tenantId = getAuthenticatedTenantId(req);
+  if (!tenantId) throw new Error("Authenticated workspace is required");
+  return tenantId;
+}
 
 export class BrandingRouter {
   readonly router: Router;
@@ -14,6 +22,8 @@ export class BrandingRouter {
   }
 
   private registerRoutes() {
+    this.router.use(requireAuth);
+
     // GET /api/branding/:tenantId — get branding config
     this.router.get("/:tenantId", (_req, res) => {
       try {

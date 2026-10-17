@@ -4,7 +4,7 @@ import { ApprovalEngine } from "../../services/ApprovalEngine";
 import { ModerationEngine } from "../../services/ModerationEngine";
 import { ValidationEngine } from "../../services/ValidationEngine";
 import type { Config } from "../../config";
-import { getAuthenticatedTenantId, isAdminRequest } from "../auth";
+import { getAuthenticatedTenantId, isAdminRequest, requireAuth } from "../auth";
 function tenantIdFrom(req: Request): string {
   const tenantId = getAuthenticatedTenantId(req);
   if (!tenantId) throw new Error("Authenticated workspace is required");
@@ -33,6 +33,8 @@ export class ApprovalRouter {
   }
 
   private register() {
+    this.router.use(requireAuth);
+
     // Approval queue
     this.router.get("/queue", (req: Request, res: Response) => {
       res.json({ status: "ok", data: this.approval.getAll(tenantIdFrom(req)) });

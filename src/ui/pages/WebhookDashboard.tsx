@@ -169,8 +169,9 @@ const WebhookDashboard: React.FC = () => {
       showToast(editingId ? 'Webhook updated!' : 'Webhook created!');
       closeDialog();
       fetchAll();
-    } catch (err: any) {
-      showToast(err.message || 'Failed to save webhook', 'error');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save webhook";
+      showToast(message, 'error');
     } finally {
       setSaving(false);
     }

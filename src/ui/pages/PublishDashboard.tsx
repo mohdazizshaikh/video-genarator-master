@@ -86,7 +86,7 @@ const STEPS = ["Select Videos", "Choose Platforms", "Add Metadata", "Schedule & 
 
 export const PublishDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { warning: warnNotification, error: errorNotification } = useNotification();
+  const { warning: warnNotification } = useNotification();
   const [activeStep, setActiveStep] = useState(0);
   const [selectedVideos, setSelectedVideos] = useState<SelectedVideo[]>([]);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);

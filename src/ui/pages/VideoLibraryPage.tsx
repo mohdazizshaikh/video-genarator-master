@@ -7,7 +7,7 @@ import {
   Box, Typography, Grid, Card, CardContent, CardActions, Button, TextField,
   MenuItem, Select, FormControl, InputLabel, Chip, CircularProgress, Alert,
   IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab,
-  Stack, InputAdornment, Badge, Tooltip, Divider, Paper, LinearProgress
+  Stack, InputAdornment, Tooltip, Paper, LinearProgress
 } from "@mui/material";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import VideoLibraryIcon from "@mui/icons-material/VideoLibrary";
@@ -16,11 +16,9 @@ import SearchIcon from "@mui/icons-material/Search";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import BarChartIcon from "@mui/icons-material/BarChart";
-import FilterListIcon from "@mui/icons-material/FilterList";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import PublishIcon from "@mui/icons-material/Publish";
-import ScheduleIcon from "@mui/icons-material/Schedule";
 import TagIcon from "@mui/icons-material/Tag";
 import ThumbUpIcon from "@mui/icons-material/ThumbUp";
 import VisibilityIcon from "@mui/icons-material/Visibility";
@@ -105,7 +103,9 @@ export const VideoLibraryPage: React.FC = () => {
       ]);
       if (s.status === "ok" && s.stats) setStats(s.stats);
       if (t.status === "ok" && Array.isArray(t.tags)) setTrendingTags(t.tags);
-    } catch {}
+    } catch {
+      // Intentionally ignored - stats are non-critical
+    }
   }, []);
 
   useEffect(() => { fetchVideos(); fetchStats(); }, [fetchVideos, fetchStats]);
@@ -126,7 +126,6 @@ export const VideoLibraryPage: React.FC = () => {
     try {
       const body = { ...form, tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean) };
       const url = editRecord ? `/api/videolibrary/${editRecord.id}` : "/api/videolibrary";
-      const method = editRecord ? "PATCH" : "POST";
       const data = editRecord
         ? await apiClient.patch<{ status?: string; error?: string }>(url, body)
         : await apiClient.post<{ status?: string; error?: string }>(url, body);
@@ -140,14 +139,18 @@ export const VideoLibraryPage: React.FC = () => {
     try {
       await apiClient.delete(`/api/videolibrary/${id}`);
       setDeleteConfirm(null); fetchVideos(); fetchStats();
-    } catch { setError("Delete failed"); }
+    } catch {
+      setError("Delete failed");
+    }
   };
 
   const updateStatus = async (id: string, status: string) => {
     try {
       await apiClient.patch(`/api/videolibrary/${id}/status`, { status });
       fetchVideos(); fetchStats();
-    } catch {}
+    } catch {
+      // Intentionally ignored - fetchVideos will handle error state
+    }
   };
 
   const fmtDuration = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -377,7 +380,7 @@ export const VideoLibraryPage: React.FC = () => {
                   <CardContent>
                     <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>📈 Overall Engagement Trends</Typography>
                     <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={videos.map((v, i) => ({ name: v.title.slice(0, 12), views: v.engagementMetrics?.views || 0, likes: v.engagementMetrics?.likes || 0, comments: v.engagementMetrics?.comments || 0, shares: v.engagementMetrics?.shares || 0 }))}>
+                      <LineChart data={videos.map((v) => ({ name: v.title.slice(0, 12), views: v.engagementMetrics?.views || 0, likes: v.engagementMetrics?.likes || 0, comments: v.engagementMetrics?.comments || 0, shares: v.engagementMetrics?.shares || 0 }))}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                         <XAxis dataKey="name" stroke="rgba(255,255,255,0.5)" fontSize={12} />
                         <YAxis stroke="rgba(255,255,255,0.5)" fontSize={12} />
@@ -451,8 +454,13 @@ export const VideoLibraryPage: React.FC = () => {
                   <CardContent>
                     <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>🏆 Top Performers (Engagement Rate)</Typography>
                     {videos
-                      .map((v) => ({ ...v, engagementRate: v.engagementMetrics?.views ? ((v.engagementMetrics.likes + v.engagementMetrics.comments + v.engagementMetrics.shares) / v.engagementMetrics.views * 100).toFixed(2) : 0 }))
-                      .sort((a, b) => parseFloat(b.engagementRate as any) - parseFloat(a.engagementRate as any))
+                      .map((v) => {
+                        const rate = v.engagementMetrics?.views
+                          ? ((v.engagementMetrics.likes + v.engagementMetrics.comments + v.engagementMetrics.shares) / v.engagementMetrics.views * 100)
+                          : 0;
+                        return { ...v, engagementRate: rate };
+                      })
+                      .sort((a, b) => b.engagementRate - a.engagementRate)
                       .slice(0, 5)
                       .map((v, idx) => (
                         <Box key={v.id} sx={{ mb: 2, pb: 2, borderBottom: idx < 4 ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
@@ -529,7 +537,7 @@ export const VideoLibraryPage: React.FC = () => {
               <Grid item xs={6}>
                 <FormControl fullWidth>
                   <InputLabel>Status</InputLabel>
-                  <Select value={form.status} label="Status" onChange={(e) => setForm({ ...form, status: e.target.value as any })}>
+                  <Select value={form.status} label="Status" onChange={(e) => setForm({ ...form, status: e.target.value as "draft" | "published" | "scheduled" | "archived" })}>
                     {STATUSES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
                   </Select>
                 </FormControl>

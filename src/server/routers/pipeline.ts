@@ -7,7 +7,7 @@ import { PipelineOrchestrator } from "../../services/PipelineOrchestrator";
 import { PipelineStore } from "../../db/PipelineStore";
 import { logger } from "../../logger";
 import type { Config } from "../../config";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 export class PipelineRouter {
   public router: Router;
@@ -23,6 +23,8 @@ export class PipelineRouter {
   }
 
   private registerRoutes(): void {
+    this.router.use(requireAuth);
+
     this.router.post("/run", (req: Request, res: Response) => this.run(req, res));
     this.router.post("/compare", (req: Request, res: Response) => this.compare(req, res));
     this.router.get("/comparisons", (req: Request, res: Response) => this.listComparisons(req, res));

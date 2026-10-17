@@ -75,7 +75,7 @@ interface UseAnalyticsReturn extends UseAnalyticsState {
 
 function getDateRangeDates(range: DateRange, customStart?: string, customEnd?: string) {
   const end = new Date();
-  let start = new Date();
+  const start = new Date();
 
   if (range === "7d") start.setDate(end.getDate() - 7);
   else if (range === "30d") start.setDate(end.getDate() - 30);

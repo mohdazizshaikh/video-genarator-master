@@ -1,6 +1,8 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { ContentEnhancementService } from "../../services/ContentEnhancementService";
+import { requireAuth } from "../auth";
+
 
 export class ContentRouter {
   public router: Router;
@@ -14,6 +16,8 @@ export class ContentRouter {
   }
 
   private register(): void {
+    this.router.use(requireAuth);
+
     this.router.post("/ideation", (req, res) => this.ideation(req, res));
     this.router.post("/editing-primitives", (req, res) => this.editing(req, res));
     this.router.post("/personalize", (req, res) => this.personalize(req, res));

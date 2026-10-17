@@ -5,7 +5,7 @@ import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import type { ShortCreator } from "../../short-creator/ShortCreator";
 import { SchedulerService } from "../../services/SchedulerService";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 import { renderConfig } from "../../types/shorts";
 import { resolveCategoryPipeline } from "../../components/videos/CategoryPipelineProfiles";
 
@@ -21,6 +21,8 @@ export class QueueRouter {
   }
 
   private registerRoutes(): void {
+    this.router.use(expressJsonMiddleware());
+    this.router.use(requireAuth);
     this.router.post("/bulk", (req: Request, res: Response) => this.bulkEnqueue(req, res));
   }
 

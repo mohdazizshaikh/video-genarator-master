@@ -4,6 +4,8 @@ import { ContentRecycleEngine } from "../../services/ContentRecycleEngine";
 import { ContentFreshnessEngine } from "../../services/ContentFreshnessEngine";
 import { AntiDuplicationEngine } from "../../services/AntiDuplicationEngine";
 import { Config } from "../../config";
+import { requireAuth } from "../auth";
+
 
 
 export class RecycleRouter {
@@ -22,6 +24,8 @@ export class RecycleRouter {
   }
 
   private setupRoutes() {
+    this.router.use(requireAuth);
+
     this.router.get("/candidates", (_req: ExpressRequest, res: ExpressResponse) => {
       res.json({ status: "ok", data: this.recycleEngine.getCandidates() });
     });

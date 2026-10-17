@@ -33,7 +33,7 @@ const AuthBootstrap: React.FC = () => {
   const [busy, setBusy] = useState(false);
 
   const establishSession = async (key: string, tenantHint?: AuthTenant) => {
-    const result = await apiClient.post<AuthenticateResponse>("/api/system/auth/authenticate", { apiKey: key });
+    const result = await apiClient.post<AuthenticateResponse>("/api/system-engines/auth/authenticate", { apiKey: key });
     if (!result.success || !result.token || !result.tenant) {
       throw new Error(result.error || "Authentication failed");
     }
@@ -59,7 +59,7 @@ const AuthBootstrap: React.FC = () => {
         if (!workspaceName.trim() || !email.trim()) {
           throw new Error("Workspace name and email are required");
         }
-        const registration = await apiClient.post<RegisterResponse>("/api/system/auth/register", {
+        const registration = await apiClient.post<RegisterResponse>("/api/system-engines/auth/register", {
           name: workspaceName.trim(),
           email: email.trim(),
           plan: "free",

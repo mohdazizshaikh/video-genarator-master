@@ -103,7 +103,7 @@ export const TrendDashboard: React.FC = () => {
     loadRadar();
   }, [loadTrends, loadRadar]);
 
-  const priorityColor = (p: string) => p === 'critical' ? 'error' : p === 'high' ? 'warning' : 'default';
+  const priorityColor = (p: string): "error" | "warning" | "default" => p === 'critical' ? 'error' : p === 'high' ? 'warning' : 'default';
 
   return (
     <Box>
@@ -190,7 +190,7 @@ export const TrendDashboard: React.FC = () => {
                   <Card sx={{ border: `2px solid ${alert.priority === 'critical' ? '#ef4444' : '#f59e0b'}` }}>
                     <CardContent>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Chip label={alert.priority.toUpperCase()} color={priorityColor(alert.priority) as any} size="small" />
+                        <Chip label={alert.priority.toUpperCase()} color={priorityColor(alert.priority)} size="small" />
                         {alert.bypassQueue && (
                           <Tooltip title="Bypass normal queue — generate immediately!">
                             <Chip label="⚡ BYPASS QUEUE" color="error" size="small" />

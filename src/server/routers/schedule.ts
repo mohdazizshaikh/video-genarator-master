@@ -23,7 +23,7 @@ import { ImageEngine } from "../../services/ImageEngine";
 import { ContentFreshnessEngine } from "../../services/ContentFreshnessEngine";
 import { BestTimeLearningEngine } from "../../services/BestTimeLearningEngine";
 import type { ShortCreator } from "../../short-creator/ShortCreator";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 import { LanguageEnum, VideoTypeEnum, VoiceEnum, MusicVolumeEnum, TextModeEnum, OrientationEnum, MusicMoodEnum, CaptionPositionEnum } from "../../types/shorts";
 
 export class ScheduleRouter {
@@ -53,6 +53,8 @@ export class ScheduleRouter {
   }
 
   private registerRoutes(): void {
+    this.router.use(requireAuth);
+
     this.router.get("/stats", (req: Request, res: Response) => this.getStats(req, res));
     this.router.get("/due", (req: Request, res: Response) => this.getDue(req, res));
     this.router.get("/upcoming", (req: Request, res: Response) => this.getUpcoming(req, res));
@@ -350,7 +352,8 @@ export class ScheduleRouter {
 
   private async updateSchedule(req: Request, res: Response): Promise<void> {
     try {
-      const { tenantId: _ignoredTenantId, ...data } = req.body as Record<string, unknown>;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { tenantId: _tenantId, ...data } = req.body as Record<string, unknown>;
       const updated = await this.store.updateForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id, data);
       if (!updated) {
         res.status(404).json({ error: "Schedule not found" });

@@ -2,11 +2,10 @@ import { authenticatedFetch } from "../services/authenticatedFetch";
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, Chip, Button, Alert,
-  CircularProgress, Tabs, Tab, TextField, MenuItem, Select, FormControl, InputLabel, Divider, List, ListItem, ListItemText, LinearProgress
+  CircularProgress, Tabs, Tab, LinearProgress, Divider, FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import PieChartIcon from '@mui/icons-material/PieChart';
-import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import CommentIcon from '@mui/icons-material/Comment';
 
 interface PlatformProfile {
@@ -34,6 +33,13 @@ interface BucketStat {
   description: string;
 }
 
+interface CTAOption {
+  text: string;
+  engagementType: string;
+  score: number;
+  language: string;
+}
+
 const BUCKET_COLORS: Record<string, string> = {
   viral_trending: '#ef4444', evergreen: '#10b981', educational: '#3b82f6', personal_brand: '#8b5cf6',
 };
@@ -47,7 +53,7 @@ export const StrategyDashboard: React.FC = () => {
   const [platforms, setPlatforms] = useState<PlatformProfile[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformProfile | null>(null);
   const [buckets, setBuckets] = useState<BucketStat[]>([]);
-  const [ctas, setCtas] = useState<any[]>([]);
+  const [ctas, setCtas] = useState<CTAOption[]>([]);
   const [ctaPlatform, setCtaPlatform] = useState('instagram');
   const [ctaCategory, setCtaCategory] = useState('General');
   const [loading, setLoading] = useState(false);

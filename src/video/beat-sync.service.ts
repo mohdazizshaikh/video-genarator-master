@@ -4,7 +4,7 @@
  */
 
 import { logger } from "../logger";
-import type { Scene, RenderConfig } from "../types/shorts";
+import type { Scene } from "../types/shorts";
 
 export interface BeatSyncConfig {
   bpm: number; // Beats per minute of background music

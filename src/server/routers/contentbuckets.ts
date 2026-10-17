@@ -2,6 +2,8 @@ import { Router, json } from "express";
 import type { Request, Response } from "express";
 import { ContentBucketEngine } from "../../services/ContentBucketEngine";
 import type { Config } from "../../config";
+import { requireAuth } from "../auth";
+
 
 
 export class ContentBucketsRouter {
@@ -16,6 +18,8 @@ export class ContentBucketsRouter {
   }
 
   private register() {
+    this.router.use(requireAuth);
+
     this.router.get("/stats", (_req: Request, res: Response) => {
       res.json({ status: "ok", data: this.engine.getStats() });
     });

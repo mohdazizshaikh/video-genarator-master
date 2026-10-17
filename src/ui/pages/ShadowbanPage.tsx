@@ -33,8 +33,6 @@ interface PlatformStatus {
   lastChecked: string;
 }
 
-const PLATFORMS = ["youtube", "instagram", "tiktok", "twitter", "facebook", "linkedin"];
-
 const RECOVERY_RECOMMENDATIONS: Record<string, string[]> = {
   low: [
     "Continue current posting strategy",
@@ -89,8 +87,9 @@ function ShadowbanPage() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setStatuses(Array.isArray(data.data) ? data.data : []);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load shadowban data");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load shadowban data";
+      setError(message);
     } finally {
       setLoading(false);
     }

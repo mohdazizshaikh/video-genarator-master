@@ -5,7 +5,7 @@ const baseUrl = process.argv[2] || "http://localhost:3123";
 const name = process.argv[3] || "Aaditech Solution";
 const email = process.argv[4];
 if (!email) throw new Error("owner email is required");
-const response = await fetch(`${baseUrl}/api/system/auth/register`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, email, plan: "free" }) });
+const response = await fetch(`${baseUrl}/api/system-engines/auth/register`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, email, plan: "free" }) });
 const payload = await response.json();
 if (!response.ok) throw new Error(`registration failed with HTTP ${response.status}`);
 const result = payload?.data;

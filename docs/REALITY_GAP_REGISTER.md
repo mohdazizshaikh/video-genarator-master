@@ -29,10 +29,10 @@ The recent work improved the security boundary, but it did not create those miss
 
 | ID | Priority | Gap | Why it matters | Acceptance criterion |
 |---|---|---|---|---|
-| G-01 | P0 | PostgreSQL is absent | File-backed state cannot safely support concurrent instances, transactions, durable ownership, or recovery | PostgreSQL schema, migrations, repositories, transactions, dual-write/read-verify, reconciliation, and rollback evidence pass |
-| G-02 | P0 | MinIO/S3 is absent | Local media paths are not durable, portable, or safe for scaled workers | Artifact manifest + object upload/download, tenant prefixes, checksums, signed URLs, lifecycle cleanup, and migration reconciliation pass |
+| G-01 | P0 | PostgreSQL not integrated | File-backed state cannot safely support concurrent instances, transactions, durable ownership, or recovery. PG was provisioned in compose but removed as unused. | PostgreSQL schema, migrations, repositories, transactions, dual-write/read-verify, reconciliation, and rollback evidence pass |
+| G-02 | P0 | MinIO/S3 not integrated | Local media paths are not durable, portable, or safe for scaled workers. MinIO was provisioned in compose but removed as unused. | Artifact manifest + object upload/download, tenant prefixes, checksums, signed URLs, lifecycle cleanup, and migration reconciliation pass |
 | G-03 | P0 | Release control and durable job events are absent | There is no authoritative release state or durable creator-facing job timeline in this checkout | `job_events`, idempotency keys, state transitions, DLQ/replay, release gates, and API/UI timeline acceptance pass |
-| G-04 | P0 | Authenticated acceptance traffic is incomplete | Unit tests do not prove real tenant A can never read/mutate tenant B through every route and worker path | Owner-approved test tenants exercise 401/403/404, success, mutation, queue callback, and artifact access paths |
+| G-04 | P0 | Authenticated acceptance traffic remains partial | Local two-tenant acceptance now passes (distinct bearer claims, workspace-scoped lists, non-enumerating 404 cross-tenant reads), but production owner-credential mutation, queue-callback, and artifact-path acceptance is still unexercised | Owner-approved test tenants exercise 401/403/404, success, mutation, queue callback, and artifact access paths |
 | G-05 | P0 | Provider credential/OAuth lifecycle is incomplete | Publishing can fail or leak operational state without secure refresh, revocation, retry, and audit handling | At least one owner-configured provider completes connect, refresh, publish, failure, retry, revoke, and audit flows |
 | G-06 | P1 | Artifact manifests are not wired to producers | The manifest seam exists, but generated outputs are not yet registered as authoritative records | Image/filter/repurpose/render producers register manifests with checksum and tenant ownership; reads resolve through scoped manifests |
 | G-07 | P1 | Job orchestration is only partially durable | Workers exist, but restart/retry/idempotency/reconciliation behavior is not established as one contract | Kill/restart tests prove no duplicate publish/render, deterministic retry, DLQ recovery, and event ordering |
@@ -52,8 +52,8 @@ These statements are deliberately narrower than “production-ready.” They des
 
 ## Recommended execution order
 
-1. Freeze the real contracts and acceptance tests for PostgreSQL, MinIO, job events, release state, and artifact manifests.
-2. Add PostgreSQL and MinIO through owner-approved deployment configuration; keep local files authoritative and keep all primary-read flags disabled.
+1. Freeze the real contracts and acceptance tests for job events, release state, and artifact manifests. (PostgreSQL/MinIO removed from compose as unused)
+2. Add PostgreSQL and MinIO through owner-approved deployment configuration when durable storage is required; keep local files authoritative and keep all primary-read flags disabled.
 3. Migrate the artifact manifest and highest-risk domain repositories using dual-write/read-verify and reconciliation.
 4. Establish one durable BullMQ/job-event contract with idempotency, retries, DLQ replay, and creator-facing timeline events.
 5. Complete provider OAuth/credential lifecycle and one full owner-configured publish path.

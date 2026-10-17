@@ -6,7 +6,7 @@ import { HashtagLearningEngine } from "../../services/HashtagLearningEngine";
 import { SkipAnalysisEngine } from "../../services/SkipAnalysisEngine";
 import { HumanMimicryEngine } from "../../services/HumanMimicryEngine";
 import { Config } from "../../config";
-import { getAuthenticatedTenantId } from "../auth";
+import { getAuthenticatedTenantId, requireAuth } from "../auth";
 
 export class ShadowbanRouter {
   public router: express.Router;
@@ -28,6 +28,8 @@ export class ShadowbanRouter {
   }
 
   private setupRoutes() {
+    this.router.use(requireAuth);
+
     // Shadowban
     this.router.get("/", (_req: ExpressRequest, res: ExpressResponse) => {
       res.json({ status: "ok", data: this.shadowban.getAllStatuses() });
