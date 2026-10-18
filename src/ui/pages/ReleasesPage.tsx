@@ -243,7 +243,7 @@ function ReleasesPage() {
   };
 
   const verifiedDestinations = destinations.filter((d) => d.status === "verified");
-  const queuedTargets = targets.filter((t) => t.status === "queued");
+  const queueableTargets = targets.filter((t) => t.status === "queued" || t.status === "failed");
   const canApprove = selected ? selected.approvalStatus !== "approved" : false;
 
   return (
@@ -428,7 +428,7 @@ function ReleasesPage() {
 
             <Divider sx={{ my: 2 }} />
             <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Queue Publish</Typography>
-            {queuedTargets.length === 0 ? (
+            {queueableTargets.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
                 No queued targets. Add a target to an approved release to make it queueable.
               </Typography>
@@ -437,8 +437,8 @@ function ReleasesPage() {
                 <FormControl size="small" sx={{ minWidth: 220 }}>
                   <InputLabel>Queued target</InputLabel>
                   <Select value={queueTargetId} label="Queued target" onChange={(e) => setQueueTargetId(e.target.value)}>
-                    {queuedTargets.map((target) => (
-                      <MenuItem key={target.id} value={target.id}>{target.id}</MenuItem>
+                    {queueableTargets.map((target) => (
+                      <MenuItem key={target.id} value={target.id}>{target.id} — {target.status}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -454,6 +454,12 @@ function ReleasesPage() {
                   Queue Publish
                 </Button>
               </Box>
+            )}
+            {queueableTargets.some((target) => target.status === "failed") && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+                Re-queueing a failed target is an operator recovery of a dead-lettered publish. It re-runs the same
+                approval and credential checks; a target mid-flight or already published stays rejected.
+              </Typography>
             )}
           </CardContent>
         </Card>

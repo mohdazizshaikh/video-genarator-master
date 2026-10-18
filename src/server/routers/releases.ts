@@ -92,7 +92,10 @@ export class ReleasesRouter {
         const { targetId, renderOutputPath, title, description = "", tags = [], category = "general", language = "en", thumbnailPath, scheduleAt } = req.body || {};
         const target = this.releases.getTarget(workspaceId, targetId);
         if (!target || target.releaseId !== req.params.releaseId) return res.status(404).json({ error: "Release target not found" });
-        if (target.status !== "queued") return res.status(409).json({ error: "Release target is not queueable" });
+        // Failed targets may be re-queued as an explicit operator recovery of a
+        // dead-lettered publish; the reset to "queued" happens only after every
+        // approval/credential gate below passes. In-flight states stay rejected.
+        if (target.status !== "queued" && target.status !== "failed") return res.status(409).json({ error: "Release target is not queueable" });
         const connector = this.connectors.getConnector(workspaceId, target.connectorId);
         const destination = connector ? this.connectors.listDestinations(workspaceId, connector.id).find((candidate) => candidate.id === target.destinationId) : undefined;
         const release = this.releases.getRelease(workspaceId, req.params.releaseId);
@@ -104,8 +107,16 @@ export class ReleasesRouter {
           return res.status(409).json({ error: "Connector credentials are unavailable; store the connector secret before queueing" });
         }
         if (!renderOutputPath || !title || !Array.isArray(tags)) return res.status(400).json({ error: "renderOutputPath, title, and tags are required" });
+        const recovering = target.status === "failed";
+        if (recovering) {
+          this.releases.updateTarget(workspaceId, target.id, { status: "queued", lastErrorCode: undefined });
+        }
         const job = await this.publishJobs.createJob({ tenantId: workspaceId, renderOutputPath, platform: connector.platform === "twitter" ? "x" : connector.platform, channelId: destination.externalDestinationId, title, description, tags, category, language, thumbnailPath, scheduleAt });
         const queue = createPublishQueue(this.config);
+        if (recovering) {
+          // Drop the terminal BullMQ job so the re-add below is not ignored as a duplicate id.
+          await queue.remove(`release-target-${target.id}`).catch(() => undefined);
+        }
         await queue.add("publish-release-target", { ...job, tenantId: workspaceId, publishJobId: job.id, releaseTargetId: target.id, connectorId: connector.id, destinationId: destination.id }, { jobId: `release-target-${target.id}` });
         return res.status(202).json({ jobId: job.id, targetId: target.id, queued: true });
       } catch (error) {

@@ -16,6 +16,7 @@ import { JobEventOutboxStore } from "../db/JobEventOutboxStore";
 import { JobLifecycleEventService } from "../services/JobLifecycleEventService";
 import { logger } from "../logger";
 import { getRedisConnection, QUEUE_NAMES } from "./QueueManager";
+import { isTerminalAttempt } from "./attemptBudget";
 import type { PlatformType } from "../types/shorts";
 import { enforcePlatformMetadataLimits, validatePublishPayload } from "../publishers/PlatformLimits";
 
@@ -41,18 +42,7 @@ export interface PublishJobPayload {
   destinationId?: string;
 }
 
-/**
- * Retry terminality contract for publish jobs.
- *
- * The BullMQ job's own `attempts` budget is the single source of truth: a
- * failure is terminal only when the attempt that just failed was the last one
- * BullMQ will execute. Dead-lettering before this point would let the worker
- * declare "permanently failed" while another retry is still scheduled — and a
- * retry that later succeeds would contradict the recorded terminal state.
- */
-export function isTerminalPublishFailure(attemptsMade: number, maxAttempts: number | undefined): boolean {
-  return attemptsMade >= Math.max(1, maxAttempts ?? 1);
-}
+// Retry terminality follows the shared contract in `attemptBudget.ts`.
 
 export class PublishWorker {
   private worker: Worker;
@@ -83,7 +73,10 @@ export class PublishWorker {
     );
 
     this.worker.on("completed", (job) => {
-      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: job.data.publishJobId, type: "completed", payload: { queueJobId: job.id, platform: job.data.platform } });
+      const target = job.data.releaseTargetId && job.data.tenantId
+        ? this.releaseStore.getTarget(job.data.tenantId, job.data.releaseTargetId)
+        : undefined;
+      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: job.data.publishJobId, type: "completed", attempt: target?.attempts ?? (job.attemptsMade ?? 0), payload: { queueJobId: job.id, platform: job.data.platform } });
       logger.info(
         { jobId: job.id, publishJobId: job.data.publishJobId, platform: job.data.platform },
         "Publish job completed",
@@ -94,8 +87,11 @@ export class PublishWorker {
       if (!job) return;
       const { publishJobId } = job.data;
       const attemptsMade = job.attemptsMade ?? 0;
-      const terminal = isTerminalPublishFailure(attemptsMade, job.opts.attempts);
-      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "failed", attempt: attemptsMade, payload: { error: err.message, terminal } });
+      const terminal = isTerminalAttempt(attemptsMade, job.opts.attempts);
+      const failedTarget = job.data.releaseTargetId && job.data.tenantId
+        ? this.releaseStore.getTarget(job.data.tenantId, job.data.releaseTargetId)
+        : undefined;
+      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "failed", attempt: failedTarget?.attempts ?? attemptsMade, payload: { error: err.message, terminal } });
 
       await this.publishJobStore.incrementAttemptForTenant(job.data.tenantId ?? "", publishJobId);
       const record = await this.publishJobStore.getJobForTenant(job.data.tenantId ?? "", publishJobId);
@@ -148,6 +144,7 @@ export class PublishWorker {
     if (!tenantId) throw new Error("Publish job requires an authenticated workspace");
 
     let releaseTarget;
+    let executionAttempt: number | undefined;
     if (job.data.releaseTargetId) {
       releaseTarget = this.releaseStore.getTarget(tenantId, job.data.releaseTargetId);
       if (!releaseTarget) throw new Error("Release target not found for workspace");
@@ -155,12 +152,17 @@ export class PublishWorker {
         logger.info({ publishJobId, releaseTargetId: releaseTarget.id }, "Release target already published; skipping duplicate worker execution");
         return;
       }
-      await this.releaseStore.updateTarget(tenantId, releaseTarget.id, { status: "publishing" });
+      // The target's publish-start counter is the stable execution number: each
+      // worker execution — including a stalled re-delivery after a crash — gets
+      // a new value, so lifecycle events are not deduped away by the event
+      // store's jobId:type:attempt idempotency key.
+      releaseTarget = this.releaseStore.updateTarget(tenantId, releaseTarget.id, { status: "publishing" }) ?? releaseTarget;
+      executionAttempt = releaseTarget.attempts;
     }
 
     logger.info({ jobId: job.id, publishJobId, platform, channelId }, "PublishWorker processing job");
 
-    this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "publishing", attempt: job.attemptsMade ?? 0 });
+    this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "publishing", attempt: executionAttempt ?? (job.attemptsMade ?? 0) });
     await this.publishJobStore.updateJobStatusForTenant(tenantId, publishJobId, "publishing");
     await job.updateProgress(10);
 

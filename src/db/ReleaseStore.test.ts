@@ -107,4 +107,24 @@ describe("ReleaseStore", () => {
     store.updateTarget("workspace-a", second.id, { status: "published", externalId: "msg-2" });
     expect(store.getTarget("workspace-a", second.id)?.attempts).toBe(2);
   });
+
+  it("resets a failed target to queued without inflating attempts or keeping the error", () => {
+    const store = makeStore();
+    const release = store.createRelease(baseRelease);
+    const target = store.createTarget({
+      workspaceId: "workspace-a",
+      releaseId: release.id,
+      connectorId: "connector-a",
+      destinationId: "destination-a",
+      idempotencyKey: "release-a-target-a",
+    });
+    store.updateTarget("workspace-a", target.id, { status: "publishing" });
+    store.updateTarget("workspace-a", target.id, { status: "failed", lastErrorCode: "credentials invalid" });
+
+    const recovered = store.updateTarget("workspace-a", target.id, { status: "queued", lastErrorCode: undefined });
+    expect(recovered?.status).toBe("queued");
+    expect(recovered?.attempts).toBe(1);
+    expect(recovered?.lastErrorCode).toBeUndefined();
+    expect(store.getTarget("workspace-a", target.id)?.lastErrorCode).toBeUndefined();
+  });
 });

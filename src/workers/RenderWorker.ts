@@ -14,6 +14,7 @@ import { JobEventOutboxStore } from "../db/JobEventOutboxStore";
 import { JobLifecycleEventService } from "../services/JobLifecycleEventService";
 import { logger } from "../logger";
 import { getRedisConnection, QUEUE_NAMES } from "./QueueManager";
+import { isTerminalAttempt } from "./attemptBudget";
 import type { OrientationEnum, SceneInput, RenderConfig } from "../types/shorts";
 
 export interface RenderJobPayload {
@@ -61,14 +62,14 @@ export class RenderWorker {
     this.worker.on("failed", async (job, err) => {
       if (!job) return;
       const { renderJobId, tenantId } = job.data;
-      const maxAttempts = 2;
-      this.lifecycleEvents.emit({ tenantId, jobId: renderJobId, type: "failed", attempt: (job.attemptsMade ?? 0) + 1, payload: { error: err.message } });
+      const maxAttempts = Math.max(1, job.opts.attempts ?? 1);
+      this.lifecycleEvents.emit({ tenantId, jobId: renderJobId, type: "failed", attempt: job.attemptsMade ?? 0, payload: { error: err.message } });
 
       await this.renderJobStore.incrementAttemptForTenant(tenantId, renderJobId);
       const record = await this.renderJobStore.getForTenant(tenantId, renderJobId);
       const attempts = record?.attemptCount ?? 0;
 
-      if (attempts >= maxAttempts) {
+      if (isTerminalAttempt(job.attemptsMade ?? 0, job.opts.attempts)) {
         // Phase 4.5: push hard failures into dead-letter queue for visibility
         const { createQueue } = await import("./QueueManager.js");
         const deadletter = createQueue(QUEUE_NAMES.DEADLETTER, this.config);
