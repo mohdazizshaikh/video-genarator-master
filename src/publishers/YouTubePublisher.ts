@@ -8,6 +8,7 @@ import fs from "node:fs";
 import { google } from "googleapis";
 import type { Config } from "../config";
 import { logger } from "../logger";
+import { classifyFailure, sanitizeProviderMessage } from "./failureClassification";
 import type { PlatformPublisher, PlatformLimits, PublishParams, PublishResult } from "./PlatformPublisher";
 
 export class YouTubePublisher implements PlatformPublisher {
@@ -96,9 +97,21 @@ export class YouTubePublisher implements PlatformPublisher {
         publishedUrl: videoId ? `https://www.youtube.com/watch?v=${videoId}` : undefined,
       };
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error({ err: message }, "YouTube upload failed");
-      return { success: false, error: message };
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      const response = (err as {
+        response?: { status?: number; data?: { error?: { message?: string; errors?: Array<{ reason?: string }> } } };
+      })?.response;
+      const httpStatus = typeof response?.status === "number" ? response.status : undefined;
+      const apiMessage = typeof response?.data?.error?.message === "string" ? response.data.error.message : undefined;
+      const reason = Array.isArray(response?.data?.error?.errors) ? response.data.error.errors[0]?.reason : undefined;
+      const quotaLimited = reason === "quotaExceeded" || reason === "rateLimitExceeded" || reason === "userRateLimitExceeded";
+      const sourceMessage = apiMessage ?? rawMessage;
+      const safeMessage = sanitizeProviderMessage(sourceMessage, [this.config.youtubeRefreshToken, this.config.youtubeClientSecret]);
+      const failure = quotaLimited
+        ? classifyFailure({ code: "rate_limited", message: sourceMessage })
+        : classifyFailure({ message: sourceMessage, httpStatus });
+      logger.error({ err: safeMessage, code: failure.code }, "YouTube upload failed");
+      return { success: false, error: safeMessage, errorCode: failure.code };
     }
   }
 

@@ -9,6 +9,7 @@ import FormData from "form-data";
 import axios from "axios";
 import type { Config } from "../config";
 import { logger } from "../logger";
+import { classifyFailure, sanitizeProviderMessage } from "./failureClassification";
 import type { PlatformPublisher, PlatformLimits, PublishParams, PublishResult } from "./PlatformPublisher";
 
 const TELEGRAM_BASE = "https://api.telegram.org";
@@ -88,11 +89,17 @@ export class TelegramPublisher implements PlatformPublisher {
       };
     } catch (err: unknown) {
       const rawMessage = err instanceof Error ? err.message : String(err);
-      const message = this.config.telegramBotToken
-        ? rawMessage.split(this.config.telegramBotToken).join("[redacted]")
-        : rawMessage;
-      logger.error({ err: message }, "Telegram upload failed");
-      return { success: false, error: message };
+      const response = (err as {
+        response?: { status?: number; data?: { description?: string; parameters?: { retry_after?: number } } };
+      })?.response;
+      const httpStatus = typeof response?.status === "number" ? response.status : undefined;
+      const apiDescription = typeof response?.data?.description === "string" ? response.data.description : undefined;
+      const retryAfterRaw = Number(response?.data?.parameters?.retry_after);
+      const retryAfterSeconds = Number.isFinite(retryAfterRaw) && retryAfterRaw > 0 ? retryAfterRaw : undefined;
+      const safeMessage = sanitizeProviderMessage(apiDescription ?? rawMessage, [this.config.telegramBotToken]);
+      const failure = classifyFailure({ message: apiDescription ?? rawMessage, httpStatus, retryAfterSeconds });
+      logger.error({ err: safeMessage, code: failure.code }, "Telegram upload failed");
+      return { success: false, error: safeMessage, errorCode: failure.code, retryAfterSeconds };
     }
   }
 

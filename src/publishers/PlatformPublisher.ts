@@ -2,6 +2,7 @@
  * PlatformPublisher – Enhanced interface with all advanced fields
  */
 import type { PlatformType } from "../types/shorts";
+import type { PublishFailureCode } from "./failureClassification";
 
 export interface PublishParams {
   videoFilePath: string;
@@ -30,6 +31,10 @@ export interface PublishResult {
   error?: string;
   rateLimitResetAt?: Date;
   credentialsValid?: boolean;
+  /** Normalized failure classification (P1-03); set when success is false. */
+  errorCode?: PublishFailureCode;
+  /** Provider-advertised seconds to wait before retrying (rate limits). */
+  retryAfterSeconds?: number;
 }
 
 export interface PlatformLimits {

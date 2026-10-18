@@ -37,4 +37,40 @@ describe("TelegramPublisher", () => {
     expect(result.error).not.toContain("test-bot-token");
     expect(result.error).toContain("[redacted]");
   });
+
+  it("classifies 401 responses as non-repairable credential failures", async () => {
+    mockedAxios.post.mockRejectedValueOnce(
+      Object.assign(new Error("Request failed with status code 401"), {
+        response: { status: 401, data: { ok: false, error_code: 401, description: "Unauthorized" } },
+      }),
+    );
+    const result = await publisher().uploadVideo({ videoFilePath: "/tmp/video.mp4", title: "Auth test", description: "Auth test", tags: [], category: "Technology", language: "en" as any });
+    expect(result).toMatchObject({ success: false, errorCode: "credentials_invalid", error: "Unauthorized" });
+  });
+
+  it("classifies 429 responses as rate limits and surfaces provider retry-after", async () => {
+    mockedAxios.post.mockRejectedValueOnce(
+      Object.assign(new Error("Request failed with status code 429"), {
+        response: { status: 429, data: { ok: false, error_code: 429, description: "Too Many Requests: retry after 30", parameters: { retry_after: 30 } } },
+      }),
+    );
+    const result = await publisher().uploadVideo({ videoFilePath: "/tmp/video.mp4", title: "Rate test", description: "Rate test", tags: [], category: "Technology", language: "en" as any });
+    expect(result).toMatchObject({ success: false, errorCode: "rate_limited", retryAfterSeconds: 30 });
+  });
+
+  it("classifies destination problems reported as 400s as permission failures", async () => {
+    mockedAxios.post.mockRejectedValueOnce(
+      Object.assign(new Error("Request failed with status code 400"), {
+        response: { status: 400, data: { ok: false, error_code: 400, description: "Bad Request: chat not found" } },
+      }),
+    );
+    const result = await publisher().uploadVideo({ videoFilePath: "/tmp/video.mp4", title: "Destination test", description: "Destination test", tags: [], category: "Technology", language: "en" as any });
+    expect(result).toMatchObject({ success: false, errorCode: "permission_denied" });
+  });
+
+  it("classifies network failures as retryable provider unavailability", async () => {
+    mockedAxios.post.mockRejectedValueOnce(new Error("connect ECONNREFUSED 127.0.0.1:443"));
+    const result = await publisher().uploadVideo({ videoFilePath: "/tmp/video.mp4", title: "Network test", description: "Network test", tags: [], category: "Technology", language: "en" as any });
+    expect(result).toMatchObject({ success: false, errorCode: "provider_unavailable" });
+  });
 });

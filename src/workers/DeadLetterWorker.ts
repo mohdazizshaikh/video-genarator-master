@@ -20,6 +20,8 @@ export interface DeadLetterPayload {
   jobId: string;
   originalQueue: string;
   failReason: string;
+  /** Normalized publish failure classification (P1-03), when available. */
+  failureCode?: string;
   attemptsMade: number;
   originalJobData: Record<string, unknown>;
 }
@@ -58,16 +60,16 @@ export class DeadLetterWorker {
   }
 
   private async processJob(job: Job<DeadLetterPayload>): Promise<void> {
-    const { type, jobId, failReason, attemptsMade, originalJobData } = job.data;
+    const { type, jobId, failReason, failureCode, attemptsMade, originalJobData } = job.data;
     const tenantId = typeof originalJobData.tenantId === "string" ? originalJobData.tenantId : undefined;
     if (!tenantId) {
       logger.error({ deadLetterJobId: job.id, jobId }, "Rejecting unowned dead-letter job");
       return;
     }
-    this.lifecycleEvents.emit({ tenantId, jobId, type: "dead_letter", attempt: attemptsMade, payload: { originalQueue: job.data.originalQueue, reason: failReason } });
+    this.lifecycleEvents.emit({ tenantId, jobId, type: "dead_letter", attempt: attemptsMade, payload: { originalQueue: job.data.originalQueue, reason: failReason, code: failureCode } });
 
     logger.error(
-      { type, jobId, failReason, attemptsMade, originalJobData },
+      { type, jobId, failReason, failureCode, attemptsMade, originalJobData },
       "DEAD LETTER: Job permanently failed",
     );
 
@@ -86,7 +88,7 @@ export class DeadLetterWorker {
     await this.alertingService.notify({
       summary: `Dead-letter job detected: ${type} ${jobId}`,
       severity: "critical",
-      details: { type, jobId, failReason, attemptsMade, originalJobData },
+      details: { type, jobId, failReason, failureCode, attemptsMade, originalJobData },
     });
   }
 
