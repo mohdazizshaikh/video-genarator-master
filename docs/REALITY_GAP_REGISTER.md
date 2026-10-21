@@ -1,12 +1,12 @@
 # Durable Content Factory — Reality Gap Register
 
-**Status date:** 2026-08-24  
+**Status date:** 2026-10-21  
 **Canonical checkout:** `/Users/admin/Documents/short-video-creator-master`  
 **Purpose:** Replace optimistic or conflicting completion language with an evidence-based statement of what is implemented, what is only partially implemented, and what must be built before production deployment.
 
 ## Executive conclusion
 
-The current checkout is a broad creator application with a newer React/Express interface, many content engines, Redis/BullMQ support, FFmpeg/Whisper-based media processing, and substantial fail-closed authentication and tenant-isolation work. It is **not yet a durable multi-tenant Content Factory**. The durable target still requires PostgreSQL authority, MinIO/S3 artifact storage, durable job events, release-control state, provider lifecycle management, complete authenticated UI propagation, observability, backup/restore drills, and production acceptance traffic.
+The current checkout is a broad creator application with a newer React/Express interface, many content engines, Redis/BullMQ support, FFmpeg/Whisper-based media processing, and substantial fail-closed authentication and tenant-isolation work. It is **not yet a durable multi-tenant Content Factory**. The durable target still requires PostgreSQL authority, MinIO/S3 artifact storage, durable job events, release-control state, provider lifecycle management, complete authenticated UI propagation, observability, off-host backup replication with durable-store disaster recovery, and production acceptance traffic.
 
 The recent work improved the security boundary, but it did not create those missing systems. File-backed JSON remains the effective application persistence, local filesystem paths remain the effective media authority, and the Compose stack contains the application and Redis only. Therefore, healthy Docker status and passing tests must be interpreted as **current-scope validation**, not production readiness.
 
@@ -16,6 +16,7 @@ The recent work improved the security boundary, but it did not create those miss
 |---|---|---|
 | Runtime | Docker Compose runs `ace-app` and `ace-redis` on port `3123`; health endpoint returns 200 | Development/beta runtime is healthy |
 | Persistence | `src/db` and service stores remain JSON/file-backed; no PostgreSQL client or migration runner is present | Prototype persistence; not horizontally durable |
+| Backup / DR | Encrypted full-data backups (stores + media + encrypted connector secrets) with checksum manifests, retention, fail-closed restore, and a live isolated-app restore rehearsal; archives are local-only and Redis queue state is excluded | File-backed recovery proven locally; off-host replication open |
 | Object storage | Generated, filtered, repurposed, and video paths remain local filesystem paths; owner-aware prefixes are interim controls | Safer local artifacts; MinIO not implemented |
 | Authentication | `requireAuth` protects many API namespaces; missing/invalid credentials fail closed on covered routes | Strong progress, but route/client coverage still requires acceptance testing |
 | Tenant isolation | Many repositories and workers derive tenant ownership; legacy unowned records are quarantined on covered boundaries | Substantial coverage, not proven universal |
@@ -37,7 +38,7 @@ The recent work improved the security boundary, but it did not create those miss
 | G-06 | P1 | Artifact manifests are not wired to producers | The manifest seam exists, but generated outputs are not yet registered as authoritative records | Image/filter/repurpose/render producers register manifests with checksum and tenant ownership; reads resolve through scoped manifests |
 | G-07 | P1 | Job orchestration is only partially durable | Publish retry terminality is a single contract (the release route uses the publish queue's attempt budget; the worker dead-letters only at BullMQ exhaustion) with a live two-attempt terminal drill; publish failures are classified into bounded retry classes (invalid credentials, lost permissions, and rejected payloads fail fast on the first attempt via `discard`, rate limits honor provider retry-after bounded to two deferrals) with live fail-fast and operator-recovery evidence; kill-mid-upload/restart published exactly once with a stalled-job resume; a kill-mid-render drill resumed via stalled detection to exactly one artifact, one render record, and one completion event; dead-lettered targets recover through operator re-queue; lifecycle events now align with the publish-start counter. Ambiguous provider-outcome reconciliation and automatic DLQ retry remain unproven | Kill/restart tests prove no duplicate publish/render, deterministic retry, DLQ recovery, and event ordering |
 | G-08 | P1 | Observability and cost controls are incomplete | AI/provider spend, latency, queue saturation, and failure rates cannot be operated safely at scale | Structured metrics/traces/log correlation, per-tenant usage/cost ledger, alerts, and dashboards pass a runbook drill |
-| G-09 | P1 | Backup, restore, and disaster recovery are not proven | A backup script is not evidence of recoverability | Automated backup encryption/retention, restore rehearsal, RPO/RTO evidence, and rollback procedure pass |
+| G-09 | P1 | Backup and restore are proven only for the file-backed scope | A backup script is not evidence of recoverability; host loss still destroys local-only archives | Encrypted full backups (stores, media, encrypted connector secrets), checksum manifests, retention, fail-closed restore, isolated-app rehearsal, measured RPO/RTO, and rollback pass for the file-backed scope; off-host replication and Redis/durable-store recovery remain open |
 | G-10 | P1 | Frontend workflow completion is uneven | Engines/pages existing does not mean the creator can finish a reliable end-to-end job | Authenticated UI journeys pass: create → generate → review → approve → render → publish → observe → recover |
 | G-11 | P2 | RAG/vector learning and cross-run intelligence are incomplete | AI-learning files do not equal durable retrieval, evaluation, or model governance | Versioned embeddings/index, tenant scope, evaluation set, feedback loop, rollback, and cost limits pass |
 | G-12 | P2 | Quality, Approval, Rights, and release workflows are incomplete | Content Factory governance cannot rely on individual engines alone | Rights checks, approval states, audit trail, release gates, and UI timeline pass |
@@ -58,7 +59,7 @@ These statements are deliberately narrower than “production-ready.” They des
 4. Establish one durable BullMQ/job-event contract with idempotency, retries, DLQ replay, and creator-facing timeline events.
 5. Complete provider OAuth/credential lifecycle and one full owner-configured publish path.
 6. Finish authenticated UI migration and run real two-tenant acceptance journeys.
-7. Add observability, cost controls, backups/restore, load tests, rollback drills, and only then consider controlled cutover.
+7. Add observability, cost controls, off-host backup replication, load tests, rollback drills, and only then consider controlled cutover.
 
 ## Non-goals and explicit prohibitions
 
