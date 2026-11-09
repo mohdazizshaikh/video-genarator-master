@@ -1,0 +1,5 @@
+{
+  "scripts/migrations/backup.mjs": "88d019bd7b6000d33d028c342b9ee0d2c9a1d402bd77bc14ec89a8536fab1254",
+  "src/integration/MigrationBackup.test.ts": "66be8ad2299c756d2d1406adac3eadaf7b95b5189b1d6f9abb054685e647de4a",
+  "docs/MIGRATION_RUNBOOK.md": "a16d5982dd854a4e6b5b003660f8e2fcdc94e5e6e717ef2c0c2171a3d113da1f"
+}

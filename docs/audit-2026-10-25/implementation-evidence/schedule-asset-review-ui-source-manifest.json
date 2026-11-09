@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-29",
+  "files": [
+    {
+      "path": "src/ui/pages/SchedulePersistPage.tsx",
+      "sha256": "854c9c06622206f1140cf12b542c91c190f65d0997c8ffd8fd2a6e2124f9ea3a"
+    },
+    {
+      "path": "src/ui/components/scheduler/ScheduleAssetReview.tsx",
+      "sha256": "4afde5425a01b410df210cdae6eb2338358d183f62842cd77aee852626b529ab"
+    },
+    {
+      "path": "src/ui/components/scheduler/ScheduleAssetReview.test.tsx",
+      "sha256": "92d712ab3b506c462150dd5bd4ad239f7cac2ae5f0ed1c987866c0ba86523845"
+    }
+  ]
+}

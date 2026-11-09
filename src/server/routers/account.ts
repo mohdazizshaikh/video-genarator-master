@@ -1,28 +1,37 @@
+import {
+  TenantEngineScope,
+  tenantEngineAt,
+} from "../../services/TenantEngineScope";
 import { Router } from "express";
 import type { Request, Response } from "express";
 import type { Config } from "../../config";
 import { AccountManagerEngine } from "../../services/AccountManagerEngine";
 import { logger } from "../../logger";
-import { requireAuth } from "../auth";
+import { requireAuth, requireWorkspace } from "../auth";
 
 export class AccountRouter {
   readonly router: Router;
-  private engine: AccountManagerEngine;
+  private scoped: TenantEngineScope<{ engine: AccountManagerEngine }>;
 
   constructor(config: Config) {
     this.router = Router();
-    this.engine = new AccountManagerEngine(config.dataDirPath);
+    this.scoped = new TenantEngineScope(config.dataDirPath, (directory) => ({
+      engine: tenantEngineAt(directory, AccountManagerEngine),
+    }));
     this.registerRoutes();
   }
 
   private registerRoutes() {
-    this.router.use(requireAuth);
+    this.router.use(requireAuth, requireWorkspace);
 
     this.router.post("/metrics", (req: Request, res: Response) => {
       try {
-        const { totalVideos = 10, totalViews = 5000, totalEngagement = 250, followersGained = 50 } = req.body;
+        const { totalVideos = 10, totalViews = 5000, totalEngagement = 250, followersGained = 50,
+        } = req.body;
 
-        const metrics = this.engine.calculateAccountMetrics(
+        const metrics = this.scoped
+          .forRequest(req)
+          .engine.calculateAccountMetrics(
           totalVideos,
           totalViews,
           totalEngagement,
@@ -40,7 +49,9 @@ export class AccountRouter {
       try {
         const { metrics } = req.body;
         if (!metrics) return res.status(400).json({ error: "metrics required" });
-        const guidance = this.engine.getAccountGuidance(metrics);
+        const guidance = this.scoped
+          .forRequest(req)
+          .engine.getAccountGuidance(metrics);
         res.json({ guidance });
       } catch (err) {
         logger.error({ err }, "POST /account/guidance failed");
@@ -48,9 +59,9 @@ export class AccountRouter {
       }
     });
 
-    this.router.get("/load", (_req, res) => {
+    this.router.get("/load", (req, res) => {
       try {
-        const metrics = this.engine.loadMetrics();
+        const metrics = this.scoped.forRequest(req).engine.loadMetrics();
         if (!metrics) {
           return res.json({
             metrics: {
@@ -72,7 +83,7 @@ export class AccountRouter {
 
     this.router.post("/save", (req, res) => {
       try {
-        this.engine.saveMetrics(req.body);
+        this.scoped.forRequest(req).engine.saveMetrics(req.body);
         res.json({ success: true });
       } catch (err) {
         logger.error({ err }, "POST /account/save failed");

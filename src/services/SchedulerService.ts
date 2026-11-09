@@ -1,15 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
- * SchedulerService – Phase 6.1
- *
- * node-cron job that periodically:
- *   1. Fetches new RSS reports
- *   2. Creates ScriptPlan entries
- *   3. Enqueues RenderJobs on the BullMQ render_queue
- *
- * When Redis is disabled, jobs are dispatched directly via ShortCreator.addToQueue()
- * to preserve backward-compatibility.
+ * Source automation creates workspace-owned content drafts for review.
+ * Manual render enqueue uses BullMQ when enabled. Without Redis, render jobs
+ * are stored for visibility and require an execution path; this is not an
+ * automatic in-memory render fallback.
  */
 import cron from "node-cron";
 import cuid from "cuid";
@@ -37,6 +32,8 @@ export class SchedulerService {
   private intelligence: ContentIntelligenceEngine;
   private aiLlm: AiLlmGenerator;
   private running = false;
+  private stopping = false;
+  private drainWaiters = new Set<() => void>();
   private inFlightCategorySlot = new Set<string>();
 
   constructor(
@@ -52,6 +49,7 @@ export class SchedulerService {
   }
 
   start(): void {
+    this.stopping = false;
     if (!cron.validate(this.config.cronInterval)) {
       logger.error({ cronInterval: this.config.cronInterval }, "Invalid cron expression – SchedulerService NOT started");
       return;
@@ -71,18 +69,20 @@ export class SchedulerService {
   }
 
   stop(): void {
+    this.stopping = true;
     this.task?.stop();
     logger.info("SchedulerService stopped");
   }
 
   async runOnce(): Promise<{ rules: number; drafts: number; skipped: number }> {
-    if (this.running) return { rules: 0, drafts: 0, skipped: 0 };
+    if (this.running || this.stopping) return { rules: 0, drafts: 0, skipped: 0 };
     this.running = true;
     let drafts = 0;
     let skipped = 0;
     try {
       const rules = this.automationRules.listEnabled();
       for (const rule of rules) {
+        if (this.stopping) break;
         const result = await this.processRule(rule);
         drafts += result.drafts;
         skipped += result.skipped;
@@ -91,7 +91,15 @@ export class SchedulerService {
       return { rules: rules.length, drafts, skipped };
     } finally {
       this.running = false;
+      for (const resolve of this.drainWaiters) resolve();
+      this.drainWaiters.clear();
     }
+  }
+
+  close(): Promise<void> {
+    this.stop();
+    if (!this.running) return Promise.resolve();
+    return new Promise<void>((resolve) => this.drainWaiters.add(resolve));
   }
 
   private async tick(): Promise<void> {
@@ -104,6 +112,7 @@ export class SchedulerService {
     let drafts = 0;
     let skipped = 0;
     for (const story of stories.slice(0, rule.maxDraftsPerTick)) {
+      if (this.stopping) break;
       const sourceKey = story.link || `${story.sourceId || "source"}:${story.title}`;
       const signature = crypto.createHash("sha256").update(`${rule.tenantId}:${sourceKey}`.toLowerCase()).digest("hex");
       try {
@@ -160,7 +169,9 @@ export class SchedulerService {
     namingKey?: string;
   }): Promise<string> {
     // Phase 6.4: guard duplicate category-slot in-flight work
-    const slotKey = `${params.category}:${params.orientation}:${params.videoType ?? "short"}`;
+    if (this.stopping) throw new Error("Scheduler is shutting down");
+    if (!params.tenantId?.trim()) throw new Error("Render job workspace is required");
+    const slotKey = `${params.tenantId}:${params.category}:${params.orientation}:${params.videoType ?? "short"}`;
     if (this.inFlightCategorySlot.has(slotKey)) {
       throw new Error(`Duplicate in-flight category slot: ${slotKey}`);
     }

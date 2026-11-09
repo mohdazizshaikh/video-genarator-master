@@ -1,0 +1,417 @@
+{
+  "stores": [
+    {
+      "name": "abVariants.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "ai-learning-events.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "ai-learning-model.json",
+      "bytes": 249,
+      "sha256": "6da02225433f152959b524566451bf8ec8166432c5fa70a1c92b0ddccc21d5f2",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "unknown"
+    },
+    {
+      "name": "analytics.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "audienceTargets.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "auth-tenants.json",
+      "bytes": 3879,
+      "sha256": "252109486c8c1e3d726d485363b3b4acff80ae54b34ed6d412020d0ac61a6b24",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "explicit_registry"
+    },
+    {
+      "name": "branding.json",
+      "bytes": 967,
+      "sha256": "4896416bc71f4517931eef04cfdba5ba2489ff67efc8c8a3a39ae99040e97316",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "unknown"
+    },
+    {
+      "name": "channelConfigs.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "connector-secrets.json",
+      "bytes": 625,
+      "sha256": "03286c3996c383401ec6e9bcc2b9174053a94262b5af6678b7f4ff0207b32f82",
+      "validJson": true,
+      "records": 2,
+      "tenantKeyCounts": {
+        "tenant_1787792611681_6y0fo7": 1,
+        "tenant_1792272396058_rr2ne5": 1
+      },
+      "classification": "owned_array"
+    },
+    {
+      "name": "connectors.json",
+      "bytes": 2501,
+      "sha256": "4fc00901dc51401e780bdc878678c2ab32c13999fea26ea7d89b4dd703c3c5f6",
+      "validJson": true,
+      "records": 5,
+      "tenantKeyCounts": {
+        "tenant_1787792611681_6y0fo7": 2,
+        "tenant_1792272396058_rr2ne5": 3
+      },
+      "classification": "workspace_relations"
+    },
+    {
+      "name": "content-versions.json",
+      "bytes": 5707,
+      "sha256": "4a4721ef277602259b76347da212bf9c1c3dcb0bd610090ad14dccc583d06a4c",
+      "validJson": true,
+      "records": 3,
+      "tenantKeyCounts": {
+        "tenant_1787792611681_6y0fo7": 1,
+        "tenant_1792272396058_rr2ne5": 2
+      },
+      "classification": "workspace_relations"
+    },
+    {
+      "name": "contentAutomationRules.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "unknown"
+    },
+    {
+      "name": "customNewsSources.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "unknown"
+    },
+    {
+      "name": "hook-library.json",
+      "bytes": 7297,
+      "sha256": "2136a683f28f4c8c109a2cd4e8e154e62dfc67be35df3eb8d8b479ea0fe7f66c",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "unknown"
+    },
+    {
+      "name": "job-event-outbox.json",
+      "bytes": 12005,
+      "sha256": "c688fb1ca990a43ea3ecaeae3bcd517afd0fd0714fd52c991657513063b0461b",
+      "validJson": true,
+      "records": 34,
+      "tenantKeyCounts": {
+        "tenant_1787792611681_6y0fo7": 8,
+        "tenant_1792272396058_rr2ne5": 26
+      },
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "job-events.json",
+      "bytes": 12589,
+      "sha256": "19c09a7ca334d83af1a1010575c69d90b8f8d00be7d5323fbdaf2273513bd38a",
+      "validJson": true,
+      "records": 34,
+      "tenantKeyCounts": {
+        "tenant_1787792611681_6y0fo7": 8,
+        "tenant_1792272396058_rr2ne5": 26
+      },
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "knowledge-base.json",
+      "bytes": 7009,
+      "sha256": "710c4ae29e43464958058b9679b7a30e1205370bf2925ace5553ece9b317c135",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "unknown"
+    },
+    {
+      "name": "pipeline-comparisons.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "pipeline-jobs.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "pipeline-variations.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "publishAttempts.json",
+      "bytes": 2950,
+      "sha256": "5cbad9a46a48f4d808f4131dd2a9bfbaa2ba16ef8fb1f141628f05e38e865076",
+      "validJson": true,
+      "records": 11,
+      "tenantKeyCounts": {
+        "tenant_1792272396058_rr2ne5": 11
+      },
+      "classification": "derived_from_publish_job"
+    },
+    {
+      "name": "publishJobs.json",
+      "bytes": 5455,
+      "sha256": "34075cf9b32c0b3eb69eb7c1938fb8c01fceec2173f9abf7d49bb07a12675e23",
+      "validJson": true,
+      "records": 8,
+      "tenantKeyCounts": {
+        "tenant_1792272396058_rr2ne5": 8
+      },
+      "classification": "owned_array"
+    },
+    {
+      "name": "releases.json",
+      "bytes": 4637,
+      "sha256": "dce513d3c743ed3055b1c1dad4c81c2b6b5f7035757c6ad4f39a170995da6b91",
+      "validJson": true,
+      "records": 9,
+      "tenantKeyCounts": {
+        "tenant_1787792611681_6y0fo7": 1,
+        "tenant_1792272396058_rr2ne5": 8
+      },
+      "classification": "workspace_relations"
+    },
+    {
+      "name": "renderJobs.json",
+      "bytes": 3616,
+      "sha256": "af445300b29b1e9d016b0436a03cdd13db35534f582478de5f3e6e0c695abd98",
+      "validJson": true,
+      "records": 7,
+      "tenantKeyCounts": {
+        "tenant_1787792611681_6y0fo7": 4,
+        "tenant_1792272396058_rr2ne5": 1
+      },
+      "classification": "owned_array"
+    },
+    {
+      "name": "reports.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "resource-snapshots.json",
+      "bytes": 474,
+      "sha256": "454edd34ff30152d6addd7820059c5dbf6247bff064c1b8bed3cd681ae117e99",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "unknown"
+    },
+    {
+      "name": "schedules.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "scriptPlans.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "tenantUsage.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "tenants.json",
+      "bytes": 1439,
+      "sha256": "5de9e5ed7ef4fbf9f48019babc64a823e4f28400ff33ca8edf2147009d70504a",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "unknown"
+    },
+    {
+      "name": "videoLibrary.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "validJson": true,
+      "records": 0,
+      "tenantKeyCounts": {},
+      "classification": "direct_tenant_array"
+    },
+    {
+      "name": "videoMetadata.json",
+      "bytes": 6248,
+      "sha256": "8596fd396791a2b851575757597f1a1ddd9acf8e2e59f21fcd886170a7e5b298",
+      "validJson": true,
+      "records": 6,
+      "tenantKeyCounts": {
+        "tenant_1787792611681_6y0fo7": 4,
+        "tenant_1792272396058_rr2ne5": 2
+      },
+      "classification": "direct_tenant_array"
+    }
+  ],
+  "issues": [
+    {
+      "file": "ai-learning-model.json",
+      "code": "unreviewed_store_policy"
+    },
+    {
+      "file": "branding.json",
+      "code": "unreviewed_store_policy"
+    },
+    {
+      "file": "contentAutomationRules.json",
+      "code": "unreviewed_store_policy"
+    },
+    {
+      "file": "customNewsSources.json",
+      "code": "unreviewed_store_policy"
+    },
+    {
+      "file": "hook-library.json",
+      "code": "unreviewed_store_policy"
+    },
+    {
+      "file": "knowledge-base.json",
+      "code": "unreviewed_store_policy"
+    },
+    {
+      "file": "renderJobs.json",
+      "code": "missing_owner",
+      "collection": "renderJobs",
+      "index": 1
+    },
+    {
+      "file": "renderJobs.json",
+      "code": "missing_owner",
+      "collection": "renderJobs",
+      "index": 2
+    },
+    {
+      "file": "resource-snapshots.json",
+      "code": "unreviewed_store_policy"
+    },
+    {
+      "file": "tenants.json",
+      "code": "unreviewed_store_policy"
+    },
+    {
+      "file": "connector-secrets.json",
+      "code": "owner_absent_from_workspace_registry"
+    },
+    {
+      "file": "connectors.json",
+      "code": "owner_absent_from_workspace_registry"
+    },
+    {
+      "file": "content-versions.json",
+      "code": "owner_absent_from_workspace_registry"
+    },
+    {
+      "file": "job-event-outbox.json",
+      "code": "owner_absent_from_workspace_registry"
+    },
+    {
+      "file": "job-events.json",
+      "code": "owner_absent_from_workspace_registry"
+    },
+    {
+      "file": "releases.json",
+      "code": "owner_absent_from_workspace_registry"
+    },
+    {
+      "file": "renderJobs.json",
+      "code": "owner_absent_from_workspace_registry"
+    },
+    {
+      "file": "videoMetadata.json",
+      "code": "owner_absent_from_workspace_registry"
+    }
+  ],
+  "unknownStores": [
+    "ai-learning-model.json",
+    "branding.json",
+    "contentAutomationRules.json",
+    "customNewsSources.json",
+    "hook-library.json",
+    "knowledge-base.json",
+    "resource-snapshots.json",
+    "tenants.json"
+  ],
+  "excludedNamespaces": [
+    {
+      "name": "libs/whisper",
+      "reason": "runtime_dependency_source",
+      "ownershipAssessed": false
+    }
+  ],
+  "workspaceRegistryChecked": true,
+  "pass": false
+}

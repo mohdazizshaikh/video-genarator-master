@@ -6,6 +6,7 @@
  * server authentication. A 401 clears the persisted session and lets Layout
  * redirect the user to secure onboarding.
  */
+import { isApiOrigin } from "./apiOrigin";
 import { useAuthStore } from "../store/authStore";
 
 export async function authenticatedFetch(
@@ -14,14 +15,29 @@ export async function authenticatedFetch(
 ): Promise<Response> {
   const token = useAuthStore.getState().token;
   const headers = new Headers(init.headers);
-  if (!headers.has("Authorization") && token) {
+  const trustedOrigin = isApiOrigin(input);
+  if (!headers.has("Authorization") && token && trustedOrigin) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
+  if (
+    !trustedOrigin &&
+    token &&
+    headers.get("Authorization") === `Bearer ${token}`
+  )
+    headers.delete("Authorization");
   const response = await fetch(input, { ...init, headers });
-  if (response.status === 401) {
+  if (trustedOrigin && token !== useAuthStore.getState().token)
+    throw new Error("Session changed while the request was in flight");
+  if (
+    trustedOrigin &&
+    response.status === 401 &&
+    token &&
+    token === useAuthStore.getState().token
+  ) {
     useAuthStore.getState().logout();
-    window.dispatchEvent(new CustomEvent("auth-expired"));
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new CustomEvent("auth-expired"));
   }
   return response;
 }

@@ -1,35 +1,25 @@
-/**
- * PublishWorker – Phase 4.1 / 5.1
- *
- * BullMQ worker that processes publish_queue jobs.
- * Concurrency = 3 (different platforms can run in parallel).
- * Retries up to 2 times with exponential backoff, then deadletter.
- */
-import { Worker, Job, DelayedError } from "bullmq";
-import { Config } from "../config";
+import { observeWorker } from "./WorkerHealth";
+import { Worker, Job, DelayedError, UnrecoverableError } from "bullmq";
+import type { Config } from "../config";
 import { PublishJobStore } from "../db/PublishJobStore";
+import { PublishExecutionStore, type PublishBinding } from "../db/PublishExecutionStore";
 import { ReleaseStore } from "../db/ReleaseStore";
 import { ConnectorStore } from "../db/ConnectorStore";
 import { ConnectorSecretStore } from "../db/ConnectorSecretStore";
 import { JobEventStore } from "../db/JobEventStore";
 import { JobEventOutboxStore } from "../db/JobEventOutboxStore";
 import { JobLifecycleEventService } from "../services/JobLifecycleEventService";
+import { ReleaseAuthorization } from "../services/ReleaseAuthorization";
+import { PublishDeliveryService, PublicationReconciliationError } from "../services/PublishDeliveryService";
+import { WorkerTaskDrain } from "./WorkerTaskDrain";
 import { logger } from "../logger";
 import { getRedisConnection, QUEUE_NAMES } from "./QueueManager";
 import { isTerminalAttempt } from "./attemptBudget";
 import type { PlatformType } from "../types/shorts";
 import { enforcePlatformMetadataLimits, validatePublishPayload } from "../publishers/PlatformLimits";
-import {
-  CONFIG_SECRET_FIELDS,
-  PublishFailureError,
-  classifyFailure,
-  collectSecretValues,
-  sanitizeProviderMessage,
-  toPublishFailureError,
-} from "../publishers/failureClassification";
+import { CONFIG_SECRET_FIELDS, PublishFailureError, collectSecretValues, sanitizeProviderMessage, toPublishFailureError } from "../publishers/failureClassification";
 
 export interface PublishJobPayload {
-  /** Auth-derived tenant owner; legacy jobs without this field cannot access accounts. */
   tenantId?: string;
   publishJobId: string;
   renderOutputPath: string;
@@ -42,313 +32,169 @@ export interface PublishJobPayload {
   language: string;
   thumbnailPath?: string;
   scheduleAt?: string;
-  /** Optional profile account id. Legacy compatibility path only. */
   accountId?: string;
-  /** Target identity for the approved workspace-owned release path. */
   releaseTargetId?: string;
   connectorId?: string;
   destinationId?: string;
-  /** Bounded count of provider rate-limit deferrals already used (P1-03). */
   rateLimitDefers?: number;
 }
-
-// Retry terminality follows the shared contract in `attemptBudget.ts`.
-
-/**
- * How many times a provider rate-limit (429 + retry-after) may defer a job
- * instead of consuming its BullMQ attempt budget. Bounded so a provider that
- * keeps rate-limiting cannot postpone a job indefinitely.
- */
 const MAX_RATE_LIMIT_DEFERS = 2;
 
 export class PublishWorker {
   private worker: Worker;
+  private health: ReturnType<typeof observeWorker>;
+  private eventTasks = new WorkerTaskDrain("publish");
   private publishJobStore: PublishJobStore;
   private lifecycleEvents: JobLifecycleEventService;
   private releaseStore: ReleaseStore;
   private connectorStore: ConnectorStore;
   private connectorSecrets?: ConnectorSecretStore;
-  /** Provider secrets from global config; used to redact operator-facing failure messages. */
-  private readonly configSecretValues: string[];
+  private configSecretValues: string[];
+  private delivery: PublishDeliveryService;
+  private executions: PublishExecutionStore;
 
   constructor(private config: Config) {
     this.publishJobStore = new PublishJobStore(config.dataDirPath);
     this.releaseStore = new ReleaseStore(config.dataDirPath);
     this.connectorStore = new ConnectorStore(config.dataDirPath);
+    this.delivery = new PublishDeliveryService(config.dataDirPath);
+    this.executions = this.delivery.executions;
     this.configSecretValues = collectSecretValues(config as unknown as Record<string, unknown>, CONFIG_SECRET_FIELDS);
-    const connectorSecret = process.env.TENANT_KEYS_SECRET || "";
-    if (connectorSecret.trim()) this.connectorSecrets = new ConnectorSecretStore(config.dataDirPath, connectorSecret);
+    if (process.env.TENANT_KEYS_SECRET?.trim()) this.connectorSecrets = new ConnectorSecretStore(config.dataDirPath, process.env.TENANT_KEYS_SECRET);
     this.lifecycleEvents = new JobLifecycleEventService(new JobEventStore(config.dataDirPath), new JobEventOutboxStore(config.dataDirPath));
+    const concurrency = Math.max(1, config.publishWorkerConcurrency || 3);
+    this.worker = new Worker(QUEUE_NAMES.PUBLISH, (job: Job<PublishJobPayload>, token?: string) => this.processJob(job, token), { connection: getRedisConnection(config), concurrency, stalledInterval: 30000 });
+    this.health = observeWorker(this.worker, "publish", "Publish Worker", QUEUE_NAMES.PUBLISH, Math.max(1, config.publishWorkerConcurrency || 3), () => getRedisConnection(config).status === "ready");
+    this.worker.on("completed", (job) => this.eventTasks.track(() => {
+      if (!job.data.tenantId) return;
+      const target = job.data.releaseTargetId ? this.releaseStore.getTarget(job.data.tenantId, job.data.releaseTargetId) : undefined;
+      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: job.data.publishJobId, type: "completed", attempt: target?.attempts ?? job.attemptsMade ?? 0, payload: { queueJobId: job.id, platform: job.data.platform } });
+    }));
+    this.worker.on("failed", (job, error) => this.eventTasks.track(() => this.failed(job, error)));
+    logger.info({ concurrency }, "PublishWorker started");
+  }
 
-    const publishConcurrency = Math.max(1, this.config.publishWorkerConcurrency || 3);
-    // Phase 4.9: configurable worker scaling
-    this.worker = new Worker(
-      QUEUE_NAMES.PUBLISH,
-      async (job: Job<PublishJobPayload>, token?: string) => this.processJob(job, token),
-      {
-        connection: getRedisConnection(config),
-        concurrency: publishConcurrency,
-        stalledInterval: 30000,
-      },
-    );
+  private binding(data: PublishJobPayload): PublishBinding {
+    if (!data.tenantId || !data.releaseTargetId || !data.connectorId || !data.destinationId) throw new UnrecoverableError("Approved workspace release target is required");
+    const target = this.releaseStore.getTarget(data.tenantId, data.releaseTargetId);
+    if (!target || target.connectorId !== data.connectorId || target.destinationId !== data.destinationId) throw new UnrecoverableError("Release target identity mismatch");
+    const release = this.releaseStore.getRelease(data.tenantId, target.releaseId);
+    if (!release?.approvedContent) throw new UnrecoverableError("Bound release approval is required");
+    return { tenantId: data.tenantId, targetId: target.id, releaseId: target.releaseId, connectorId: target.connectorId, destinationId: target.destinationId, platform: data.platform, contentDigest: release.approvedContent.contentDigest };
+  }
 
-    this.worker.on("completed", (job) => {
-      const target = job.data.releaseTargetId && job.data.tenantId
-        ? this.releaseStore.getTarget(job.data.tenantId, job.data.releaseTargetId)
-        : undefined;
-      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: job.data.publishJobId, type: "completed", attempt: target?.attempts ?? (job.attemptsMade ?? 0), payload: { queueJobId: job.id, platform: job.data.platform } });
-      logger.info(
-        { jobId: job.id, publishJobId: job.data.publishJobId, platform: job.data.platform },
-        "Publish job completed",
-      );
-    });
-
-    this.worker.on("failed", async (job, err) => {
-      if (!job) return;
-      const { publishJobId } = job.data;
-      const attemptsMade = job.attemptsMade ?? 0;
-      // Terminal when the BullMQ attempt budget is exhausted OR the failure is
-      // classified as non-retryable (invalid credentials, lost permissions,
-      // rejected payload) — the latter is discarded in `processJob` so no
-      // further attempts are scheduled.
-      const failure = toPublishFailureError(err, this.configSecretValues);
-      const budgetExhausted = isTerminalAttempt(attemptsMade, job.opts.attempts);
-      const terminal = budgetExhausted || !failure.retryable;
-      const failedTarget = job.data.releaseTargetId && job.data.tenantId
-        ? this.releaseStore.getTarget(job.data.tenantId, job.data.releaseTargetId)
-        : undefined;
-      this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "failed", attempt: failedTarget?.attempts ?? attemptsMade, payload: { error: failure.message, code: failure.code, terminal } });
-
-      await this.publishJobStore.incrementAttemptForTenant(job.data.tenantId ?? "", publishJobId);
-      const record = await this.publishJobStore.getJobForTenant(job.data.tenantId ?? "", publishJobId);
-      const attempts = record?.attemptCount ?? 0;
-
-      if (terminal) {
-        const { createQueue } = await import("./QueueManager.js");
-        const deadletter = createQueue(QUEUE_NAMES.DEADLETTER, this.config);
-        await deadletter.add("publish-deadletter", {
-          type: "publish",
-          jobId: publishJobId,
-          originalQueue: QUEUE_NAMES.PUBLISH,
-          failReason: failure.message,
-          failureCode: failure.code,
-          attemptsMade: attemptsMade,
-          originalJobData: job.data,
-        });
-
-        await this.publishJobStore.updateJobStatusForTenant(job.data.tenantId ?? "", publishJobId, "failed", {
-          error: budgetExhausted ? `Max retries exceeded: ${failure.message}` : `Terminal failure (${failure.code}): ${failure.message}`,
-          attemptCount: attempts,
-        });
-        if (job.data.releaseTargetId && job.data.tenantId) {
-          await this.releaseStore.updateTarget(job.data.tenantId, job.data.releaseTargetId, {
-            status: "failed",
-            lastErrorCode: failure.code,
-          });
-        }
-        logger.error(
-          { publishJobId, platform: job.data.platform, attempts, failureCode: failure.code, failFast: !failure.retryable && !budgetExhausted, err: failure.message },
-          "Publish job moved to dead-letter",
-        );
-      } else {
-        await this.publishJobStore.updateJobStatusForTenant(job.data.tenantId ?? "", publishJobId, "failed", {
-          error: failure.message,
-          attemptCount: attempts,
-        });
-        logger.warn(
-          { publishJobId, platform: job.data.platform, attemptsMade, maxAttempts: job.opts.attempts ?? 1, failureCode: failure.code, err: failure.message },
-          "Publish job failed; BullMQ retry scheduled",
-        );
-      }
-    });
-
-    logger.info("PublishWorker started (concurrency=3)");
+  private async deferUntilDue(job: Job<PublishJobPayload>, token: string | undefined, scheduleAt: string | null | undefined): Promise<void> {
+    if (!scheduleAt) return;
+    const due = Date.parse(scheduleAt);
+    if (!Number.isFinite(due)) {
+      job.discard();
+      throw new PublishFailureError({ code: "payload_rejected", retryable: false, message: "Invalid publish due time" });
+    }
+    if (due > Date.now()) {
+      if (!token) throw new Error("Scheduled publishing requires a queue execution token");
+      await job.moveToDelayed(due, token);
+      throw new DelayedError();
+    }
   }
 
   private async processJob(job: Job<PublishJobPayload>, token?: string): Promise<void> {
-    const { publishJobId, platform, channelId } = job.data;
-    const tenantId = job.data.tenantId;
-    if (!tenantId) throw new Error("Publish job requires an authenticated workspace");
-    let jobSecrets = this.configSecretValues;
-
-    let releaseTarget;
-    let executionAttempt: number | undefined;
-    if (job.data.releaseTargetId) {
-      releaseTarget = this.releaseStore.getTarget(tenantId, job.data.releaseTargetId);
-      if (!releaseTarget) throw new Error("Release target not found for workspace");
-      if (releaseTarget.status === "published") {
-        logger.info({ publishJobId, releaseTargetId: releaseTarget.id }, "Release target already published; skipping duplicate worker execution");
-        return;
-      }
-      // The target's publish-start counter is the stable execution number: each
-      // worker execution — including a stalled re-delivery after a crash — gets
-      // a new value, so lifecycle events are not deduped away by the event
-      // store's jobId:type:attempt idempotency key.
-      releaseTarget = this.releaseStore.updateTarget(tenantId, releaseTarget.id, { status: "publishing" }) ?? releaseTarget;
-      executionAttempt = releaseTarget.attempts;
-    }
-
-    logger.info({ jobId: job.id, publishJobId, platform, channelId }, "PublishWorker processing job");
-
-    this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: publishJobId, type: "publishing", attempt: executionAttempt ?? (job.attemptsMade ?? 0) });
-    await this.publishJobStore.updateJobStatusForTenant(tenantId, publishJobId, "publishing");
-    await job.updateProgress(10);
-
-    // Dynamic import of the right publisher based on platform
+    await this.deferUntilDue(job, token, job.data.scheduleAt);
+    const { tenantId, publishJobId, platform } = job.data;
+    if (!tenantId) throw new UnrecoverableError("Publish job requires an authenticated workspace");
+    const stored = await this.publishJobStore.getJobForTenant(tenantId, publishJobId);
+    if (!stored || stored.releaseTargetId !== job.data.releaseTargetId || stored.connectorId !== job.data.connectorId || stored.destinationId !== job.data.destinationId || stored.platform !== platform) throw new UnrecoverableError("Owned publish job binding is required");
+    await this.deferUntilDue(job, token, stored.scheduleAt);
+    const binding = this.binding(job.data);
+    let secrets = this.configSecretValues;
     try {
-      const { createPublisher } = await import("../publishers/PublisherFactory.js");
-
-      let publisher;
-      if (job.data.connectorId) {
-        if (!job.data.destinationId) throw new Error("Connector publishing requires a destination");
-        const connector = this.connectorStore.getConnector(tenantId, job.data.connectorId);
-        if (!connector || connector.platform !== platform || connector.status !== "connected") {
-          throw new Error("Connected workspace connector not found or provider mismatch");
-        }
-        const destination = this.connectorStore.listDestinations(tenantId, connector.id).find((candidate) => candidate.id === job.data.destinationId);
-        if (!destination || destination.status !== "verified") throw new Error("Verified workspace destination not found");
-        if (!this.connectorSecrets) throw new Error("Workspace connector secret storage is not configured");
-        const credentials = this.connectorSecrets.get(tenantId, connector.id);
-        if (!credentials || Object.keys(credentials).length === 0) throw new Error("Workspace connector credentials are unavailable");
-        jobSecrets = [...this.configSecretValues, ...collectSecretValues(credentials as Record<string, unknown>)];
-        const connectorCredentials = {
-          ...credentials,
-          ...(platform === "telegram" ? { channelId: destination.externalDestinationId } : {}),
-        };
-        const { createPublisherForAccount } = await import("../publishers/PublisherFactory.js");
-        publisher = createPublisherForAccount(platform, this.config, connectorCredentials);
-      } else if (job.data.accountId) {
-        const { ProfileService } = await import("../services/ProfileService.js");
-        const service = new ProfileService(
-          this.config.dataDirPath,
-          process.env.TENANT_KEYS_SECRET || "",
-        );
-        const credentials = await service.getAccountCredentials(job.data.tenantId ?? "", job.data.accountId);
-        const account = await service.getAccount(job.data.tenantId ?? "", job.data.accountId);
-        if (!account || account.provider !== platform) {
-          throw new Error(`Account ${job.data.accountId} not found or provider mismatch`);
-        }
-        if (!credentials || Object.keys(credentials).length === 0) {
-          throw new Error(`Account ${job.data.accountId} has no stored credentials`);
-        }
-        jobSecrets = [...this.configSecretValues, ...collectSecretValues(credentials as Record<string, unknown>)];
-        const { createPublisherForAccount } = await import("../publishers/PublisherFactory.js");
-        publisher = createPublisherForAccount(platform, this.config, credentials);
-      } else {
-        publisher = createPublisher(platform, this.config);
-      }
-
-      const credentialsValid = await publisher.validateCredentials();
-      if (!credentialsValid) {
-        // Retrying cannot repair invalid credentials; fail fast to dead-letter
-        // so the operator sees the target failed and can rotate the secret.
-        throw new PublishFailureError({
-          code: "credentials_invalid",
-          retryable: false,
-          message: sanitizeProviderMessage(`Publisher credentials invalid for platform: ${platform}`, jobSecrets),
-        });
-      }
-
-      const rawParams = {
-        videoFilePath: job.data.renderOutputPath,
-        title: job.data.title,
-        description: job.data.description,
-        tags: job.data.tags,
-        category: job.data.category,
-        language: job.data.language,
-        thumbnailPath: job.data.thumbnailPath,
-        scheduleAt: job.data.scheduleAt ? new Date(job.data.scheduleAt) : undefined,
-      };
-
-      const payloadValidation = validatePublishPayload(platform, rawParams);
-      if (!payloadValidation.valid) {
-        throw new PublishFailureError({
-          code: "payload_rejected",
-          retryable: false,
-          message: sanitizeProviderMessage(`Platform limit validation failed: ${payloadValidation.errors.join("; ")}`, jobSecrets),
-        });
-      }
-
-      const publishParams = enforcePlatformMetadataLimits(platform, rawParams);
-
+      // Receipt replay precedes artifact/credential checks: an already accepted
+      // publication remains a fact even if a token expires or media is removed.
+      if (await this.delivery.recover(binding, publishJobId)) return;
+      new ReleaseAuthorization(this.config.dataDirPath).authorizeDestination(tenantId, binding.releaseId, binding.connectorId, binding.destinationId);
+      const authorized = new ReleaseAuthorization(this.config.dataDirPath).authorize(tenantId, binding.releaseId);
+      const connector = this.connectorStore.getConnector(tenantId, binding.connectorId);
+      const connectorPlatform = connector?.platform === "twitter" ? "x" : connector?.platform;
+      if (!connector || connectorPlatform !== platform || connector.status !== "connected") throw new PublishFailureError({ code: "permission_denied", retryable: false, message: "Connected workspace connector is unavailable" });
+      const destination = this.connectorStore.listDestinations(tenantId, connector.id).find((row) => row.id === binding.destinationId && row.status === "verified");
+      if (!destination) throw new PublishFailureError({ code: "permission_denied", retryable: false, message: "Verified workspace destination is unavailable" });
+      const credentials = this.connectorSecrets?.get(tenantId, connector.id);
+      if (!credentials || !Object.keys(credentials).length) throw new PublishFailureError({ code: "credentials_invalid", retryable: false, message: "Workspace connector credentials are unavailable" });
+      secrets = [...secrets, ...collectSecretValues(credentials)];
+      const { createPublisherForAccount } = await import("../publishers/PublisherFactory.js");
+      const publisher = createPublisherForAccount(platform, this.config, { ...credentials, ...(platform === "telegram" ? { channelId: destination.externalDestinationId } : {}) });
+      if (!await publisher.validateCredentials()) throw new PublishFailureError({ code: "credentials_invalid", retryable: false, message: "Publisher credentials are invalid" });
+      const raw = { videoFilePath: authorized.localPath, title: authorized.snapshot.title, description: authorized.snapshot.description, tags: authorized.snapshot.tags, category: authorized.snapshot.category, language: authorized.snapshot.language, scheduleAt: undefined };
+      const validation = validatePublishPayload(platform, raw);
+      if (!validation.valid) throw new PublishFailureError({ code: "payload_rejected", retryable: false, message: "Approved content exceeds platform publishing limits" });
+      const params = enforcePlatformMetadataLimits(platform, raw);
       await job.updateProgress(30);
-
-      const result = job.data.scheduleAt
-        ? await publisher.scheduleVideo(publishParams, new Date(job.data.scheduleAt))
-        : await publisher.uploadVideo(publishParams);
-
-      if (!result.success) {
-        const message = sanitizeProviderMessage(result.error ?? "Unknown publish error", jobSecrets);
-        throw new PublishFailureError(classifyFailure({ code: result.errorCode, message, retryAfterSeconds: result.retryAfterSeconds }));
+      // Credential verification/progress are asynchronous; recheck approval
+      // immediately before claiming a provider request.
+      new ReleaseAuthorization(this.config.dataDirPath).authorizeDestination(tenantId, binding.releaseId, binding.connectorId, binding.destinationId);
+      const receipt = await this.delivery.deliver(binding, publishJobId, () => {
+        const execution = this.executions.get(tenantId, binding.targetId)!;
+        this.lifecycleEvents.emit({ tenantId, jobId: publishJobId, type: "publishing", attempt: execution.attempt, payload: { providerRequestId: execution.requestId } });
+        return publisher.uploadVideo(params);
+      }, secrets);
+      await job.updateProgress(100).catch(() => logger.warn({ publishJobId }, "Publication confirmed but progress telemetry failed"));
+      logger.info({ publishJobId, platform, externalId: receipt.externalId }, "Publication receipt confirmed");
+    } catch (error) {
+      const checkpoint = this.executions.get(tenantId, binding.targetId);
+      if (checkpoint?.state === "accepted") throw error; // Repairable projection failure; never upload again.
+      if (error instanceof PublicationReconciliationError || checkpoint?.state === "dispatching" || checkpoint?.state === "reconciling") {
+        job.discard();
+        throw new UnrecoverableError("Publication outcome requires reconciliation; automatic upload retry is blocked");
       }
-
-      await this.publishJobStore.updateJobStatusForTenant(tenantId, publishJobId, "published", {
-        externalId: result.externalId,
-        publishedUrl: result.publishedUrl,
-      });
-      if (releaseTarget) {
-        await this.releaseStore.updateTarget(tenantId, releaseTarget.id, {
-          status: "published",
-          externalId: result.externalId,
-          publishedUrl: result.publishedUrl,
-        });
+      const classified = toPublishFailureError(error, secrets);
+      const failure = new PublishFailureError({ code: classified.code, retryable: classified.retryable, retryAfterMs: classified.retryAfterMs, message: sanitizeProviderMessage(classified.message, secrets) });
+      const target = this.releaseStore.getTarget(tenantId, binding.targetId);
+      if (failure.retryable && target?.status !== "published") this.releaseStore.updateTarget(tenantId, binding.targetId, { status: "retryable", lastErrorCode: failure.code });
+      await this.publishJobStore.addAttempt({ publishJobId, attemptNumber: checkpoint?.attempt ?? (job.attemptsMade ?? 0) + 1, status: "failed", responseBody: `${failure.code}: ${failure.message}` });
+      if (!failure.retryable) { job.discard(); throw failure; }
+      const defers = job.data.rateLimitDefers ?? 0;
+      if (failure.code === "rate_limited" && failure.retryAfterMs && token && defers < MAX_RATE_LIMIT_DEFERS && !isTerminalAttempt(job.attemptsMade ?? 0, job.opts.attempts)) {
+        const due = Date.now() + failure.retryAfterMs;
+        const scheduleAt = new Date(due).toISOString();
+        await this.publishJobStore.updateJobStatusForTenant(tenantId, publishJobId, "scheduled", { scheduleAt, error: failure.message });
+        await job.updateData({ ...job.data, rateLimitDefers: defers + 1, scheduleAt });
+        await job.moveToDelayed(due, token);
+        throw new DelayedError();
       }
-
-      await this.publishJobStore.addAttempt({
-        publishJobId,
-        attemptNumber: (job.attemptsMade ?? 0) + 1,
-        status: "success",
-        responseBody: result.externalId,
-      });
-
-      await job.updateProgress(100);
-      logger.info({ publishJobId, platform, externalId: result.externalId }, "Published successfully");
-
-    } catch (err) {
-      const failure = toPublishFailureError(err, jobSecrets);
-      if (releaseTarget) {
-        if (failure.retryable) {
-          await this.releaseStore.updateTarget(tenantId, releaseTarget.id, { status: "retryable", lastErrorCode: failure.code });
-        }
-        // Terminal failures keep the target in "publishing" until the failed
-        // handler records the dead-letter and flips it to "failed".
-      }
-      await this.publishJobStore.addAttempt({
-        publishJobId,
-        attemptNumber: (job.attemptsMade ?? 0) + 1,
-        status: "failed",
-        responseBody: `${failure.code}: ${failure.message}`,
-      });
-
-      if (!failure.retryable) {
-        // Discard so BullMQ does not schedule a pointless retry for a failure
-        // that retrying cannot repair.
-        try {
-          job.discard();
-        } catch (discardError) {
-          logger.warn({ publishJobId, err: String(discardError) }, "Failed to discard terminal publish job; a retry may still be scheduled");
-        }
-        throw failure;
-      }
-
-      if (failure.code === "rate_limited" && failure.retryAfterMs && token) {
-        const defers = job.data.rateLimitDefers ?? 0;
-        if (defers < MAX_RATE_LIMIT_DEFERS && !isTerminalAttempt(job.attemptsMade ?? 0, job.opts.attempts)) {
-          await job.updateData({ ...job.data, rateLimitDefers: defers + 1 });
-          await job.moveToDelayed(Date.now() + failure.retryAfterMs, token);
-          logger.warn(
-            { publishJobId, retryAfterMs: failure.retryAfterMs, defers: defers + 1 },
-            "Provider rate limit; deferring next attempt until provider retry-after",
-          );
-          throw new DelayedError();
-        }
-      }
-
-      throw failure; // Let BullMQ handle the bounded retry
+      throw failure;
     }
   }
 
-  async close(): Promise<void> {
-    await this.worker.close();
+  private async failed(job: Job<PublishJobPayload> | undefined, error: Error): Promise<void> {
+    if (!job?.data.tenantId) return;
+    const { tenantId, publishJobId } = job.data;
+    const stored = await this.publishJobStore.getJobForTenant(tenantId, publishJobId);
+    if (!stored || !stored.releaseTargetId || stored.releaseTargetId !== job.data.releaseTargetId || stored.connectorId !== job.data.connectorId || stored.destinationId !== job.data.destinationId || stored.platform !== job.data.platform) return;
+    const binding = this.binding(job.data);
+    const checkpoint = this.executions.get(tenantId, binding.targetId);
+    if (checkpoint?.state === "accepted" || checkpoint?.state === "dispatching" || checkpoint?.state === "reconciling" || this.releaseStore.getTarget(tenantId, binding.targetId)?.status === "reconciling") {
+      try { await this.delivery.recover(binding, publishJobId); }
+      catch (failure) { if (!(failure instanceof PublicationReconciliationError)) throw failure; }
+      this.lifecycleEvents.emit({ tenantId, jobId: publishJobId, type: checkpoint?.state === "accepted" ? "completed" : "reconciling", attempt: checkpoint?.attempt ?? job.attemptsMade ?? 0 });
+      return;
+    }
+    const target = this.releaseStore.getTarget(tenantId, binding.targetId);
+    if (target?.status === "cancelled") {
+      await this.publishJobStore.updateJobStatusForTenant(tenantId, publishJobId, "skipped", { error: "Release target was cancelled" });
+      return;
+    }
+    if (target?.status === "published") return;
+    const failure = toPublishFailureError(error, this.configSecretValues);
+    const terminal = error instanceof UnrecoverableError || !failure.retryable || isTerminalAttempt(job.attemptsMade ?? 0, job.opts.attempts);
+    await this.publishJobStore.incrementAttemptForTenant(tenantId, publishJobId);
+    this.lifecycleEvents.emit({ tenantId, jobId: publishJobId, type: "failed", attempt: checkpoint?.attempt ?? job.attemptsMade ?? 0, payload: { code: failure.code, terminal } });
+    if (terminal) {
+      const { createQueue } = await import("./QueueManager.js");
+      await createQueue(QUEUE_NAMES.DEADLETTER, this.config).add("publish-deadletter", { type: "publish", jobId: publishJobId, originalQueue: QUEUE_NAMES.PUBLISH, failReason: failure.message, failureCode: failure.code, attemptsMade: job.attemptsMade ?? 0, originalJobData: job.data });
+      this.releaseStore.updateTarget(tenantId, binding.targetId, { status: "failed", lastErrorCode: failure.code, retryDisposition: checkpoint?.state === "rejected" ? "not_accepted" : "not_dispatched" });
+    }
+    await this.publishJobStore.updateJobStatusForTenant(tenantId, publishJobId, "failed", { error: failure.message });
   }
+
+  async pause(): Promise<void> { this.health.pause(); await this.worker.pause(true); }
+  async close(): Promise<void> { await this.worker.close(); await this.eventTasks.drain(); }
 }

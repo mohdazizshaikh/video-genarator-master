@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-28",
+  "files": {
+    "src/publishers/FacebookPublisher.ts": "8397ab7fb2f02a5901aacbc7efa25f695605e3ea2cc98d71c6aa6fde7ce98f15",
+    "src/publishers/InstagramPublisher.ts": "624ecb3e30b34ea85b00648c3e6a17ed84c37974e23dbc4e33a30f8a7a9474bc",
+    "src/publishers/graphTransport.ts": "2da625b61f32eae0801d706cf54240be230ade6cb898be48f90abe742507714d",
+    "src/publishers/providerContracts.ts": "852e9d6d96b3467f5b8300f3229d7b681f1cf0865469cbbba3e0d72ea8a900d1",
+    "src/publishers/GraphPublishers.test.ts": "8e52a05fe46e5f511bfff58a5ae6fb23f03f7395c8fe9cb7187b316ebbbb5226",
+    "src/publishers/failureClassification.ts": "6abc2d364a9808126be55c32ecc8829fe8a74bc3cc6384af51f486f22eaa1933",
+    "src/publishers/failureClassification.test.ts": "fdffb1200a3266d47121ae6bf4e90a8b57e4ca4398b41b2b545dd48484e51f43"
+  }
+}

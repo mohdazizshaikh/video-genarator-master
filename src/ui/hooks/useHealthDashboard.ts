@@ -14,8 +14,9 @@ export interface QueueCounts {
 export interface HealthDashboardData {
   status: "ok" | "degraded";
   generatedAt: string;
-  uptime: number;
-  version: string;
+  scope?: "workspace" | "operations";
+  uptime: number | null;
+  version: string | null;
   queue: {
     redisEnabled: boolean;
     totals: {
@@ -38,28 +39,28 @@ export interface HealthDashboardData {
     online: number;
     total: number;
     capacity: number;
-    currentJobs: number;
+    currentJobs: number | null;
     items: Array<{
       id: string;
       label: string;
       queue: string;
       capacity: number;
-      currentJobs: number;
+      currentJobs: number | null;
       online: boolean;
       status: "online" | "offline" | "busy";
     }>;
-  };
+  } | null;
   database: {
     status: "ok" | "degraded";
     engine: string;
     connections: {
-      active: number;
-      max: number;
+      active: number | null;
+      max: number | null;
     };
     latencyMs: number;
     sizeBytes: number;
     files: string[];
-  };
+  } | null;
   redis: {
     status: "ok" | "degraded" | "error" | "disabled";
     enabled: boolean;
@@ -68,13 +69,13 @@ export interface HealthDashboardData {
     memoryPeakBytes: number | null;
     hitRate: number | null;
     keyCount: number;
-  };
+  } | null;
   system: {
     cpuPercent: number;
     memoryPercent: number;
     diskPercent: number;
     loadAverage: number[];
-  };
+  } | null;
   errors: {
     last24h: number;
     trend: Array<{

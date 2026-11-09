@@ -1,3 +1,4 @@
+import { fetchPublicFeed } from "../services/PublicFeedTransport";
 import Parser from "rss-parser";
 import path from "path";
 import { CustomNewsSourceStore, type CustomNewsSourceRecord } from "../db/CustomNewsSourceStore";
@@ -96,6 +97,7 @@ export class RssFetcher {
   constructor(
     basePath: string = process.env.DATA_DIR_PATH || path.join(process.cwd(), "data"),
     private tenantId?: string,
+    private fetchFeed: (url: string) => Promise<string> = fetchPublicFeed,
   ) {
     this.parser = new Parser();
     this.customSourceStore = new CustomNewsSourceStore(basePath);
@@ -124,7 +126,7 @@ export class RssFetcher {
 
   public async validateFeedUrl(feedUrl: string): Promise<{ ok: true; itemCount: number } | { ok: false; reason: string }> {
     try {
-      const feed = await this.parser.parseURL(feedUrl);
+      const feed = await this.parser.parseString(await this.fetchFeed(feedUrl));
       const itemCount = feed.items?.filter((item) => (item.title || item.contentSnippet || item.content || "").trim()).length || 0;
       if (itemCount === 0) {
         return { ok: false, reason: "Feed is reachable but contains no usable items" };
@@ -212,7 +214,7 @@ export class RssFetcher {
 
     try {
       console.log(`[RssFetcher] Parsing feed URL: ${source.url}`);
-      const feed = await this.parser.parseURL(source.url);
+      const feed = await this.parser.parseString(await this.fetchFeed(source.url));
       console.log(`[RssFetcher] Fetched ${feed.items?.length || 0} stories from ${source.id}`);
       const stories = (feed.items || []).slice(0, 5).map((item) => ({
         title: item.title || "",

@@ -372,6 +372,7 @@ export type StatusRequest = z.infer<typeof statusRequestSchema>;
 // ─── Phase 4: Queue Job Status Types ────────────────────────────────────────
 export type RenderJobStatus =
   | "scheduled"
+  | "reconciling"
   | "queued"
   | "processing"
   | "ready"
@@ -380,6 +381,7 @@ export type RenderJobStatus =
   | "skipped";
 
 export type PublishJobStatus =
+  | "reconciling"
   | "scheduled"
   | "queued"
   | "publishing"
@@ -392,6 +394,10 @@ export type PlatformType = "youtube" | "telegram" | "instagram" | "facebook" | "
 
 // ─── Phase 4/5: Render Job DB Record ─────────────────────────────────────────
 export interface RenderJobRecord {
+  executionId?: string;
+  videoId?: string;
+  artifactId?: string;
+  contentVersionId?: string;
   /** Auth-derived owner. Legacy records without this field are not tenant-visible. */
   tenantId?: string;
   id: string;
@@ -412,6 +418,9 @@ export interface RenderJobRecord {
 
 // ─── Phase 5: Publish Job DB Record ──────────────────────────────────────────
 export interface PublishJobRecord {
+  releaseTargetId?: string;
+  connectorId?: string;
+  destinationId?: string;
   /** Auth-derived owner. Legacy records without this field are not tenant-visible. */
   tenantId?: string;
   id: string;

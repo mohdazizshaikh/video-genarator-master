@@ -16,6 +16,24 @@ import { Config } from "../config";
 import { MusicManager } from "./music";
 import { LanguageEnum } from "../types/shorts";
 
+// The legacy render tests isolate filesystem-dependent publication metadata;
+// the owned lifecycle integration is exercised with real stores separately.
+vi.mock("../db/ArtifactManifestStore", () => ({
+  ArtifactManifestStore: class {
+    async register() {
+      return { id: "artifact-test" };
+    }
+  },
+}));
+vi.mock("../db/ContentVersionStore", () => ({
+  ContentVersionStore: class {
+    create() {
+      return { id: "version-test" };
+    }
+    updateRender() {}
+  },
+}));
+
 // mock fs-extra
 vi.mock("fs-extra", () => {
   const files = new Map<string, string | Buffer>([
@@ -51,13 +69,19 @@ vi.mock("fs-extra", () => {
       const normalizedPath = normalizePath(targetPath);
       return files.has(normalizedPath) || directories.has(normalizedPath);
     }),
-    writeFileSync: vi.fn((targetPath: string, content: string | Buffer) => {
+    writeFileSync: vi.fn((targetPath: string, content: string | Buffer, options?: { flag?: string } | string) => {
       const normalizedPath = normalizePath(targetPath);
+      if (typeof options === "object" && options.flag === "wx" && files.has(normalizedPath)) throw Object.assign(new Error("File exists"), { code: "EEXIST" });
       files.set(normalizedPath, content);
       const lastSlash = normalizedPath.lastIndexOf("/");
       if (lastSlash > 0) {
         directories.add(normalizedPath.slice(0, lastSlash));
       }
+    }),
+    renameSync: vi.fn((from: string, to: string) => {
+      const content = files.get(normalizePath(from));
+      if (content === undefined) throw new Error("Rename source missing");
+      files.set(normalizePath(to), content); files.delete(normalizePath(from));
     }),
     readFileSync: vi.fn((targetPath: string) => {
       const normalizedPath = normalizePath(targetPath);
@@ -93,9 +117,11 @@ vi.mock("fs-extra", () => {
         .map((filePath) => filePath.slice(prefix.length))
         .filter((fileName) => !fileName.includes("/"));
     }),
-    unlink: vi.fn((_targetPath: string, callback?: (error?: Error | null) => void) => {
-      callback?.(null);
-    }),
+    unlink: vi.fn(
+      (_targetPath: string, callback?: (error?: Error | null) => void) => {
+        callback?.(null);
+      },
+    ),
     removeSync: vi.fn((targetPath: string) => {
       const normalizedPath = normalizePath(targetPath);
       files.delete(normalizedPath);
@@ -256,21 +282,22 @@ test("ShortCreator basic current behavior", async () => {
       {
         text: "test",
         searchTerms: ["test"],
-      language: LanguageEnum.en,
+        language: LanguageEnum.en,
       },
     ],
     {} as any,
     "short",
     "en",
+    "test-workspace",
   );
 
   // list videos while the video is being processed
-  let videos = shortCreator.listAllVideos();
+  let videos = shortCreator.listAllVideos("test-workspace");
   expect(videos.find((v) => v.id === videoId)?.status).toBe("processing");
 
   // create the video file on the file system and check the status again
   fs.writeFileSync(shortCreator.getVideoPath(videoId), "mock video content");
-  videos = shortCreator.listAllVideos();
+  videos = shortCreator.listAllVideos("test-workspace");
   expect(videos.find((v) => v.id === videoId)?.status).toBe("processing");
 
   // resolve the render promise to simulate the video being processed, and check the status again
@@ -279,9 +306,12 @@ test("ShortCreator basic current behavior", async () => {
   let attempts = 0;
   do {
     await new Promise((resolve) => setTimeout(resolve, 25));
-    videos = shortCreator.listAllVideos();
+    videos = shortCreator.listAllVideos("test-workspace");
     attempts += 1;
-  } while (videos.find((v) => v.id === videoId)?.status !== "ready" && attempts < 20);
+  } while (
+    videos.find((v) => v.id === videoId)?.status !== "ready" &&
+    attempts < 20
+  );
 
   expect(videos.find((v) => v.id === videoId)?.status).toBe("ready");
 
@@ -307,9 +337,14 @@ test("ShortCreator renders the requested base video id when subtitleLanguage is 
 
   const config = new Config();
   const remotion = await Remotion.init(config);
-  const renderSpy = vi.spyOn(remotion, "render").mockImplementation(async (_data, id) => {
-    fs.writeFileSync(path.normalize(`${config.videosDirPath}/${id}.mp4`), "mock video content");
-  });
+  const renderSpy = vi
+    .spyOn(remotion, "render")
+    .mockImplementation(async (_data, id) => {
+      fs.writeFileSync(
+        path.normalize(`${config.videosDirPath}/${id}.mp4`),
+        "mock video content",
+      );
+    });
 
   const whisper = await Whisper.init(config);
   vi.spyOn(whisper, "CreateCaption").mockResolvedValue([
@@ -335,11 +370,13 @@ test("ShortCreator renders the requested base video id when subtitleLanguage is 
       {
         text: "This scene has enough content to pass validation.",
         searchTerms: ["markets", "economy"],
-      language: LanguageEnum.en,
+        language: LanguageEnum.en,
       },
     ],
     {} as any,
     "short",
+    undefined,
+    "test-workspace",
   );
 
   let attempts = 0;
@@ -372,12 +409,19 @@ test("ShortCreator continues rendering when Whisper transcription fails", async 
 
   const config = new Config();
   const remotion = await Remotion.init(config);
-  const renderSpy = vi.spyOn(remotion, "render").mockImplementation(async (_data, id) => {
-    fs.writeFileSync(path.normalize(`${config.videosDirPath}/${id}.mp4`), "mock video content");
-  });
+  const renderSpy = vi
+    .spyOn(remotion, "render")
+    .mockImplementation(async (_data, id) => {
+      fs.writeFileSync(
+        path.normalize(`${config.videosDirPath}/${id}.mp4`),
+        "mock video content",
+      );
+    });
 
   const whisper = await Whisper.init(config);
-  vi.spyOn(whisper, "CreateCaption").mockRejectedValue(new Error("Whisper unavailable"));
+  vi.spyOn(whisper, "CreateCaption").mockRejectedValue(
+    new Error("Whisper unavailable"),
+  );
 
   const musicManager = new MusicManager(config);
   const shortCreator = new ShortCreator(
@@ -396,12 +440,13 @@ test("ShortCreator continues rendering when Whisper transcription fails", async 
       {
         text: "This render should still complete even without captions.",
         searchTerms: ["news", "studio"],
-      language: LanguageEnum.en,
+        language: LanguageEnum.en,
       },
     ],
     {} as any,
     "short",
     "en",
+    "test-workspace",
   );
 
   let attempts = 0;
@@ -433,9 +478,14 @@ test("ShortCreator returns the existing video id for duplicate ready videos", as
 
   const config = new Config();
   const remotion = await Remotion.init(config);
-  const renderSpy = vi.spyOn(remotion, "render").mockImplementation(async (_data, id) => {
-    fs.writeFileSync(path.normalize(`${config.videosDirPath}/${id}.mp4`), "mock video content");
-  });
+  const renderSpy = vi
+    .spyOn(remotion, "render")
+    .mockImplementation(async (_data, id) => {
+      fs.writeFileSync(
+        path.normalize(`${config.videosDirPath}/${id}.mp4`),
+        "mock video content",
+      );
+    });
 
   const whisper = await Whisper.init(config);
   vi.spyOn(whisper, "CreateCaption").mockResolvedValue([
@@ -465,7 +515,13 @@ test("ShortCreator returns the existing video id for duplicate ready videos", as
     },
   ];
 
-  const firstVideoId = shortCreator.addToQueue(inputScenes, {} as any, "short", "en");
+  const firstVideoId = shortCreator.addToQueue(
+    inputScenes,
+    {} as any,
+    "short",
+    "en",
+    "test-workspace",
+  );
 
   let attempts = 0;
   let status = shortCreator.status(firstVideoId);
@@ -477,7 +533,13 @@ test("ShortCreator returns the existing video id for duplicate ready videos", as
 
   expect(status).toBe("ready");
 
-  const duplicateVideoId = shortCreator.addToQueue(inputScenes, {} as any, "short", "en");
+  const duplicateVideoId = shortCreator.addToQueue(
+    inputScenes,
+    {} as any,
+    "short",
+    "en",
+    "test-workspace",
+  );
 
   expect(duplicateVideoId).toBe(firstVideoId);
   expect(renderSpy).toHaveBeenCalledTimes(1);
@@ -500,9 +562,14 @@ test("ShortCreator dedupes scenes with only formatting differences", async () =>
 
   const config = new Config();
   const remotion = await Remotion.init(config);
-  const renderSpy = vi.spyOn(remotion, "render").mockImplementation(async (_data, id) => {
-    fs.writeFileSync(path.normalize(`${config.videosDirPath}/${id}.mp4`), "mock video content");
-  });
+  const renderSpy = vi
+    .spyOn(remotion, "render")
+    .mockImplementation(async (_data, id) => {
+      fs.writeFileSync(
+        path.normalize(`${config.videosDirPath}/${id}.mp4`),
+        "mock video content",
+      );
+    });
 
   const whisper = await Whisper.init(config);
   vi.spyOn(whisper, "CreateCaption").mockResolvedValue([
@@ -536,6 +603,7 @@ test("ShortCreator dedupes scenes with only formatting differences", async () =>
     {} as any,
     "short",
     "en",
+    "test-workspace",
   );
 
   let attempts = 0;
@@ -560,6 +628,7 @@ test("ShortCreator dedupes scenes with only formatting differences", async () =>
     {} as any,
     "short",
     "en",
+    "test-workspace",
   );
 
   expect(duplicateVideoId).toBe(firstVideoId);
@@ -583,9 +652,14 @@ test("ShortCreator does not dedupe meaningful variants of the same topic", async
 
   const config = new Config();
   const remotion = await Remotion.init(config);
-  const renderSpy = vi.spyOn(remotion, "render").mockImplementation(async (_data, id) => {
-    fs.writeFileSync(path.normalize(`${config.videosDirPath}/${id}.mp4`), "mock video content");
-  });
+  const renderSpy = vi
+    .spyOn(remotion, "render")
+    .mockImplementation(async (_data, id) => {
+      fs.writeFileSync(
+        path.normalize(`${config.videosDirPath}/${id}.mp4`),
+        "mock video content",
+      );
+    });
 
   const whisper = await Whisper.init(config);
   vi.spyOn(whisper, "CreateCaption").mockResolvedValue([
@@ -619,6 +693,7 @@ test("ShortCreator does not dedupe meaningful variants of the same topic", async
     {} as any,
     "short",
     "en",
+    "test-workspace",
   );
 
   let attempts = 0;
@@ -643,6 +718,7 @@ test("ShortCreator does not dedupe meaningful variants of the same topic", async
     {} as any,
     "short",
     "en",
+    "test-workspace",
   );
 
   attempts = 0;

@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { OrientationEnum } from "./../types/shorts";
-/* eslint-disable @remotion/deterministic-randomness */
 import fs from "fs-extra";
 import cuid from "cuid";
 import path from "path";
@@ -20,6 +19,8 @@ import { Config } from "../config";
 import { logger } from "../logger";
 import { MusicManager } from "./music";
 import { createRenderMediaToken } from "../services/RenderMediaToken";
+import { ArtifactManifestStore } from "../db/ArtifactManifestStore";
+import { ContentVersionStore } from "../db/ContentVersionStore";
 import { VideoMetadataStore } from "../db/VideoMetadataStore";
 import { AiLlmGenerator } from "../script-generator/AiLlmGenerator";
 import { resolveTheme } from "../components/videos/ThemeEngine";
@@ -55,6 +56,8 @@ export class ShortCreator {
     subtitleLanguage?: string;
     tenantId?: string;
   }[] = [];
+  private closing = false;
+  private drainWaiters = new Set<() => void>();
   private ttsAdapter: TtsAdapter;
   private videoMetadataStore: VideoMetadataStore;
   private translator: AiLlmGenerator;
@@ -68,7 +71,8 @@ export class ShortCreator {
     private pexelsApi: PexelsAPI,
     private musicManager: MusicManager,
   ) {
-    this.ttsAdapter = new TtsAdapter(kokoro, config.aiLlmUrl, config.aiLlmModel);
+    this.ttsAdapter = new TtsAdapter(kokoro, config.aiLlmUrl, config.aiLlmModel,
+    );
     this.videoMetadataStore = new VideoMetadataStore(config.dataDirPath);
     this.translator = new AiLlmGenerator(config.aiLlmUrl, config.aiLlmModel);
   }
@@ -89,11 +93,13 @@ export class ShortCreator {
 
   private extractCapitalizedPhrases(text?: string): string[] {
     const source = text || "";
-    const matches = source.match(/\b(?:[A-Z]{2,}|[A-Z][a-z]+)(?:\s+(?:[A-Z]{2,}|[A-Z][a-z]+)){0,3}\b/g) || [];
+    const matches = source.match(/\b(?:[A-Z]{2,}|[A-Z][a-z]+)(?:\s+(?:[A-Z]{2,}|[A-Z][a-z]+)){0,3}\b/g,
+      ) || [];
     return matches
       .map((match) => this.normalizeSearchPhrase(match))
       .filter((match) => match.length >= 4)
-      .filter((match) => !ignoredCapitalizedSearchPhrases.has(match.toLowerCase()));
+      .filter((match) => !ignoredCapitalizedSearchPhrases.has(match.toLowerCase()),
+      );
   }
 
   private inferVisualAnchors(scene: SceneInput, terms: string[]): string[] {
@@ -120,23 +126,28 @@ export class ShortCreator {
     if (/(football|soccer|premier league|goal)/.test(haystack)) {
       addAnchors("football stadium", "soccer player", "match crowd");
     }
-    if (/(market|stocks|earnings|tariff|economy|business|trade|investor)/.test(haystack)) {
+    if (/(market|stocks|earnings|tariff|economy|business|trade|investor)/.test(haystack,
+      )) {
       addAnchors("stock market", "trading screen", "business district");
     }
-    if (/(election|president|prime minister|parliament|war|conflict|diplomacy|summit|government|world)/.test(haystack)) {
+    if (/(election|president|prime minister|parliament|war|conflict|diplomacy|summit|government|world)/.test(haystack,
+      )) {
       addAnchors("press conference", "parliament building", "world leaders");
     }
-    if (/(science|research|lab|laboratory|nasa|space|rocket|climate|satellite)/.test(haystack)) {
+    if (/(science|research|lab|laboratory|nasa|space|rocket|climate|satellite)/.test(haystack,
+      )) {
       addAnchors("science laboratory", "space launch", "scientist research");
     }
-    if (/(ai|technology|tech|startup|software|robot|chip|semiconductor)/.test(haystack)) {
+    if (/(ai|technology|tech|startup|software|robot|chip|semiconductor)/.test(haystack,
+      )) {
       addAnchors("technology lab", "computer server", "circuit board");
     }
 
     return Array.from(anchors).filter((anchor) => !terms.includes(anchor));
   }
 
-  private buildMediaSearchTerms(scene: SceneInput, category?: string): string[] {
+  private buildMediaSearchTerms(scene: SceneInput, category?: string,
+  ): string[] {
     const pipeline = resolveCategoryPipeline(category);
     const keywordTerms = [...(scene.keywords || [])]
       .map((term) => this.normalizeSearchPhrase(term))
@@ -154,17 +165,23 @@ export class ShortCreator {
       .filter(Boolean);
 
     const anchorTerms = this.inferVisualAnchors(scene, baseTerms);
-    const profileTerms = pipeline.mediaPrefixes.map((term) => this.normalizeSearchPhrase(term));
-    const uniqueTerms = Array.from(new Set([...profileTerms, ...baseTerms, ...anchorTerms]))
-      .filter((term) => !pipeline.prohibitedMediaTerms.some((blocked) => term.toLowerCase().includes(blocked.toLowerCase())));
+    const profileTerms = pipeline.mediaPrefixes.map((term) => this.normalizeSearchPhrase(term),
+    );
+    const uniqueTerms = Array.from(new Set([...profileTerms, ...baseTerms, ...anchorTerms]),
+    )
+      .filter((term) => !pipeline.prohibitedMediaTerms.some((blocked) => term.toLowerCase().includes(blocked.toLowerCase()),
+        ),
+    );
 
     const specificityScore = (term: string): number => {
       const normalized = term.trim();
       const wordCount = normalized.split(/\s+/).filter(Boolean).length;
       const keywordBoost = keywordTerms.includes(normalized) ? 250 : 0;
       const subcategoryBoost = scene.subcategory && normalized === this.normalizeSearchPhrase(scene.subcategory) ? 180 : 0;
-      const cueBoost = scene.cues?.some((cue) => (cue.brollSearchTerms || []).includes(normalized)) ? 220 : 0;
-      return (wordCount * 100) + normalized.length + keywordBoost + subcategoryBoost + cueBoost;
+      const cueBoost = scene.cues?.some((cue) => (cue.brollSearchTerms || []).includes(normalized),
+      ) ? 220 : 0;
+      return (wordCount * 100 + normalized.length + keywordBoost + subcategoryBoost + cueBoost
+      );
     };
 
     return uniqueTerms
@@ -187,7 +204,8 @@ export class ShortCreator {
       visualPrompt: this.normalizeSignatureValue(scene.visualPrompt),
       sourceLanguage: scene.sourceLanguage || LanguageEnum.en,
       language: scene.language || LanguageEnum.en,
-      translationTarget: this.normalizeSignatureValue(scene.translationTarget || null),
+      translationTarget: this.normalizeSignatureValue(scene.translationTarget || null,
+      ),
     }));
 
     const payload = {
@@ -215,16 +233,19 @@ export class ShortCreator {
       }
 
       try {
-        const text = await this.translator.translateText(caption.text, sourceLanguage, targetLanguage);
+        const text = await this.translator.translateText(caption.text, sourceLanguage, targetLanguage,
+          );
         return {
           ...caption,
           text: text.trim() || caption.text,
         };
       } catch (error) {
-        logger.warn({ error, sourceLanguage, targetLanguage, caption: caption.text }, "Caption translation failed, keeping source text");
+        logger.warn({ error, sourceLanguage, targetLanguage, caption: caption.text }, "Caption translation failed, keeping source text",
+          );
         return caption;
       }
-    }));
+    }),
+    );
 
     return translated;
   }
@@ -248,7 +269,8 @@ export class ShortCreator {
     }
 
     try {
-      const translated = await this.translator.translateText(text, sourceLanguage, targetLanguage);
+      const translated = await this.translator.translateText(text, sourceLanguage, targetLanguage,
+      );
       return translated.trim() || text;
     } catch (error) {
       logger.warn(
@@ -274,7 +296,8 @@ export class ShortCreator {
     }
 
     const totalDurationMs = Math.max(1200, Math.round(durationSeconds * 1000));
-    const wordDurationMs = Math.max(120, Math.floor(totalDurationMs / words.length));
+    const wordDurationMs = Math.max(120, Math.floor(totalDurationMs / words.length),
+    );
 
     return words.map((word, index) => {
       const startMs = index * wordDurationMs;
@@ -304,8 +327,10 @@ export class ShortCreator {
       const translatedFullText = scene.captionText?.trim()
         || (sourceLanguage === targetLanguage
           ? scene.text
-          : await this.translator.translateText(scene.text, sourceLanguage, targetLanguage));
-      const synthetic = this.buildSyntheticCaptions(translatedFullText, audioDurationSeconds);
+          : await this.translator.translateText(scene.text, sourceLanguage, targetLanguage,
+            ));
+      const synthetic = this.buildSyntheticCaptions(translatedFullText, audioDurationSeconds,
+      );
       if (synthetic.length > 0) {
         return synthetic;
       }
@@ -317,7 +342,8 @@ export class ShortCreator {
     }
 
     if (whisperCaptions.length > 0) {
-      return await this.translateCaptions(whisperCaptions, scene.language, targetLanguage);
+      return await this.translateCaptions(whisperCaptions, scene.language, targetLanguage,
+      );
     }
 
     return this.buildSyntheticCaptions(scene.text, audioDurationSeconds);
@@ -341,14 +367,22 @@ export class ShortCreator {
     subtitleLanguage?: string,
     tenantId?: string,
   ): string {
-    const signature = this.buildVideoSignature(sceneInput, config, videoType, subtitleLanguage);
+    if (this.closing) throw new Error("Video engine is shutting down");
+    if (!tenantId?.trim())
+      throw new Error("Authenticated workspace is required to create a video");
+    const signature = this.buildVideoSignature(sceneInput, config, videoType, subtitleLanguage,
+    );
     const queuedMatch = this.queue.find((item) =>
-      this.buildVideoSignature(item.sceneInput, item.config, item.videoType, item.subtitleLanguage) === signature);
+        item.tenantId === tenantId &&
+        this.buildVideoSignature(item.sceneInput, item.config, item.videoType, item.subtitleLanguage,
+        ) === signature,
+    );
     if (queuedMatch) {
       return queuedMatch.id;
     }
 
-    const existingRecord = this.videoMetadataStore.findBySignatureSync(signature, tenantId);
+    const existingRecord = this.videoMetadataStore.findBySignatureSync(signature, tenantId,
+    );
     if (existingRecord && fs.existsSync(this.getVideoPath(existingRecord.videoId))) {
       return existingRecord.videoId;
     }
@@ -358,6 +392,7 @@ export class ShortCreator {
       tenantId,
       videoId: id,
       scenes: sceneInput,
+      category: config.category,
       signature,
     });
     this.queue.push({
@@ -374,22 +409,72 @@ export class ShortCreator {
     return id;
   }
 
+  public stopAccepting(): void { this.closing = true; }
+
+  public close(): Promise<void> {
+    this.stopAccepting();
+    if (!this.queue.length) return Promise.resolve();
+    return new Promise<void>((resolve) => this.drainWaiters.add(resolve));
+  }
+
   private async processQueue(): Promise<void> {
     // todo add a semaphore
     if (this.queue.length === 0) {
+      for (const resolve of this.drainWaiters) resolve();
+      this.drainWaiters.clear();
       return;
     }
     const { sceneInput, config, id, videoType, subtitleLanguage, tenantId } = this.queue[0];
-    console.log(`[ShortCreator] Starting to process video ${id} with ${sceneInput.length} scenes.`);
+    console.log(`[ShortCreator] Starting to process video ${id} with ${sceneInput.length} scenes.`,
+    );
     logger.debug(
       { sceneInput, config, id },
       "Processing video item in the queue",
     );
     try {
-      await this.createShort(id, sceneInput, config, videoType, subtitleLanguage, tenantId);
+      await this.createShort(
+        id,
+        sceneInput,
+        config,
+        videoType,
+        subtitleLanguage,
+        tenantId,
+      );
+      if (!tenantId) throw new Error("Rendered video has no workspace owner");
+      const outputPath = this.getVideoPath(id);
+      await new ArtifactManifestStore(this.config.dataDirPath).register({
+        tenantId,
+        kind: "video",
+        localPath: outputPath,
+        mimeType: "video/mp4",
+        lifecycle: "active",
+      });
+      const versions = new ContentVersionStore(this.config.dataDirPath);
+      const metadata = this.videoMetadataStore.getSync(id, tenantId)!;
+      const version = versions.create({
+        workspaceId: tenantId,
+        title: metadata.topic,
+        script: sceneInput.map((scene) => scene.text).join("\n\n"),
+        scenes: sceneInput,
+        metadata: {
+          category: config.category,
+          language: config.audioLanguage || sceneInput[0]?.language || "en",
+          description: metadata.summary,
+        },
+        sourceUrls: [],
+        contentSignature: `render:${id}`,
+        createdBy: "render",
+      });
+      versions.updateRender(tenantId, version.id, {
+        status: "ready",
+        renderOutputPath: outputPath,
+        renderError: undefined,
+      });
       console.log(`[ShortCreator] Video ${id} created successfully.`);
     } catch (error: any) {
-      console.error(`[ShortCreator] Error creating video ${id}: ${error.message}`);
+      console.error(
+        `[ShortCreator] Error creating video ${id}: ${error.message}`,
+      );
       logger.error(error, "Error creating video");
     } finally {
       this.queue.shift();
@@ -397,7 +482,11 @@ export class ShortCreator {
     }
   }
 
-  private renderMediaUrl(kind: "tmp" | "music", fileName: string, tenantId?: string): string {
+  private renderMediaUrl(
+    kind: "tmp" | "music",
+    fileName: string,
+    tenantId?: string,
+  ): string {
     const token = createRenderMediaToken(tenantId || "unscoped", fileName);
     return `http://localhost:${this.config.port}/api/${kind}/${encodeURIComponent(fileName)}?mediaToken=${encodeURIComponent(token)}`;
   }
@@ -462,9 +551,19 @@ export class ShortCreator {
     let index = 0;
     for (const scene of inputScenes) {
       const sceneNum = index + 1;
-      console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Generating audio...`);
-      const sourceScriptLanguage = scene.sourceLanguage || config.scriptLanguage || scene.language || LanguageEnum.en;
-      const audio = await this.ttsAdapter.synthesize(scene, config.voice, sourceScriptLanguage);
+      console.log(
+        `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Generating audio...`,
+      );
+      const sourceScriptLanguage =
+        scene.sourceLanguage ||
+        config.scriptLanguage ||
+        scene.language ||
+        LanguageEnum.en;
+      const audio = await this.ttsAdapter.synthesize(
+        scene,
+        config.voice,
+        sourceScriptLanguage,
+      );
       let { audioLength } = audio;
       const { audio: audioStream } = audio;
 
@@ -473,8 +572,7 @@ export class ShortCreator {
         (subtitleLanguage as LanguageEnum | undefined) ||
         scene.language;
       const effectiveOverlayLanguage =
-        config.overlayLanguage ||
-        sourceScriptLanguage;
+        config.overlayLanguage || sourceScriptLanguage;
       logger.debug(
         {
           sceneNum,
@@ -504,11 +602,16 @@ export class ShortCreator {
       tempFiles.push(tempWavPath, tempMp3Path);
 
       await this.ffmpeg.saveNormalizedAudio(audioStream, tempWavPath);
-      
-      console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Transcribing with Whisper...`);
+
+      console.log(
+        `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Transcribing with Whisper...`,
+      );
       let captions: Caption[] = [];
       try {
-        captions = await this.whisper.CreateCaption(tempWavPath, scene.language);
+        captions = await this.whisper.CreateCaption(
+          tempWavPath,
+          scene.language,
+        );
       } catch (captionErr) {
         logger.warn(
           { captionErr, sceneNum, tempWavPath, language: scene.language },
@@ -542,12 +645,18 @@ export class ShortCreator {
         try {
           await SubtitleBuilder.buildAndSave(
             displayCaptions,
-            { audioLanguage: scene.language, subtitleLanguage: effectiveCaptionLanguage },
+            {
+              audioLanguage: scene.language,
+              subtitleLanguage: effectiveCaptionLanguage,
+            },
             this.config.tempDirPath,
             `${tempId}_sub`,
           );
         } catch (subErr) {
-          logger.warn({ subErr }, "Subtitle generation failed, continuing without subtitles");
+          logger.warn(
+            { subErr },
+            "Subtitle generation failed, continuing without subtitles",
+          );
         }
       }
 
@@ -557,10 +666,13 @@ export class ShortCreator {
       }
 
       const isAiImage = config.useAiImages || this.config.useAiImages;
-      const mediaSearchTerms = this.buildMediaSearchTerms(scene, config.category);
+      const mediaSearchTerms = this.buildMediaSearchTerms(
+        scene,
+        config.category,
+      );
       let mediaExt = ".mp4"; // Default generic extension, will be updated
       if (isAiImage) {
-        mediaExt = ".jpg"; 
+        mediaExt = ".jpg";
       }
       let tempMediaFileName = `${cuid()}${mediaExt}`;
       let tempMediaPath = path.join(this.config.tempDirPath, tempMediaFileName);
@@ -569,28 +681,37 @@ export class ShortCreator {
       let mediaUrl = "";
       if (isAiImage) {
         if (!this.config.pollinationsApiKey) {
-          console.error(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Pollinations API key is missing. Now required by Pollinations.ai. Falling back to Pexels video.`);
-          logger.warn("POLLINATIONS_API_KEY is not set in environment. Falling back to stock video.");
+          console.error(
+            `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Pollinations API key is missing. Now required by Pollinations.ai. Falling back to Pexels video.`,
+          );
+          logger.warn(
+            "POLLINATIONS_API_KEY is not set in environment. Falling back to stock video.",
+          );
         }
-        
+
         // Use AI image from Pollinations.ai if key is available
         const keywordFocus = (scene.keywords || []).slice(0, 4).join(", ");
         const aiPrompt = (
           scene.visualPrompt
             ? `${scene.visualPrompt}${keywordFocus ? `. Focus on ${keywordFocus}.` : ""}`
-            : [scene.headline, scene.subcategory, ...(scene.keywords || []), scene.text]
+            : [scene.headline, scene.subcategory, ...(scene.keywords || []), scene.text,
+              ]
               .filter(Boolean)
               .join(", ")
         ).slice(0, 240);
-        const apiKeyParam = this.config.pollinationsApiKey ? `&key=${this.config.pollinationsApiKey}` : '';
+        const apiKeyParam = this.config.pollinationsApiKey ? `&key=${this.config.pollinationsApiKey}`
+          : "";
         const pollinationsUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(aiPrompt)}?width=${orientation === OrientationEnum.landscape ? 1920 : 1080}&height=${orientation === OrientationEnum.landscape ? 1080 : 1920}&nologo=true${apiKeyParam}`;
         
-        console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Fetching AI image: ${pollinationsUrl.replace(/key=[^&]*/, 'key=***')}`);
+        console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Fetching AI image: ${pollinationsUrl.replace(/key=[^&]*/, 'key=***')}`,
+        );
         try {
           await this.downloadFile(pollinationsUrl, tempMediaPath);
           mediaUrl = this.renderMediaUrl("tmp", tempMediaFileName, tenantId);
         } catch (err: any) {
-          console.error(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] AI image failed (${pollinationsUrl}): ${err.message}. Falling back to Pexels video.`);
+          console.error(
+            `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] AI image failed (${pollinationsUrl}): ${err.message}. Falling back to Pexels video.`,
+          );
           logger.error(err, `Error downloading AI image for scene ${sceneNum}`);
           // If AI image fails, we fallback to Pexels video
           const video = await this.pexelsApi.findVideo(
@@ -599,11 +720,13 @@ export class ShortCreator {
             excludeVideoIds,
             orientation,
           );
-          console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Fallback video found: ${video.url}`);
+          console.log(
+            `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Fallback video found: ${video.url}`,
+          );
           // Delete the old .jpg temp path from the tempFiles array
           const oldIndex = tempFiles.indexOf(tempMediaPath);
           if (oldIndex > -1) {
-             tempFiles.splice(oldIndex, 1);
+            tempFiles.splice(oldIndex, 1);
           }
           mediaExt = ".mp4";
           tempMediaFileName = `${cuid()}${mediaExt}`;
@@ -614,7 +737,9 @@ export class ShortCreator {
           mediaUrl = this.renderMediaUrl("tmp", tempMediaFileName, tenantId);
         }
       } else {
-        console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Searching Pexels for: ${mediaSearchTerms.join(", ")}`);
+        console.log(
+          `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Searching Pexels for: ${mediaSearchTerms.join(", ")}`,
+        );
         const video = await this.pexelsApi.findVideo(
           mediaSearchTerms,
           audioLength,
@@ -622,7 +747,9 @@ export class ShortCreator {
           orientation,
         );
 
-        console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Downloading video: ${video.url}`);
+        console.log(
+          `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Downloading video: ${video.url}`,
+        );
         await this.downloadFile(video.url, tempMediaPath);
         excludeVideoIds.push(video.id);
         mediaUrl = this.renderMediaUrl("tmp", tempMediaFileName, tenantId);
@@ -631,21 +758,23 @@ export class ShortCreator {
         // shots, no motion) and replace them with an AI image so the scene
         // keeps the viewer engaged instead of reading as a blank frame.
         if (this.config.pollinationsApiKey && scene.visualPrompt) {
-          const { flat, yavgRange, frames } = await this.ffmpeg.assessVideoFlatness(
-            tempMediaPath,
-          );
+          const { flat, yavgRange, frames } =
+            await this.ffmpeg.assessVideoFlatness(tempMediaPath);
           if (flat) {
             logger.info(
               { sceneNum, yavgRange, frames, sceneId: sceneNum },
               `Scene ${sceneNum}/${inputScenes.length} stock video is flat, generating AI image instead`,
             );
-            console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Flat stock clip detected (YAVG range ${yavgRange.toFixed(1)}), generating AI image`);
+            console.log(
+              `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Flat stock clip detected (YAVG range ${yavgRange.toFixed(1)}), generating AI image`,
+            );
 
             const keywordFocus = (scene.keywords || []).slice(0, 4).join(", ");
             const aiPrompt = (
               scene.visualPrompt
                 ? `${scene.visualPrompt}${keywordFocus ? `. Focus on ${keywordFocus}.` : ""}`
-                : [scene.headline, scene.subcategory, ...(scene.keywords || []), scene.text]
+                : [scene.headline, scene.subcategory, ...(scene.keywords || []), scene.text,
+                  ]
                   .filter(Boolean)
                   .join(", ")
             ).slice(0, 240);
@@ -655,16 +784,25 @@ export class ShortCreator {
             const aiMediaPath = path.join(this.config.tempDirPath, aiFileName);
             tempFiles.push(aiMediaPath);
 
-            console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Fetching AI replacement image: ${pollinationsUrl.replace(/key=[^&]*/, 'key=***')}`);
+            console.log(
+              `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] Fetching AI replacement image: ${pollinationsUrl.replace(/key=[^&]*/, 'key=***')}`,
+            );
             try {
               await this.downloadFile(pollinationsUrl, aiMediaPath);
               mediaUrl = this.renderMediaUrl("tmp", aiFileName, tenantId);
               tempMediaPath = aiMediaPath;
               tempMediaFileName = aiFileName;
-              console.log(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] AI replacement image ready`);
+              console.log(
+                `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] AI replacement image ready`,
+              );
             } catch (aiErr: any) {
-              console.error(`[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] AI replacement image failed (${pollinationsUrl}): ${aiErr.message}. Keeping stock video.`);
-              logger.error(aiErr, `Error downloading flat-scene AI image for scene ${sceneNum}`);
+              console.error(
+                `[ShortCreator] [Scene ${sceneNum}/${inputScenes.length}] AI replacement image failed (${pollinationsUrl}): ${aiErr.message}. Keeping stock video.`,
+              );
+              logger.error(
+                aiErr,
+                `Error downloading flat-scene AI image for scene ${sceneNum}`,
+              );
               const aiIndex = tempFiles.indexOf(aiMediaPath);
               if (aiIndex > -1) {
                 tempFiles.splice(aiIndex, 1);
@@ -706,13 +844,22 @@ export class ShortCreator {
       index++;
     }
 
-    const selectedMusic = this.findMusic(totalDuration, config.music, config.category);
+    const selectedMusic = this.findMusic(
+      totalDuration,
+      config.music,
+      config.category,
+    );
     const rendererMusic = selectedMusic
-      ? { ...selectedMusic, url: this.renderMediaUrl("music", selectedMusic.file, tenantId) }
+      ? {
+          ...selectedMusic,
+          url: this.renderMediaUrl("music", selectedMusic.file, tenantId),
+        }
       : selectedMusic;
     logger.debug({ selectedMusic }, "Selected music for the video");
 
-    console.log(`[ShortCreator] Final rendering with Remotion for video ${videoId}...`);
+    console.log(
+      `[ShortCreator] Final rendering with Remotion for video ${videoId}...`,
+    );
     await this.remotion.render(
       {
         music: rendererMusic,
@@ -735,7 +882,9 @@ export class ShortCreator {
           musicVolume: config.musicVolume,
           category: config.category,
           templateVariant: config.templateVariant,
-          contentTemplate: config.contentTemplate || resolveCategoryPipeline(config.category).template,
+          contentTemplate:
+            config.contentTemplate ||
+            resolveCategoryPipeline(config.category).template,
         },
       },
       videoId,
@@ -760,7 +909,10 @@ export class ShortCreator {
     durationLimit: number,
     videoType: "short" | "long",
   ): SceneInput[][] {
-    const effectiveLimit = videoType === "short" ? Math.min(durationLimit, 180) : Math.max(durationLimit, 300);
+    const effectiveLimit =
+      videoType === "short"
+        ? Math.min(durationLimit, 180)
+        : Math.max(durationLimit, 300);
     const chunks: SceneInput[][] = [];
     let current: SceneInput[] = [];
     let currentDuration = 0;
@@ -782,7 +934,19 @@ export class ShortCreator {
     return chunks;
   }
 
+  public ownsVideo(tenantId: string, videoId: string): boolean {
+    if (!tenantId?.trim() || !/^[a-zA-Z0-9_-]+$/.test(videoId)) return false;
+    if (!this.videoMetadataStore.getSync(videoId, tenantId)) return false;
+    const filePath = this.getVideoPath(videoId);
+    if (fs.existsSync(filePath)) {
+      const base = fs.realpathSync(this.config.videosDirPath);
+      if (path.dirname(fs.realpathSync(filePath)) !== base) return false;
+    }
+    return true;
+  }
+
   public getVideoPath(videoId: string): string {
+    if (!/^[a-zA-Z0-9_-]+$/.test(videoId)) throw new Error("Invalid video ID");
     return path.join(this.config.videosDirPath, `${videoId}.mp4`);
   }
 
@@ -799,7 +963,9 @@ export class ShortCreator {
             return;
           }
           if (response.statusCode !== 200) {
-            reject(new Error(`Failed to download file: ${response.statusCode}`));
+            reject(
+              new Error(`Failed to download file: ${response.statusCode}`),
+            );
             return;
           }
 
@@ -847,7 +1013,8 @@ export class ShortCreator {
       }
       return true;
     });
-    const pool = musicFiles.length > 0 ? musicFiles : this.musicManager.musicList();
+    const pool =
+      musicFiles.length > 0 ? musicFiles : this.musicManager.musicList();
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
@@ -859,7 +1026,11 @@ export class ShortCreator {
     return Array.from(tags.values());
   }
 
-  public listAllVideos(): { id: string; status: VideoStatus }[] {
+  public listAllVideos(
+    tenantId: string,
+  ): { id: string; status: VideoStatus }[] {
+    if (!tenantId?.trim())
+      throw new Error("Authenticated workspace is required");
     const videos: { id: string; status: VideoStatus }[] = [];
 
     // Check if videos directory exists
@@ -875,6 +1046,7 @@ export class ShortCreator {
       if (file.endsWith(".mp4")) {
         const videoId = file.replace(".mp4", "");
 
+        if (!this.videoMetadataStore.getSync(videoId, tenantId)) continue;
         let status: VideoStatus = "ready";
         const inQueue = this.queue.find((item) => item.id === videoId);
         if (inQueue) {
@@ -887,6 +1059,7 @@ export class ShortCreator {
 
     // Add videos that are in the queue but not yet rendered
     for (const queueItem of this.queue) {
+      if (queueItem.tenantId !== tenantId) continue;
       const existingVideo = videos.find((v) => v.id === queueItem.id);
       if (!existingVideo) {
         videos.push({ id: queueItem.id, status: "processing" });

@@ -1,0 +1,8 @@
+{
+  "src/db/ScheduleStore.ts": "3592f0d4e8144aad2d555009c8a229a2bb01a9f4c844fba85bca4d269956ce48",
+  "src/server/routers/schedule.ts": "596a9e443a55a46c0fd3d4f5016dba0a068da701277c6b88fabbb6049450ff09",
+  "src/server/routers/scheduleClaims.test.ts": "cee48981981c789c980a20db65dafd2a8c74b9d6466e8e71af7cec33b2ffaf3f",
+  "src/ui/pages/SchedulePersistPage.tsx": "5f7d395d39e3527909af988e4a18b1df40c414fe8479855e79128fa4da868d73",
+  "scripts/migrations/readiness.mjs": "dae66fc798752ff382de023ed9b108c29582b5f782a51142d37786d6300e08b3",
+  "src/integration/MigrationGuards.test.ts": "eea4b5accab50d07ad3a41c199b69de173b8166150804c8a0c8a19e78f2b85a5"
+}

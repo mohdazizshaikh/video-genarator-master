@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import cuid from "cuid";
+import crypto from "node:crypto";
 import type { PublishJobRecord, PublishAttemptRecord, PublishJobStatus, PlatformType } from "../types/shorts";
 
 export class PublishJobStore {
@@ -10,33 +11,29 @@ export class PublishJobStore {
   constructor(basePath: string) {
     this.jobsPath = path.join(basePath, "publishJobs.json");
     this.attemptsPath = path.join(basePath, "publishAttempts.json");
-    for (const p of [this.jobsPath, this.attemptsPath]) {
-      fs.ensureFileSync(p);
-      if (!fs.readFileSync(p, "utf-8").trim()) {
-        fs.writeFileSync(p, "[]", "utf-8");
-      }
+    fs.ensureDirSync(basePath);
+    for (const file of [this.jobsPath, this.attemptsPath]) {
+      if (!fs.existsSync(file)) fs.writeFileSync(file, "[]", { flag: "wx", mode: 0o600 });
     }
   }
 
-  private async readJobs(): Promise<PublishJobRecord[]> {
-    const content = await fs.readFile(this.jobsPath, "utf-8");
-    if (!content.trim()) return [];
-    try { return JSON.parse(content); } catch { return []; }
+  private read<T>(file: string): T[] {
+    const rows: unknown = fs.readJsonSync(file);
+    if (!Array.isArray(rows)) throw new Error("Invalid publish store; reconciliation is required");
+    return rows as T[];
   }
-
-  private async writeJobs(records: PublishJobRecord[]): Promise<void> {
-    await fs.writeFile(this.jobsPath, JSON.stringify(records, null, 2), "utf-8");
+  private mutate<T, R>(file: string, change: (rows: T[]) => R): R {
+    const rows = this.read<T>(file);
+    const result = change(rows);
+    const temporary = `${file}.${crypto.randomUUID()}.tmp`;
+    try {
+      fs.writeFileSync(temporary, JSON.stringify(rows, null, 2), { flag: "wx", mode: 0o600 });
+      fs.renameSync(temporary, file);
+    } finally { fs.removeSync(temporary); }
+    return result;
   }
-
-  private async readAttempts(): Promise<PublishAttemptRecord[]> {
-    const content = await fs.readFile(this.attemptsPath, "utf-8");
-    if (!content.trim()) return [];
-    try { return JSON.parse(content); } catch { return []; }
-  }
-
-  private async writeAttempts(records: PublishAttemptRecord[]): Promise<void> {
-    await fs.writeFile(this.attemptsPath, JSON.stringify(records, null, 2), "utf-8");
-  }
+  private async readJobs(): Promise<PublishJobRecord[]> { return this.read(this.jobsPath); }
+  private async readAttempts(): Promise<PublishAttemptRecord[]> { return this.read(this.attemptsPath); }
 
   public async createJob(params: {
     tenantId: string;
@@ -51,11 +48,25 @@ export class PublishJobStore {
     thumbnailPath?: string;
     scheduleAt?: string;
     accountId?: string;
+    releaseTargetId?: string;
+    connectorId?: string;
+    destinationId?: string;
   }): Promise<PublishJobRecord> {
-    const jobs = await this.readJobs();
+    if (!params.tenantId?.trim()) throw new Error("Publish workspace is required");
+    return this.mutate<PublishJobRecord, PublishJobRecord>(this.jobsPath, (jobs) => {
+    if (params.releaseTargetId) {
+      const existing = jobs.find((job) => job.tenantId === params.tenantId && job.releaseTargetId === params.releaseTargetId);
+      if (existing) {
+        if (existing.connectorId !== params.connectorId || existing.destinationId !== params.destinationId || existing.platform !== params.platform) throw new Error("Publish target identity mismatch");
+        return existing;
+      }
+    }
     const now = new Date().toISOString();
     const record: PublishJobRecord = {
       tenantId: params.tenantId,
+      releaseTargetId: params.releaseTargetId,
+      connectorId: params.connectorId,
+      destinationId: params.destinationId,
       id: cuid(),
       renderOutputPath: params.renderOutputPath,
       platform: params.platform,
@@ -77,8 +88,8 @@ export class PublishJobStore {
       updatedAt: now,
     };
     jobs.push(record);
-    await this.writeJobs(jobs);
     return record;
+    });
   }
 
   public async getJob(id: string): Promise<PublishJobRecord | undefined> {
@@ -130,39 +141,36 @@ export class PublishJobStore {
   public async updateJobStatus(
     id: string,
     status: PublishJobStatus,
-    extras: Partial<Pick<PublishJobRecord, "externalId" | "publishedUrl" | "error" | "attemptCount">> = {},
+    extras: Partial<Pick<PublishJobRecord, "externalId" | "publishedUrl" | "error" | "attemptCount" | "scheduleAt">> = {},
   ): Promise<PublishJobRecord | undefined> {
-    const jobs = await this.readJobs();
-    const idx = jobs.findIndex((j) => j.id === id);
-    if (idx < 0) return undefined;
-    jobs[idx] = { ...jobs[idx], status, ...extras, updatedAt: new Date().toISOString() };
-    await this.writeJobs(jobs);
-    return jobs[idx];
+    return this.mutate<PublishJobRecord, PublishJobRecord | undefined>(this.jobsPath, (jobs) => this.setStatus(jobs, jobs.findIndex((job) => job.id === id), status, extras));
+  }
+
+  private setStatus(jobs: PublishJobRecord[], index: number, status: PublishJobStatus, extras: Partial<Pick<PublishJobRecord, "externalId" | "publishedUrl" | "error" | "attemptCount" | "scheduleAt">>) {
+    if (index < 0) return undefined;
+    jobs[index] = { ...jobs[index], ...extras, status, updatedAt: new Date().toISOString() };
+    return jobs[index];
   }
 
   public async updateJobStatusForTenant(
-    tenantId: string,
-    id: string,
-    status: PublishJobStatus,
-    extras: Partial<Pick<PublishJobRecord, "externalId" | "publishedUrl" | "error" | "attemptCount">> = {},
+    tenantId: string, id: string, status: PublishJobStatus,
+    extras: Partial<Pick<PublishJobRecord, "externalId" | "publishedUrl" | "error" | "attemptCount" | "scheduleAt">> = {},
   ): Promise<PublishJobRecord | undefined> {
-    if (!(await this.getJobForTenant(tenantId, id))) return undefined;
-    return this.updateJobStatus(id, status, extras);
+    if (!tenantId) return undefined;
+    return this.mutate<PublishJobRecord, PublishJobRecord | undefined>(this.jobsPath, (jobs) => this.setStatus(jobs, jobs.findIndex((job) => job.tenantId === tenantId && job.id === id), status, extras));
   }
 
   public async incrementAttempt(id: string): Promise<PublishJobRecord | undefined> {
-    const jobs = await this.readJobs();
-    const idx = jobs.findIndex((j) => j.id === id);
-    if (idx < 0) return undefined;
-    jobs[idx].attemptCount += 1;
-    jobs[idx].updatedAt = new Date().toISOString();
-    await this.writeJobs(jobs);
-    return jobs[idx];
+    return this.mutate<PublishJobRecord, PublishJobRecord | undefined>(this.jobsPath, (jobs) => this.increment(jobs, jobs.findIndex((job) => job.id === id)));
   }
-
+  private increment(jobs: PublishJobRecord[], index: number) {
+    if (index < 0) return undefined;
+    jobs[index] = { ...jobs[index], attemptCount: jobs[index].attemptCount + 1, updatedAt: new Date().toISOString() };
+    return jobs[index];
+  }
   public async incrementAttemptForTenant(tenantId: string, id: string): Promise<PublishJobRecord | undefined> {
-    if (!(await this.getJobForTenant(tenantId, id))) return undefined;
-    return this.incrementAttempt(id);
+    if (!tenantId) return undefined;
+    return this.mutate<PublishJobRecord, PublishJobRecord | undefined>(this.jobsPath, (jobs) => this.increment(jobs, jobs.findIndex((job) => job.tenantId === tenantId && job.id === id)));
   }
 
   public async addAttempt(params: {
@@ -172,7 +180,9 @@ export class PublishJobStore {
     responseCode?: number;
     responseBody?: string;
   }): Promise<PublishAttemptRecord> {
-    const attempts = await this.readAttempts();
+    return this.mutate<PublishAttemptRecord, PublishAttemptRecord>(this.attemptsPath, (attempts) => {
+    const existing = attempts.find((row) => row.publishJobId === params.publishJobId && row.attemptNumber === params.attemptNumber && row.status === params.status && row.responseBody === (params.responseBody ?? null));
+    if (existing) return existing;
     const record: PublishAttemptRecord = {
       id: cuid(),
       publishJobId: params.publishJobId,
@@ -183,8 +193,8 @@ export class PublishJobStore {
       attemptedAt: new Date().toISOString(),
     };
     attempts.push(record);
-    await this.writeAttempts(attempts);
     return record;
+    });
   }
 
   public async getAttempts(publishJobId: string): Promise<PublishAttemptRecord[]> {

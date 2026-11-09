@@ -1,4 +1,4 @@
-import fs from "fs-extra";
+import { initializeJsonArray, readJsonArray, writeJsonArray } from "./jsonArrayFile";
 import path from "path";
 
 export type AutomationVideoType = "short" | "long";
@@ -24,21 +24,15 @@ export class ContentAutomationRuleStore {
 
   constructor(basePath: string) {
     this.storePath = path.join(basePath, "contentAutomationRules.json");
-    fs.ensureFileSync(this.storePath);
-    if (!fs.readFileSync(this.storePath, "utf-8").trim()) fs.writeFileSync(this.storePath, "[]", "utf-8");
+    initializeJsonArray(this.storePath);
   }
 
   private readAllSync(): ContentAutomationRule[] {
-    try {
-      const content = fs.readFileSync(this.storePath, "utf-8");
-      return content.trim() ? JSON.parse(content) as ContentAutomationRule[] : [];
-    } catch {
-      return [];
-    }
+    return readJsonArray<ContentAutomationRule>(this.storePath);
   }
 
   private writeAllSync(records: ContentAutomationRule[]): void {
-    fs.writeFileSync(this.storePath, JSON.stringify(records, null, 2), "utf-8");
+    writeJsonArray(this.storePath, records);
   }
 
   listForTenant(tenantId: string): ContentAutomationRule[] {

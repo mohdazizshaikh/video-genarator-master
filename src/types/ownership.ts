@@ -45,6 +45,7 @@ export type ReleaseStatus =
   | "approved"
   | "queued"
   | "publishing"
+  | "reconciling"
   | "partially_published"
   | "published"
   | "failed"

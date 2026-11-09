@@ -4,6 +4,7 @@
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from "axios";
+import { isApiOrigin } from "./apiOrigin";
 import useAuthStore from "../store/authStore";
 
 /**
@@ -67,6 +68,7 @@ class ApiClientService {
   private axiosInstance: AxiosInstance;
   private cache: Map<string, CacheEntry<unknown>> = new Map();
   private requestCache: Map<string, Promise<unknown>> = new Map();
+  private sessionVersion = 0;
   private readonly DEFAULT_CACHE_TTL = 60000; // 1 minute
   private readonly DEFAULT_REQUEST_TIMEOUT = 900000; // 15 minutes
 
@@ -95,17 +97,39 @@ class ApiClientService {
       },
     });
 
+    useAuthStore.subscribe((state, previous) => {
+      if (
+        state.token !== previous.token ||
+        state.user?.tenantId !== previous.user?.tenantId ||
+        state.user?.id !== previous.user?.id
+      ) {
+        this.sessionVersion += 1;
+        this.clearCache();
+      }
+    });
+
     // Request interceptor: use the single persisted auth source for same-origin API calls.
     // Never forward application credentials to absolute third-party URLs.
     this.axiosInstance.interceptors.request.use((config) => {
       const token = useAuthStore.getState().token;
       const requestUrl = config.url || "";
-      const isAbsoluteExternalUrl = /^https?:\/\//i.test(requestUrl) && !requestUrl.startsWith(baseURL);
-      if (token && !isAbsoluteExternalUrl) {
-        if (config.headers && typeof (config.headers as { set?: unknown }).set === "function") {
-          (config.headers as { set: (name: string, value: string) => void }).set("Authorization", `Bearer ${token}`);
+      if (token && !isApiOrigin(requestUrl, baseURL) &&
+        config.headers.get("Authorization") === `Bearer ${token}`
+      )
+        config.headers.delete("Authorization");
+      if (token && isApiOrigin(requestUrl, baseURL)) {
+        if (
+          config.headers &&
+          typeof (config.headers as { set?: unknown }).set === "function"
+        ) {
+          (
+            config.headers as { set: (name: string, value: string) => void }
+          ).set("Authorization", `Bearer ${token}`);
         } else {
-          config.headers = { ...config.headers, Authorization: `Bearer ${token}` } as typeof config.headers;
+          config.headers = {
+            ...config.headers,
+            Authorization: `Bearer ${token}`,
+          } as typeof config.headers;
         }
       }
       return config;
@@ -127,7 +151,9 @@ class ApiClientService {
         if (
           status === 401 &&
           !requestUrl.includes("/api/system-engines/auth/") &&
-          typeof window !== "undefined"
+          typeof window !== "undefined" &&
+          error.config?.headers?.get("Authorization") ===
+            `Bearer ${useAuthStore.getState().token}`
         ) {
           useAuthStore.getState().logout();
           window.dispatchEvent(new CustomEvent("auth-expired"));
@@ -189,10 +215,11 @@ class ApiClientService {
     config?: AxiosRequestConfig & { cacheTTL?: number },
   ): Promise<T> {
     const cacheTTL = config?.cacheTTL ?? this.DEFAULT_CACHE_TTL;
-    const cacheKey = `GET:${url}`;
+    const sessionVersion = this.sessionVersion;
+    const cacheKey = `GET:${sessionVersion}:${this.axiosInstance.getUri({ url, params: config?.params })}:${config?.responseType || "json"}`;
 
     // Check cache first
-    const cachedData = this.getCachedData<T>(cacheKey);
+    const cachedData = cacheTTL > 0 ? this.getCachedData<T>(cacheKey) : null;
     if (cachedData !== null) {
       return cachedData;
     }
@@ -205,9 +232,17 @@ class ApiClientService {
     // Make the request
     const requestPromise = (async () => {
       try {
-        const { data } = await this.axiosInstance.get<ApiResponse<T>>(url, config);
+        const { data } = await this.axiosInstance.get<ApiResponse<T>>(
+          url,
+          config,
+        );
         const result = unwrap<T>(data);
-        this.setCachedData(cacheKey, result, cacheTTL);
+        if (sessionVersion !== this.sessionVersion)
+          throw new ApiError(
+            409,
+            "Session changed while the request was in flight",
+          );
+        if (cacheTTL > 0) this.setCachedData(cacheKey, result, cacheTTL);
         this.requestCache.delete(cacheKey);
         return result;
       } catch (error) {
@@ -242,9 +277,11 @@ class ApiClientService {
     data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<T> {
-    const { data: responseData } = await this.axiosInstance.put<
-      ApiResponse<T>
-    >(url, data, config);
+    const { data: responseData } = await this.axiosInstance.put<ApiResponse<T>>(
+      url,
+      data,
+      config,
+    );
     return unwrap<T>(responseData);
   }
 
@@ -300,7 +337,9 @@ export const api = {
     download: (videoId: string) =>
       apiClient.get(`/api/short-video/${videoId}`, { responseType: "blob" }),
     getRenderPath: (videoId: string) =>
-      apiClient.get<{ path: string }>(`/api/short-video/${videoId}/render-path`),
+      apiClient.get<{ path: string }>(
+        `/api/short-video/${videoId}/render-path`,
+      ),
     list: () =>
       apiClient.get(`/api/short-videos`).then((raw) => {
         const videos = (raw as { videos?: unknown[] })?.videos;
@@ -322,12 +361,10 @@ export const api = {
   news: {
     getSources: () => apiClient.get("/api/news-sources"),
     getReports: () => apiClient.get("/api/reports"),
-    getReport: (reportId: string) =>
-      apiClient.get(`/api/reports/${reportId}`),
+    getReport: (reportId: string) => apiClient.get(`/api/reports/${reportId}`),
     fetch: (sourceId: string) =>
       apiClient.post("/api/reports/fetch", { sourceId }),
-    merge: (data: unknown) =>
-      apiClient.post("/api/reports/merge", data),
+    merge: (data: unknown) => apiClient.post("/api/reports/merge", data),
   },
 
   // Scripts
@@ -339,21 +376,22 @@ export const api = {
 
   // Queue
   queue: {
-    bulkEnqueue: (data: unknown) =>
-      apiClient.post("/api/queue/bulk", data),
-    getStatus: () => apiClient.get("/api/health/queue"),
+    bulkEnqueue: (data: unknown) => apiClient.post("/api/queue/bulk", data),
+    listRenderJobs: () => apiClient.get<unknown[]>("/api/queue/render-jobs", { cacheTTL: 0 }),
+    getStatus: async () => {
+      const snapshot = await apiClient.get<{ queue: { redisEnabled: boolean; queues: Array<{ id: string; counts: unknown }> } }>("/api/health/dashboard", { cacheTTL: 0 });
+      return { render: snapshot.queue.queues.find((queue) => queue.id === "render")?.counts, publish: snapshot.queue.queues.find((queue) => queue.id === "publish")?.counts, redisEnabled: snapshot.queue.redisEnabled, source: "workspace_dashboard" };
+    },
     getStates: () => apiClient.get("/api/health/queue/states"),
   },
 
   // Publishing
   publish: {
-    enqueue: (data: unknown) =>
-      apiClient.post("/api/publish", data),
+    enqueue: (data: unknown) => apiClient.post("/api/publish", data),
     getMetadataSuggestions: (data: unknown) =>
       apiClient.post("/api/publish/metadata-suggestions", data),
     list: () => apiClient.get("/api/publish"),
-    getJob: (jobId: string) =>
-      apiClient.get(`/api/publish/${jobId}`),
+    getJob: (jobId: string) => apiClient.get(`/api/publish/${jobId}`),
   },
 
   // Health & Metrics
@@ -374,8 +412,7 @@ export const api = {
         apiClient.post("/api/marketing/analytics", data),
       getByVideo: (videoId: string) =>
         apiClient.get(`/api/marketing/analytics/${videoId}`),
-      dashboard: () =>
-        apiClient.get("/api/marketing/dashboard"),
+      dashboard: () => apiClient.get("/api/marketing/dashboard"),
     },
     seo: {
       optimize: (data: unknown) =>
@@ -395,21 +432,18 @@ export const api = {
 
   // AI
   ai: {
-    addEvent: (data: unknown) =>
-      apiClient.post("/api/ai/events", data),
+    addEvent: (data: unknown) => apiClient.post("/api/ai/events", data),
     listEvents: (limit?: number) =>
       apiClient.get(`/api/ai/events?limit=${limit || 200}`),
     train: () => apiClient.post("/api/ai/train", {}),
     getModel: () => apiClient.get("/api/ai/model"),
-    getSuggestion: (data: unknown) =>
-      apiClient.post("/api/ai/suggest", data),
+    getSuggestion: (data: unknown) => apiClient.post("/api/ai/suggest", data),
     dashboard: () => apiClient.get("/api/ai/dashboard"),
   },
 
   // Content
   content: {
-    ideate: (data: unknown) =>
-      apiClient.post("/api/content/ideation", data),
+    ideate: (data: unknown) => apiClient.post("/api/content/ideation", data),
     getEditingSuggestions: (data: unknown) =>
       apiClient.post("/api/content/editing-primitives", data),
     personalize: (data: unknown) =>
@@ -427,10 +461,8 @@ export const api = {
   // Tenants (Multi-tenant)
   tenants: {
     list: () => apiClient.get("/api/tenants"),
-    create: (data: unknown) =>
-      apiClient.post("/api/tenants", data),
-    get: (tenantId: string) =>
-      apiClient.get(`/api/tenants/${tenantId}`),
+    create: (data: unknown) => apiClient.post("/api/tenants", data),
+    get: (tenantId: string) => apiClient.get(`/api/tenants/${tenantId}`),
     update: (tenantId: string, data: unknown) =>
       apiClient.put(`/api/tenants/${tenantId}`, data),
     keys: {
@@ -457,10 +489,7 @@ export const api = {
     },
     logs: {
       write: (tenantId: string, engine: string, data: unknown) =>
-        apiClient.post(
-          `/api/tenants/${tenantId}/logs/${engine}`,
-          data,
-        ),
+        apiClient.post(`/api/tenants/${tenantId}/logs/${engine}`, data),
     },
   },
 
@@ -473,10 +502,8 @@ export const api = {
   // Channel configuration
   channels: {
     list: () => apiClient.get("/api/channel-configs"),
-    create: (data: unknown) =>
-      apiClient.post("/api/channel-configs", data),
-    remove: (id: string) =>
-      apiClient.delete(`/api/channel-configs/${id}`),
+    create: (data: unknown) => apiClient.post("/api/channel-configs", data),
+    remove: (id: string) => apiClient.delete(`/api/channel-configs/${id}`),
   },
 };
 

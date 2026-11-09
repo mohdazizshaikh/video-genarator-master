@@ -1,9 +1,10 @@
 import { Router } from "express";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import type { Config } from "../../config";
-import { WebhookNotificationEngine } from "../../services/WebhookNotificationEngine";
+import { WebhookNotificationEngine, WebhookNotFoundError, WebhookStorageUnavailableError } from "../../services/WebhookNotificationEngine";
+import { WebhookValidationError } from "../../services/webhookSecurity";
 import { logger } from "../../logger";
-import { getAuthenticatedTenantId, requireAuth } from "../auth";
+import { getAuthenticatedTenantId, requireWorkspace } from "../auth";
 
 function tenantIdFrom(req: Request): string {
   const tenantId = getAuthenticatedTenantId(req);
@@ -15,14 +16,22 @@ export class WebhooksRouter {
   readonly router: Router;
   private engine: WebhookNotificationEngine;
 
-  constructor(config: Config) {
+  constructor(config: Config, engine?: WebhookNotificationEngine) {
     this.router = Router();
-    this.engine = new WebhookNotificationEngine(config.dataDirPath);
+    this.engine = engine ?? new WebhookNotificationEngine(config.dataDirPath);
     this.registerRoutes();
   }
 
+  private sendError(res: Response, error: unknown, fallback: string) {
+    if (error instanceof WebhookValidationError) return res.status(400).json({ error: error.message, code: error.code });
+    if (error instanceof WebhookNotFoundError) return res.status(404).json({ error: "Webhook not found" });
+    if (error instanceof WebhookStorageUnavailableError) return res.status(503).json({ error: "Webhook secret storage is unavailable" });
+    logger.error({ errorType: error instanceof Error ? error.name : "unknown" }, fallback);
+    return res.status(500).json({ error: fallback });
+  }
+
   private registerRoutes() {
-    this.router.use(requireAuth);
+    this.router.use(requireWorkspace);
 
     // GET /api/webhooks — list all webhooks
     this.router.get("/", (req, res) => {
@@ -56,13 +65,14 @@ export class WebhooksRouter {
     });
 
     // POST /api/webhooks — create webhook
-    this.router.post("/", (req, res) => {
+    this.router.post("/", async (req, res) => {
       try {
+        if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) return res.status(400).json({ error: "Webhook configuration must be an object" });
         const { name, channel, events, telegramBotToken, telegramChatId, slackWebhookUrl, discordWebhookUrl, customUrl, customHeaders, customMethod } = req.body;
         if (!name || !channel || !events?.length) {
           return res.status(400).json({ error: "name, channel, and events are required" });
         }
-        const webhook = this.engine.addWebhook({
+        const webhook = await this.engine.addWebhook({
           tenantId: tenantIdFrom(req),
           name,
           channel,
@@ -78,20 +88,18 @@ export class WebhooksRouter {
         });
         res.status(201).json({ webhook });
       } catch (err) {
-        logger.error({ err }, "POST /webhooks failed");
-        res.status(500).json({ error: "Failed to create webhook" });
+        this.sendError(res, err, "Failed to create webhook");
       }
     });
 
     // PUT /api/webhooks/:id — update webhook
-    this.router.put("/:id", (req, res) => {
+    this.router.put("/:id", async (req, res) => {
       try {
-        const updated = this.engine.updateWebhook(tenantIdFrom(req), req.params.id, req.body);
+        const updated = await this.engine.updateWebhook(tenantIdFrom(req), req.params.id, req.body);
         if (!updated) return res.status(404).json({ error: "Webhook not found" });
         res.json({ webhook: updated });
       } catch (err) {
-        logger.error({ err }, "PUT /webhooks/:id failed");
-        res.status(500).json({ error: "Failed to update webhook" });
+        this.sendError(res, err, "Failed to update webhook");
       }
     });
 
@@ -125,8 +133,7 @@ export class WebhooksRouter {
         const results = await this.engine.testWebhook(tenantIdFrom(req), req.params.id);
         res.json({ results });
       } catch (err) {
-        logger.error({ err }, "POST /webhooks/:id/test failed");
-        res.status(500).json({ error: (err as Error).message });
+        this.sendError(res, err, "Webhook test failed");
       }
     });
 
@@ -140,8 +147,7 @@ export class WebhooksRouter {
         const results = await this.engine.notify(tenantIdFrom(req), event, title, message, data, severity);
         res.json({ results, count: results.length });
       } catch (err) {
-        logger.error({ err }, "POST /webhooks/notify failed");
-        res.status(500).json({ error: "Failed to dispatch notification" });
+        this.sendError(res, err, "Failed to dispatch notification");
       }
     });
   }

@@ -1,6 +1,6 @@
 /**
- * InstagramPublisher – Full Instagram Graph API implementation
- * Supports Reels, Stories, Carousels, scheduled posts, and first comments
+ * InstagramPublisher – Conservative Instagram publication adapter
+ * Reels via an accessible video URL; live platform acceptance is separate.
  */
 import type { Config } from "../config";
 import type {
@@ -10,9 +10,10 @@ import type {
   PublishParams,
   PublishResult,
 } from "./PlatformPublisher";
+import { graphRequest, requiredProviderId, requiredVideoUrl } from "./graphTransport";
+import { canonicalPublication, providerFailure, verifyProviderCredentials, unsupportedNativeSchedule } from "./providerContracts";
 import { logger } from "../logger";
 
-type MediaContainerStatus = { status_code: "FINISHED" | "IN_PROGRESS" | "PUBLISHED" | "ERROR"; error?: { message: string } };
 
 export class InstagramPublisher implements PlatformPublisher {
   readonly platform = "instagram" as const;
@@ -21,24 +22,17 @@ export class InstagramPublisher implements PlatformPublisher {
   private apiBase = "https://graph.instagram.com/v19.0";
 
   constructor(config: Config) {
-    this.accessToken = config.instagramAccessToken || process.env.INSTAGRAM_ACCESS_TOKEN || "";
+    this.accessToken = config.instagramAccessToken || "";
     this.businessAccountId =
-      config.instagramBusinessAccountId || process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || "";
+      config.instagramBusinessAccountId || "";
   }
 
   async validateCredentials(): Promise<boolean> {
     if (!this.accessToken || !this.businessAccountId) return false;
-    try {
-      const res = await fetch(
-        `${this.apiBase}/${this.businessAccountId}?fields=id,name,username&access_token=${this.accessToken}`,
-        { signal: AbortSignal.timeout(8000) },
-      );
-      if (!res.ok) return false;
-      const data = (await res.json()) as { id?: string };
-      return Boolean(data?.id);
-    } catch {
-      return false;
-    }
+    return verifyProviderCredentials(async () => {
+      const data = await graphRequest(`${this.apiBase}/${this.businessAccountId}?fields=id,name,username&access_token=${encodeURIComponent(this.accessToken)}`, {}, 8000);
+      try { requiredProviderId(data.id); } catch { throw new Error("Credential verification response unavailable"); }
+    }, [this.accessToken]);
   }
 
   async refreshToken(): Promise<void> {
@@ -47,15 +41,14 @@ export class InstagramPublisher implements PlatformPublisher {
       const appId = process.env.INSTAGRAM_APP_ID;
       const appSecret = process.env.INSTAGRAM_APP_SECRET;
       if (!appId || !appSecret) throw new Error("INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET not set");
-      const res = await fetch(
-        `https://graph.instagram.com/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&access_token=${this.accessToken}`,
-      );
-      const data = (await res.json()) as { access_token?: string; error?: { message: string } };
-      if (data.error) throw new Error(data.error.message);
-      if (data.access_token) this.accessToken = data.access_token;
+      const query = new URLSearchParams({ grant_type: "fb_exchange_token", client_id: appId, client_secret: appSecret, access_token: this.accessToken });
+      const data = await graphRequest(`https://graph.instagram.com/oauth/access_token?${query}`, {}, 8000);
+      if (typeof data.access_token !== "string" || !data.access_token.trim()) throw new Error("Token refresh response unavailable");
+      this.accessToken = data.access_token;
     } catch (err) {
-      logger.error(err, "Instagram token refresh failed");
-      throw err;
+      const failure = providerFailure(err, [this.accessToken, process.env.INSTAGRAM_APP_SECRET || ""], "not_accepted");
+      logger.error({ error: failure.error }, "Instagram token refresh failed");
+      throw new Error(failure.error);
     }
   }
 
@@ -75,149 +68,68 @@ export class InstagramPublisher implements PlatformPublisher {
 
   getCapabilities(): PlatformCapabilities {
     return {
-      supportsScheduling: true,
+      supportsScheduling: false,
       supportsReels: true,
-      supportsCarousel: true,
-      supportsStories: true,
+      supportsCarousel: false,
+      supportsStories: false,
       supportsLive: false,
-      supportsThumbnailUpload: true,
+      supportsThumbnailUpload: false,
       supportsFirstComment: true,
       maxHashtags: 30,
     };
   }
 
   async uploadVideo(params: PublishParams): Promise<PublishResult> {
-    if (!this.accessToken || !this.businessAccountId) {
-      return { success: false, error: "Instagram credentials not configured. Set INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_BUSINESS_ACCOUNT_ID." };
-    }
+    if (!this.accessToken || !this.businessAccountId) return { success: false, deliveryOutcome: "not_accepted", errorCode: "credentials_invalid", error: "Instagram credentials are unavailable" };
+    const state = { started: false };
     try {
-      const videoUrl = params.videoUrl || params.videoFilePath;
-      const caption = this.buildCaption(params);
-
-      // Step 1: Create media container
-      const containerRes = await fetch(
-        `${this.apiBase}/${this.businessAccountId}/media`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            video_url: videoUrl,
-            caption,
-            media_type: "REELS",
-            share_to_feed: true,
-            access_token: this.accessToken,
-            ...(params.thumbnailUrl ? { thumb_offset: 1000 } : {}),
-          }),
-        },
-      );
-      if (!containerRes.ok) {
-        const err = (await containerRes.json()) as { error?: { message: string } };
-        return { success: false, error: err.error?.message || "Failed to create media container" };
+      const videoUrl = requiredVideoUrl(params.videoUrl);
+      const container = await graphRequest(`${this.apiBase}/${this.businessAccountId}/media`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ video_url: videoUrl, caption: this.buildCaption(params), media_type: "REELS", share_to_feed: true, access_token: this.accessToken }) });
+      const containerId = requiredProviderId(container.id);
+      await this.pollContainerReady(containerId, state);
+      state.started = true;
+      const published = await graphRequest(`${this.apiBase}/${this.businessAccountId}/media_publish`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creation_id: containerId, access_token: this.accessToken }) });
+      // Graph media IDs are not Instagram shortcodes; do not fabricate a permalink.
+      const result = canonicalPublication(published.id);
+      if (result.success) {
+        logger.info({ postId: result.externalId }, "Instagram publication acknowledged");
+        if (params.firstComment) await this.postComment(result.externalId!, params.firstComment);
       }
-      const container = (await containerRes.json()) as { id: string };
-
-      // Step 2: Poll for container status (up to 3 min)
-      const containerId = container.id;
-      const ready = await this.pollContainerReady(containerId);
-      if (!ready) return { success: false, error: "Media container not ready within timeout" };
-
-      // Step 3: Publish container
-      const publishRes = await fetch(
-        `${this.apiBase}/${this.businessAccountId}/media_publish`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ creation_id: containerId, access_token: this.accessToken }),
-        },
-      );
-      if (!publishRes.ok) {
-        const err = (await publishRes.json()) as { error?: { message: string } };
-        return { success: false, error: err.error?.message || "Failed to publish media" };
-      }
-      const published = (await publishRes.json()) as { id: string };
-
-      // Step 4: Post first comment if provided
-      if (params.firstComment && published.id) {
-        await this.postComment(published.id, params.firstComment);
-      }
-
-      const postUrl = `https://www.instagram.com/p/${published.id}/`;
-      logger.info({ postId: published.id }, "Instagram video published");
-      return { success: true, platformVideoId: published.id, publishedUrl: postUrl };
-    } catch (err) {
-      logger.error(err, "Instagram upload failed");
-      return { success: false, error: err instanceof Error ? err.message : "Upload failed" };
+      return result;
+    } catch (error) {
+      const failure = providerFailure(error, [this.accessToken], state.started ? "unknown" : "not_accepted");
+      logger.error({ error: failure.error, code: failure.errorCode }, "Instagram upload failed");
+      return failure;
     }
   }
 
   async scheduleVideo(params: PublishParams, publishAt: Date): Promise<PublishResult> {
-    if (!this.accessToken || !this.businessAccountId) {
-      return { success: false, error: "Instagram credentials not configured" };
-    }
-    try {
-      const videoUrl = params.videoUrl || params.videoFilePath;
-      const caption = this.buildCaption(params);
-      const publishTime = Math.floor(publishAt.getTime() / 1000);
-
-      const res = await fetch(
-        `${this.apiBase}/${this.businessAccountId}/media`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            video_url: videoUrl,
-            caption,
-            media_type: "REELS",
-            scheduled_publish_time: publishTime,
-            access_token: this.accessToken,
-          }),
-        },
-      );
-      if (!res.ok) {
-        const err = (await res.json()) as { error?: { message: string } };
-        return { success: false, error: err.error?.message || "Failed to schedule post" };
-      }
-      const result = (await res.json()) as { id: string };
-      logger.info({ containerId: result.id, publishAt }, "Instagram video scheduled");
-      return { success: true, platformVideoId: result.id, scheduledFor: publishAt.toISOString() };
-    } catch (err) {
-      logger.error(err, "Instagram schedule failed");
-      return { success: false, error: err instanceof Error ? err.message : "Schedule failed" };
-    }
+    void params; void publishAt;
+    return unsupportedNativeSchedule("Instagram");
   }
 
-  private async pollContainerReady(containerId: string, maxWaitMs = 180_000): Promise<boolean> {
-    const interval = 5000;
-    const maxAttempts = Math.ceil(maxWaitMs / interval);
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((r) => setTimeout(r, interval));
-      try {
-        const res = await fetch(
-          `${this.apiBase}/${containerId}?fields=status_code,error&access_token=${this.accessToken}`,
-        );
-        const data = (await res.json()) as MediaContainerStatus;
-        if (data.status_code === "FINISHED") return true;
-        if (data.status_code === "ERROR") {
-          logger.error({ error: data.error }, "Instagram container error");
-          return false;
-        }
-      } catch { /* continue polling */ }
+  private async pollContainerReady(containerId: string, state: { started: boolean }): Promise<void> {
+    const deadline = Date.now() + 180000;
+    for (let attempt = 0; attempt < 36 && Date.now() < deadline; attempt++) {
+      let data: Record<string, unknown> | undefined;
+      try { data = await graphRequest(`${this.apiBase}/${encodeURIComponent(containerId)}?fields=status_code&access_token=${encodeURIComponent(this.accessToken)}`, {}, Math.max(1, Math.min(10000, deadline - Date.now()))); }
+      catch (error) {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status && status < 500) throw error;
+      }
+      if (data?.status_code === "FINISHED") return;
+      if (data?.status_code === "PUBLISHED") { state.started = true; throw new Error("Container already published; reconciliation is required"); }
+      if (data && data.status_code !== "IN_PROGRESS") throw new Error("Media container processing failed or returned an invalid status");
+      if (attempt < 35 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, Math.min(5000, deadline - Date.now())));
     }
-    return false;
+    throw new Error("Media container processing timed out before publication");
   }
 
   private async postComment(mediaId: string, message: string): Promise<void> {
-    try {
-      await fetch(
-        `${this.apiBase}/${mediaId}/comments`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, access_token: this.accessToken }),
-        },
-      );
-    } catch (err) {
-      logger.warn(err, "Instagram first comment failed");
+    try { await graphRequest(`${this.apiBase}/${encodeURIComponent(mediaId)}/comments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, access_token: this.accessToken }) }); }
+    catch (error) {
+      const failure = providerFailure(error, [this.accessToken], "unknown");
+      logger.warn({ error: failure.error, code: failure.errorCode }, "Instagram first comment failed; publication remains acknowledged");
     }
   }
 

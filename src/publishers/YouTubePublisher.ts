@@ -8,6 +8,7 @@ import fs from "node:fs";
 import { google } from "googleapis";
 import type { Config } from "../config";
 import { logger } from "../logger";
+import { canonicalPublication, verifyProviderCredentials } from "./providerContracts";
 import { classifyFailure, sanitizeProviderMessage } from "./failureClassification";
 import type { PlatformPublisher, PlatformLimits, PublishParams, PublishResult } from "./PlatformPublisher";
 
@@ -29,12 +30,7 @@ export class YouTubePublisher implements PlatformPublisher {
     if (!this.config.youtubeClientId || !this.config.youtubeClientSecret || !this.config.youtubeRefreshToken) {
       return false;
     }
-    try {
-      await this.refreshToken();
-      return true;
-    } catch {
-      return false;
-    }
+    return verifyProviderCredentials(() => this.refreshToken(), [this.config.youtubeRefreshToken, this.config.youtubeClientSecret]);
   }
 
   async refreshToken(): Promise<void> {
@@ -56,6 +52,7 @@ export class YouTubePublisher implements PlatformPublisher {
   }
 
   async uploadVideo(params: PublishParams): Promise<PublishResult> {
+    let publicationStarted = false;
     try {
       await this.refreshToken();
       const youtube = google.youtube({ version: "v3", auth: this.oAuth2Client });
@@ -67,6 +64,7 @@ export class YouTubePublisher implements PlatformPublisher {
         .slice(0, limits.maxTagCount)
         .map((t) => t.slice(0, limits.maxTagLength));
 
+      publicationStarted = true;
       const res = await youtube.videos.insert({
         part: ["snippet", "status"],
         requestBody: {
@@ -89,13 +87,10 @@ export class YouTubePublisher implements PlatformPublisher {
       });
 
       const videoId = res.data.id;
-      logger.info({ videoId, title }, "YouTube: video uploaded");
+      const result = canonicalPublication(videoId, (id) => `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`);
+      if (result.success) logger.info({ videoId, title }, "YouTube: video uploaded");
 
-      return {
-        success: true,
-        externalId: videoId ?? undefined,
-        publishedUrl: videoId ? `https://www.youtube.com/watch?v=${videoId}` : undefined,
-      };
+      return result;
     } catch (err: unknown) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const response = (err as {
@@ -111,7 +106,7 @@ export class YouTubePublisher implements PlatformPublisher {
         ? classifyFailure({ code: "rate_limited", message: sourceMessage })
         : classifyFailure({ message: sourceMessage, httpStatus });
       logger.error({ err: safeMessage, code: failure.code }, "YouTube upload failed");
-      return { success: false, error: safeMessage, errorCode: failure.code };
+      return { success: false, deliveryOutcome: publicationStarted ? "unknown" : "not_accepted", error: safeMessage, errorCode: failure.code };
     }
   }
 

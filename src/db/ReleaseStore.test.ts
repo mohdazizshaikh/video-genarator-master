@@ -98,7 +98,7 @@ describe("ReleaseStore", () => {
       workspaceId: "workspace-a",
       releaseId: release.id,
       connectorId: "connector-a",
-      destinationId: "destination-a",
+      destinationId: "destination-b",
       idempotencyKey: "release-a-target-b",
     });
     store.updateTarget("workspace-a", second.id, { status: "publishing" });

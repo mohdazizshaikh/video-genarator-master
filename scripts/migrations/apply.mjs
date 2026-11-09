@@ -2,9 +2,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import pg from "pg";
 
-const { Client } = pg;
 const root = process.cwd();
 const migrationDir = path.join(root, "migrations");
 const requiredApprovals = ["MIGRATION_BACKUP_APPROVED", "MIGRATION_RECONCILIATION_APPROVED", "MIGRATION_ROLLBACK_APPROVED"];
@@ -23,9 +21,19 @@ if (blockers.length) {
   console.log(JSON.stringify({ mode: "migration-apply", destructive: true, executed: false, blockers, invariants: ["no database connection is opened while preconditions fail", "secret values are never printed", "file-backed authority remains unchanged", "primary-read cutover is never enabled by this command"] }, null, 2));
   process.exitCode = 2;
 } else {
-  const client = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 10000, statement_timeout: 120000, application_name: "content-factory-migration" });
+  let client;
+  let locked = false;
+  let phase = "load-client";
   try {
+    const { default: pg } = await import("pg");
+    client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 10000, statement_timeout: 120000, application_name: "content-factory-migration" });
+    phase = "connect";
     await client.connect();
+    phase = "lock";
+    const lock = await client.query("SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired", ["content-factory:migration"]);
+    if (lock.rows[0]?.acquired !== true) throw new Error("Migration runner lock is held");
+    locked = true;
+    phase = "checkpoints";
     const checkpoints = new Map();
     try {
       const result = await client.query("SELECT name, checksum FROM migration_checkpoints");
@@ -33,6 +41,7 @@ if (blockers.length) {
     } catch (error) {
       if (error?.code !== "42P01") throw error;
     }
+    phase = "apply";
     for (const migration of migrations) {
       const existing = checkpoints.get(migration.name);
       if (existing && existing !== migration.checksum) throw new Error(`checksum drift detected for ${migration.name}`);
@@ -49,11 +58,12 @@ if (blockers.length) {
         throw error;
       }
     }
-    console.log(JSON.stringify({ mode: "migration-apply", destructive: true, executed: true, migrations: migrations.map(({ name, checksum }) => ({ name, checksum, status: checkpoints.get(name) === checksum ? "verified" : "unknown" })), invariants: ["transaction per migration", "database advisory lock per migration", "checksum recorded after successful commit", "primary-read cutover remains disabled"] }, null, 2));
+    console.log(JSON.stringify({ mode: "migration-apply", destructive: true, executed: true, migrations: migrations.map(({ name, checksum }) => ({ name, checksum, status: checkpoints.get(name) === checksum ? "verified" : "unknown" })), invariants: ["transaction per migration", "session-wide migration lock before checkpoint reads", "database advisory lock per migration", "checksum recorded after successful commit", "primary-read cutover remains disabled"] }, null, 2));
   } catch (error) {
-    console.error(JSON.stringify({ mode: "migration-apply", destructive: true, executed: false, error: error instanceof Error ? error.message : "migration failed", nextAction: "Inspect the database transaction and migration checkpoint before retrying; do not bypass checksum or approval gates." }, null, 2));
+    console.error(JSON.stringify({ mode: "migration-apply", destructive: true, executed: false, phase, error: "Migration execution failed; inspect the database and checkpoint before retrying", code: typeof error?.code === "string" && /^[A-Z0-9]{5}$/.test(error.code) ? error.code : undefined, nextAction: "Inspect the database transaction and migration checkpoint before retrying; do not bypass checksum or approval gates." }, null, 2));
     process.exitCode = 1;
   } finally {
-    await client.end().catch(() => undefined);
+    if (locked) await client.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", ["content-factory:migration"]).catch(() => undefined);
+    await client?.end().catch(() => undefined);
   }
 }

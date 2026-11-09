@@ -1,6 +1,7 @@
 import axios from "axios";
 import fs from "fs-extra";
 import { logger } from "../logger";
+import { canonicalPublication, providerFailure, verifyProviderCredentials, unsupportedNativeSchedule } from "./providerContracts";
 import { getPlatformLimits } from "./PlatformLimits";
 import type { PlatformPublisher, PublishParams, PublishResult, PlatformLimits } from "./PlatformPublisher";
 
@@ -32,41 +33,40 @@ export class XTwitterPublisher implements PlatformPublisher {
   }
 
   async uploadVideo(params: PublishParams): Promise<PublishResult> {
+    let publicationStarted = false;
     try {
       const tweetText = this.truncateText(
         `${params.title}\n\n${params.description}\n\n${params.tags.slice(0, 3).map((t) => `#${t}`).join(" ")}`,
       );
 
-      let mediaId: string | undefined;
-      try {
-        const fileBuffer = await fs.readFile(params.videoFilePath);
-        const mediaRes = await axios.post(
-          "https://upload.twitter.com/1.1/media/upload.json",
-          { media_data: fileBuffer.toString("base64"), media_type: "video/mp4" },
-          { headers: { Authorization: `Bearer ${this.bearerToken}`, "Content-Type": "application/json" } },
-        );
-        mediaId = mediaRes.data.media_id_string;
-      } catch { /* video upload optional — tweet text only */ }
-
-      const body: Record<string, unknown> = { text: tweetText };
-      if (mediaId) body.media = { media_ids: [mediaId] };
-
+      const fileBuffer = await fs.readFile(params.videoFilePath);
+      const mediaRes = await axios.post(
+        "https://upload.twitter.com/1.1/media/upload.json",
+        { media_data: fileBuffer.toString("base64"), media_type: "video/mp4" },
+        { headers: { Authorization: `Bearer ${this.bearerToken}`, "Content-Type": "application/json" }, timeout: 90000 },
+      );
+      const mediaId = mediaRes.data?.media_id_string;
+      if (typeof mediaId !== "string" || !mediaId.trim() || /\s/.test(mediaId) || ["null", "undefined"].includes(mediaId)) throw new Error("Invalid video media upload response");
+      const body = { text: tweetText, media: { media_ids: [mediaId] } };
+      publicationStarted = true;
       const res = await axios.post("https://api.twitter.com/2/tweets", body, {
-        headers: { Authorization: `Bearer ${this.bearerToken}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${this.bearerToken}`, "Content-Type": "application/json" }, timeout: 30000,
       });
 
-      const tweetId = res.data.data?.id;
-      logger.info({ tweetId }, "X/Twitter post published");
-      return { success: true, platformVideoId: tweetId, publishedUrl: `https://x.com/i/web/status/${tweetId}` };
+      const tweetId = res.data?.data?.id;
+      const result = canonicalPublication(tweetId, (id) => `https://x.com/i/web/status/${encodeURIComponent(id)}`);
+      if (result.success) logger.info({ tweetId }, "X/Twitter post published");
+      return result;
     } catch (err: unknown) {
-      logger.error({ err }, "X/Twitter publish failed");
-      return { success: false, error: err instanceof Error ? err.message : "X/Twitter publish failed" };
+      const failure = providerFailure(err, [this.bearerToken, this.apiKey, this.apiSecret, this.accessToken, this.accessSecret], publicationStarted ? "unknown" : "not_accepted");
+      logger.error({ error: failure.error, code: failure.errorCode }, "X/Twitter publish failed");
+      return failure;
     }
   }
 
   async scheduleVideo(params: PublishParams, publishAt: Date): Promise<PublishResult> {
-    logger.info({ publishAt }, "X scheduling — publishing immediately");
-    return this.uploadVideo(params);
+    void params; void publishAt;
+    return unsupportedNativeSchedule("X");
   }
 
   async refreshToken(): Promise<void> {
@@ -75,13 +75,9 @@ export class XTwitterPublisher implements PlatformPublisher {
 
   async validateCredentials(): Promise<boolean> {
     if (!this.bearerToken) return false;
-    try {
-      await axios.get("https://api.twitter.com/2/users/me", {
-        headers: { Authorization: `Bearer ${this.bearerToken}` },
-        timeout: 5000,
-      });
-      return true;
-    } catch { return false; }
+    return verifyProviderCredentials(() => axios.get("https://api.twitter.com/2/users/me", {
+      headers: { Authorization: `Bearer ${this.bearerToken}` }, timeout: 5000,
+    }), [this.bearerToken, this.apiKey, this.apiSecret, this.accessToken, this.accessSecret]);
   }
 
   getVideoLimits(): PlatformLimits {

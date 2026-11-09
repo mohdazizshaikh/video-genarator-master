@@ -23,6 +23,8 @@ export interface PublishParams {
 }
 
 export interface PublishResult {
+  /** Only a confirmed provider rejection permits automatic upload retry. */
+  deliveryOutcome?: "not_accepted" | "unknown";
   success: boolean;
   externalId?: string;
   platformVideoId?: string;

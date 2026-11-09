@@ -1,0 +1,6 @@
+{
+  "scripts/backup.mjs": "96d8eb6f32612d6daa82022359ca5981f597393f016f9555a9d50c42b8f5516b",
+  "scripts/full-backup-integrity.mjs": "1c3c5ede83aacc9e92e6d69929fe14051173c21afa29e065e8a4e5240c36325a",
+  "src/integration/FullBackupRecovery.test.ts": "d28fe8f5066e8b321f3ece65be923a4afd55dd8762f42625677f150a91a04f51",
+  "docs/MIGRATION_RUNBOOK.md": "deee38f638d857dddb5625bbd026be93b23f025ce96a7e8cdafb5a59129c1ecb"
+}

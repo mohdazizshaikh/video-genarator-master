@@ -1,0 +1,6 @@
+{
+  "src/db/CustomNewsSourceStore.ts": "4ac02cf09e4036f5878db688cd5293590a03c2acf5aa2c8ee6fe8a47b17b0ec6",
+  "src/db/ContentAutomationRuleStore.ts": "a92fc212a7888badbb961eb543e1382562bf925c234dad00b4815bcd274cdad2",
+  "src/db/jsonArrayFile.ts": "205cd7d62c35b1e9301e6b5f8949e54269cb2b7b1646c22fb6410c094ee0668c",
+  "src/db/SourceStoreSafety.test.ts": "e2ed70f3e7bbbb2a2e85dec5a3663adbea497f55fd3419a36271d909b21c64fc"
+}

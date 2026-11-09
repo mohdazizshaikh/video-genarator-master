@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-28",
+  "files": {
+    "package.json": "fa20045941f22e2fa6c06b75d25d468bf30d0f1939028a73f3a383d7e5cc5d4a",
+    "pnpm-lock.yaml": "8565d68b81e6e9617beaaf1a1ca145c757d748a33f08fadb53fcc4cbac889ddb",
+    "eslint.config.mjs": "9b1ebce88521e6728e83ed663fdefab94402cd989422c3ec4651cdb32c965c2f",
+    "scripts/migrations/apply.mjs": "d398dd5d07cf20f6d6cca16932a51bc7b63a625ed77bae3f7bae365390f58285",
+    "scripts/migrations/artifacts.mjs": "69cd5b0536e8c137168a37153eba80bfe64b03e6c4ec11bd5af1d9c2163d7063",
+    "scripts/migrations/readiness.mjs": "2d0cae290b185f72fa0a162b030c89bd896b64495a53eddcd8b0a9e0a8928db3",
+    "src/integration/MigrationGuards.test.ts": "a983af8d470b74f210ecee572cf191ca09061ab26f2212595d96cc2cd56bfe8c"
+  }
+}

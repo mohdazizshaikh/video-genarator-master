@@ -1,0 +1,227 @@
+{
+  "date": "2026-10-25",
+  "source_files": [
+    {
+      "path": "src/db/ArtifactManifestStore.ts",
+      "sha256": "70065b92b1f95bb7959b643a514b3b54d42eb854ae8f7692027c2d57e6cc25b5"
+    },
+    {
+      "path": "src/db/ContentVersionStore.ts",
+      "sha256": "19b7dbc50619067159f7b9e4cb55a61e939a49e22a0efa8b74b9c9cca242a17c"
+    },
+    {
+      "path": "src/db/JobEventOutboxStore.ts",
+      "sha256": "5c68fd54c1c71eed5355210d98c6d56b2f4bc06aa0e2413c67c59caf48175981"
+    },
+    {
+      "path": "src/db/JobEventStore.ts",
+      "sha256": "a869cf75be68596d4438b14a6e05a707615d0fffb9ba0f2c2012298c20089a29"
+    },
+    {
+      "path": "src/db/LifecycleConcurrency.test.ts",
+      "sha256": "94350f887db5f32f97fbbbb82556d9f5580ae8ddbcbcf90c7f43b8075cdf140b"
+    },
+    {
+      "path": "src/db/ReleaseStore.ts",
+      "sha256": "02777cb5c8af0c448cf96236dae59a2e7083560244307df1d44fd0408bda0f91"
+    },
+    {
+      "path": "src/db/VideoMetadataStore.ts",
+      "sha256": "c6f2a6d7a437dff2dac75744d111318dd14c6ed04f89394a0b98c01cd30cc459"
+    },
+    {
+      "path": "src/server/auth.ts",
+      "sha256": "8841090bbc77b4fe918f8fd0f8ee43a07e2242758cce244a00fad77add0735ca"
+    },
+    {
+      "path": "src/server/routers/account.ts",
+      "sha256": "6e37f2b26f8b2ad3fab6db5c9053775525db0bab52f843f11a873e0860c9d7e8"
+    },
+    {
+      "path": "src/server/routers/branding.ts",
+      "sha256": "68e3050f2145ca3c336948766ffb55d7c52dc8500f1d388b77d94cba6f5d2dcf"
+    },
+    {
+      "path": "src/server/routers/contentbuckets.ts",
+      "sha256": "ae9c96d28c6623ef9d9cd5c1b1be63a9ab43340143941ad5c41b9af81291197d"
+    },
+    {
+      "path": "src/server/routers/contentversions.ts",
+      "sha256": "fb11a0d74ba3b79fb75306bcc1efb02eca7fb26c61e62db149e290e5e1064280"
+    },
+    {
+      "path": "src/server/routers/costs.ts",
+      "sha256": "24df1747d56e66cfb6b320b64cd7b16394332e976208b5eb541f1aac4d686d6e"
+    },
+    {
+      "path": "src/server/routers/engineIsolation.test.ts",
+      "sha256": "92e0d8cc106106be2a09f54b0251a6d669fe93957de82c5a1c3f22c13bd54024"
+    },
+    {
+      "path": "src/server/routers/engines.ts",
+      "sha256": "b3bcf178d79665fbe5104e4a0e8eb438ab0012c1c044c30ef35a0ce80063049d"
+    },
+    {
+      "path": "src/server/routers/hooks.ts",
+      "sha256": "eceb8f31d039d20624f850b562466394c689bdf3d206bd32fdc3402abc6a919d"
+    },
+    {
+      "path": "src/server/routers/humanized.ts",
+      "sha256": "fa38ac5f7a148bf70e557342eaf1696c80057213413985c9290d302db4a1c5e2"
+    },
+    {
+      "path": "src/server/routers/mcp.ts",
+      "sha256": "ed7846f236c12e8a770e2b030b36df482638459161bc5ee3836cdc1198b8e87c"
+    },
+    {
+      "path": "src/server/routers/publish.ts",
+      "sha256": "b65df8da653b0533244edda7fa25177a82d26bf7e025dd6e60e8f73c4fc3b713"
+    },
+    {
+      "path": "src/server/routers/recycle.ts",
+      "sha256": "8f0145c76fd2343d6096340a1b730a019ed99c9c4a9ddc83fc9cd323ca083825"
+    },
+    {
+      "path": "src/server/routers/releases.ts",
+      "sha256": "0963256ca8eea519764e4a743645c60283425af2eb18a6f9046c3e24e8205d22"
+    },
+    {
+      "path": "src/server/routers/rest.ts",
+      "sha256": "cd806569d17f50a810c5f5b8076ef9a560646ced212a192691ade1d1bc2a101d"
+    },
+    {
+      "path": "src/server/routers/schedule.ts",
+      "sha256": "74334c3238b57f950645c3a2149d5cf257ab6dbb067c5fe7f2e676ae7c58fc88"
+    },
+    {
+      "path": "src/server/routers/security.test.ts",
+      "sha256": "3c2ff1947d0389fbef23d24c57886efa5d909635a3e1a21cb01c00bae9719697"
+    },
+    {
+      "path": "src/server/routers/shadowban.ts",
+      "sha256": "9ee77a122de6240ab252930cf47711a28df3d1c2cd128e26d6a0dd99abc0cedd"
+    },
+    {
+      "path": "src/server/routers/strategy.ts",
+      "sha256": "6be5a79f345cc66a289882fda2ca71bd796b76046207bc4398c66cb3398fc8e3"
+    },
+    {
+      "path": "src/server/routers/systemengines.ts",
+      "sha256": "b2cda8ce5596933f71fa755a1ffcf9f1fd938610a627171591e830a7fe7b4572"
+    },
+    {
+      "path": "src/server/routers/tenants.ts",
+      "sha256": "66829d160f7aecaba5e02c82a97281dcc84061acc2918cd01fcbdd98b4d4d9b2"
+    },
+    {
+      "path": "src/server/routers/translate.ts",
+      "sha256": "85af1fa31806af3a7ef27fc9a77cd8a2f4e6e37926fd03278abf99c1aa0c33b4"
+    },
+    {
+      "path": "src/server/routers/videoOwnership.test.ts",
+      "sha256": "0baf782d14df29920975d1633ee458682bc84c8ae9174460c524e0349bef4390"
+    },
+    {
+      "path": "src/server/server.ts",
+      "sha256": "c5df6941dc8330bdbcf16a4f7d94cda2beede158e143ee3f2043c5fdfebe978f"
+    },
+    {
+      "path": "src/server/testing/dispatch.ts",
+      "sha256": "1b1a507ad2fbc77be769a6b4cd5730e69c6b85211120b13e7c0ccea0eaea665c"
+    },
+    {
+      "path": "src/server/videoStream.ts",
+      "sha256": "221873b202459ea5d96e3888400322597243c2c5eacbba3931506eea7c94fa0d"
+    },
+    {
+      "path": "src/services/AuthEngine.ts",
+      "sha256": "20b43ee668a90a4f24b7aa47582d25c43f3ccf5ec3fe62762baabbbcb9540d1a"
+    },
+    {
+      "path": "src/services/BrandingEngine.ts",
+      "sha256": "978ac4f0a8f7114fb3e99cdd8f6408e2cbc25d2deba699f514510f15a03f6f9d"
+    },
+    {
+      "path": "src/services/ReleaseAuthorization.test.ts",
+      "sha256": "1d2a7f9cb83fb901fa6675a4cf80afb8af57ce213795dc37ceaaf0dd0e4c4b23"
+    },
+    {
+      "path": "src/services/ReleaseAuthorization.ts",
+      "sha256": "ac78389c9b26cfd61a02ccef0319ee8b9663955ca20aeec3f18b116ae7e7fecf"
+    },
+    {
+      "path": "src/services/TenantEngineScope.ts",
+      "sha256": "b0f3f4b1081dab81f099ce73c7d1c69308dbfc2a195352035f9103484b40ba34"
+    },
+    {
+      "path": "src/services/TranslationEngine.test.ts",
+      "sha256": "58b2de80b5430725292fddda426a37e9637d72ba401d193fd182110e24b3a639"
+    },
+    {
+      "path": "src/services/TranslationEngine.ts",
+      "sha256": "d3c41c429bf4c03c2df55d63d90edc16b3bc0f370fc03e6587422a3b87bb23f9"
+    },
+    {
+      "path": "src/services/VideoAccessToken.test.ts",
+      "sha256": "bdf8349bf4f4ee3f87ab0d706c70f87e8219d243a6617e988e3dff4593f109f8"
+    },
+    {
+      "path": "src/services/VideoAccessToken.ts",
+      "sha256": "25f9240dbc4a9e9ea58612c33f9af0b2f7b36814c260fe0a5ddcf631c05b6753"
+    },
+    {
+      "path": "src/short-creator/ShortCreator.test.ts",
+      "sha256": "2c8c42eb5f4f740d858de5b8da57c53acdca46d2d4d87d69eb8fa2ffe07f1ad8"
+    },
+    {
+      "path": "src/short-creator/ShortCreator.ts",
+      "sha256": "1dcfd770a6d7896a0b7776adca6c029d46952245ee2fee5371175be3f972e140"
+    },
+    {
+      "path": "src/ui/pages/PublishDashboard.tsx",
+      "sha256": "d1709d747f1841ea86045219997537a738c1fb2d03b213cb5cb104000c4c011b"
+    },
+    {
+      "path": "src/ui/pages/ReleasesPage.tsx",
+      "sha256": "3c7227cf5cd6c4aa18da3c2a97b0f8c82e4c7cf350492596e550bfda0a4eeb69"
+    },
+    {
+      "path": "src/ui/pages/TenantConsole.tsx",
+      "sha256": "c71d078f9ca264d744ab0820e2fd39bc3ad4f43108b7607cdb3f509cc57fbc66"
+    },
+    {
+      "path": "src/ui/pages/VideoDetails.tsx",
+      "sha256": "76bf8ecf1924dab468c93ced9f778288a921a7aa11ce5d347d950d58d1351094"
+    },
+    {
+      "path": "src/ui/services/apiClient.test.ts",
+      "sha256": "7108e2b4f39088eb9b09fb9c759db22989997aafb2c83328fc64c5b542bdcfc0"
+    },
+    {
+      "path": "src/ui/services/apiClient.ts",
+      "sha256": "4d4483a0c9d514f4e0cf152132addf01c5c5e5ce85d9c7cf840e9abe3623456a"
+    },
+    {
+      "path": "src/ui/services/apiOrigin.ts",
+      "sha256": "7c8eba969892d5a72d8da6c82f5b214f775212f66f58e0daaf7a4ea4a93b199e"
+    },
+    {
+      "path": "src/ui/services/authenticatedFetch.ts",
+      "sha256": "58cdea1d77dba359d9f0c15aaa82c272cdcc0239aee0610800a2b70909a2437f"
+    },
+    {
+      "path": "src/ui/store/uiStore.ts",
+      "sha256": "1e4f93151a795d2a2a943755375258b2ccae48ddf8ee0c76a8bb9c1ee9ab778f"
+    },
+    {
+      "path": "src/workers/PublishWorker.test.ts",
+      "sha256": "c8d4a8a314390db6cc3dde584cdc8fbb5ef5d2ddeba36b216e0194b902a3a8b7"
+    },
+    {
+      "path": "src/workers/PublishWorker.ts",
+      "sha256": "01337ac1ca9f9375a1b5f21e1baadf28520514c610bba960ab3080503ab8a0ea"
+    }
+  ],
+  "external_services_exercised": false,
+  "existing_untracked_webhook_security_preserved": true
+}

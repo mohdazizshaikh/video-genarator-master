@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-31",
+  "files": [
+    {
+      "path": "src/db/VideoMetadataStore.ts",
+      "sha256": "2a889b3330f008518f675d63a09c623396b6df39197c8e46d065a6121998914a"
+    },
+    {
+      "path": "src/db/VideoMetadataStoreSafety.test.ts",
+      "sha256": "8493e1597d37ea7b9df719067fef6c9e9adec92ba613139b3182a118946d3772"
+    },
+    {
+      "path": "src/short-creator/ShortCreator.test.ts",
+      "sha256": "48f49837652dc7e3b42d99a3e5779671e224243e4183728ff57d23f8b1b5d62c"
+    }
+  ]
+}

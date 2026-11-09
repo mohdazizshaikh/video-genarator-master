@@ -1,8 +1,8 @@
 import { Router } from "express";
 import crypto from "node:crypto";
-import type { Request, Response } from "express";
+import type { Request, Response, RequestHandler } from "express";
 import type { Config } from "../../config";
-import { TenantStore, type TenantRecord } from "../../db/TenantStore";
+import { TenantStore, TenantProfileConflictError, type TenantRecord } from "../../db/TenantStore";
 import { TenantUsageStore } from "../../db/TenantUsageStore";
 import { CryptoService } from "../../services/CryptoService";
 import { TenantQuotaService } from "../../services/TenantQuotaService";
@@ -13,11 +13,11 @@ const INSECURE_SECRETS = new Set(["tenant-dev-secret", "change-me-in-production"
 
 function sanitizeTenant(tenant: TenantRecord) {
   const { apiKeys, encryptedApiKeys, ...rest } = tenant;
-  const masked = Object.keys(encryptedApiKeys ?? {}).reduce<Record<string, string>>(
+  const masked = Array.from(new Set([...Object.keys(apiKeys ?? {}), ...Object.keys(encryptedApiKeys ?? {})])).reduce<Record<string, string>>(
     (acc, k) => ({ ...acc, [k]: "••••" }),
     {},
   );
-  return { ...rest, apiKeys: { ...(apiKeys ?? {}), ...masked } };
+  return { ...rest, apiKeys: masked };
 }
 
 export class TenantRouter {
@@ -47,20 +47,25 @@ export class TenantRouter {
 
   private registerRoutes(): void {
     this.router.use(requireAuth);
+    const safely = (handler: (req: Request, res: Response) => Promise<void>): RequestHandler => (req, res) => {
+      return handler(req, res).catch(() => {
+        if (!res.headersSent) res.status(503).json({ error: "Workspace operation unavailable", code: "WORKSPACE_OPERATION_UNAVAILABLE" });
+      });
+    };
 
-    this.router.get("/", (req: Request, res: Response) => this.list(req, res));
-    this.router.post("/", requireAdminKey, (req: Request, res: Response) => this.create(req, res));
-    this.router.post("/bootstrap", (req: Request, res: Response) => this.bootstrap(req, res));
-    this.router.get("/:tenantId", (req: Request, res: Response) => this.get(req, res));
-    this.router.put("/:tenantId", (req: Request, res: Response) => this.updateWorkspace(req, res));
-    this.router.get("/:tenantId/keys", (req: Request, res: Response) => this.listManagedKeys(req, res));
-    this.router.post("/:tenantId/keys", (req: Request, res: Response) => this.manageManagedKey(req, res));
-    this.router.delete("/:tenantId/keys/:keyId", (req: Request, res: Response) => this.deleteManagedKey(req, res));
+    this.router.get("/", safely((req, res) => this.list(req, res)));
+    this.router.post("/", requireAdminKey, safely((req, res) => this.create(req, res)));
+    this.router.post("/bootstrap", safely((req, res) => this.bootstrap(req, res)));
+    this.router.get("/:tenantId", safely((req, res) => this.get(req, res)));
+    this.router.put("/:tenantId", safely((req, res) => this.updateWorkspace(req, res)));
+    this.router.get("/:tenantId/keys", safely((req, res) => this.listManagedKeys(req, res)));
+    this.router.post("/:tenantId/keys", safely((req, res) => this.manageManagedKey(req, res)));
+    this.router.delete("/:tenantId/keys/:keyId", safely((req, res) => this.deleteManagedKey(req, res)));
     // Provider credential updates remain admin-only.
-    this.router.post("/:tenantId/engines", (req: Request, res: Response) => this.updateEngines(req, res));
-    this.router.post("/:tenantId/quotas", (req: Request, res: Response) => this.updateQuotas(req, res));
-    this.router.get("/:tenantId/billing", (req: Request, res: Response) => this.getBilling(req, res));
-    this.router.post("/:tenantId/logs/:engine", (req: Request, res: Response) => this.writeEngineLog(req, res));
+    this.router.post("/:tenantId/engines", safely((req, res) => this.updateEngines(req, res)));
+    this.router.post("/:tenantId/quotas", requireAdminKey, safely((req, res) => this.updateQuotas(req, res)));
+    this.router.get("/:tenantId/billing", safely((req, res) => this.getBilling(req, res)));
+    this.router.post("/:tenantId/logs/:engine", safely((req, res) => this.writeEngineLog(req, res)));
   }
 
   private async create(req: Request, res: Response): Promise<void> {
@@ -85,7 +90,7 @@ export class TenantRouter {
       return;
     }
     const workspaceName = String(req.body?.workspaceName || "").trim();
-    const tier = req.body?.tier || "free";
+    const tier = (req as Request & { auth?: { plan?: string } }).auth?.plan || "free";
     if (!workspaceName || !["free", "pro", "enterprise"].includes(tier)) {
       res.status(400).json({ error: "workspaceName and a valid tier are required" });
       return;
@@ -95,12 +100,15 @@ export class TenantRouter {
       res.json(sanitizeTenant(existing));
       return;
     }
-    const tenant = await this.tenantStore.create({
-      id: authTenantId,
-      workspaceName,
-      tier,
-    });
-    res.status(201).json(sanitizeTenant(tenant));
+    try {
+      const tenant = await this.tenantStore.create({ id: authTenantId, workspaceName, tier: tier as TenantRecord["tier"] });
+      res.status(201).json(sanitizeTenant(tenant));
+    } catch (error) {
+      if (!(error instanceof TenantProfileConflictError)) throw error;
+      const winner = await this.tenantStore.get(authTenantId);
+      if (!winner) throw error;
+      res.json(sanitizeTenant(winner));
+    }
   }
 
   private async list(req: Request, res: Response): Promise<void> {

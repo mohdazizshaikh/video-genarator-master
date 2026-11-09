@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-29",
+  "files": [
+    {
+      "path": "src/db/ScheduleStore.ts",
+      "sha256": "9e884c4ce374a01d8f1094901b45b0f4cd3c579fc067850c88180698d9f781ba"
+    },
+    {
+      "path": "src/server/routers/schedule.ts",
+      "sha256": "1dc03b7e4416131d211a9aa99c3223e5c3711ddf5922d4340301aca945ff864a"
+    },
+    {
+      "path": "src/server/routers/scheduleClaims.test.ts",
+      "sha256": "0147e95fcf3f778091d6407d17bcb039cc8aa86a73be1057363b5d0c22f0a83c"
+    },
+    {
+      "path": "src/ui/pages/SchedulePersistPage.tsx",
+      "sha256": "abdf2ab1307ab823ee07df02a8e1e06e112cbbb58d4e817976afb860a17641ce"
+    }
+  ]
+}

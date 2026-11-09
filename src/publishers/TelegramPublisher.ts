@@ -9,7 +9,7 @@ import FormData from "form-data";
 import axios from "axios";
 import type { Config } from "../config";
 import { logger } from "../logger";
-import { classifyFailure, sanitizeProviderMessage } from "./failureClassification";
+import { PublishFailureError, classifyFailure, sanitizeProviderMessage } from "./failureClassification";
 import type { PlatformPublisher, PlatformLimits, PublishParams, PublishResult } from "./PlatformPublisher";
 
 const TELEGRAM_BASE = "https://api.telegram.org";
@@ -28,9 +28,14 @@ export class TelegramPublisher implements PlatformPublisher {
         `${TELEGRAM_BASE}/bot${this.config.telegramBotToken}/getMe`,
         { timeout: 10000 },
       );
-      return res.data?.ok === true;
-    } catch {
-      return false;
+      if (res.data?.ok === true) return true;
+      if ([401, 403].includes(res.data?.error_code)) return false;
+      throw new Error("Telegram credential verification is unavailable");
+    } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) return false;
+      const message = sanitizeProviderMessage(error instanceof Error ? error.message : "Credential verification unavailable", [this.config.telegramBotToken]);
+      throw new PublishFailureError(classifyFailure({ message, httpStatus: status }));
     }
   }
 
@@ -76,10 +81,12 @@ export class TelegramPublisher implements PlatformPublisher {
       );
 
       if (!res.data?.ok) {
-        throw new Error(res.data?.description ?? "Telegram API error");
+        throw Object.assign(new Error(res.data?.description ?? "Telegram API error"), { response: { status: res.status ?? 200, data: res.data } });
       }
 
-      const messageId = String(res.data.result?.message_id);
+      const id = res.data.result?.message_id;
+      if (!Number.isSafeInteger(id) || id <= 0) return { success: false, deliveryOutcome: "unknown", errorCode: "unknown", error: "Telegram response did not confirm a message ID" };
+      const messageId = String(id);
       logger.info({ messageId, channelId: this.config.telegramChannelId }, "Telegram: video sent");
 
       return {
@@ -90,7 +97,7 @@ export class TelegramPublisher implements PlatformPublisher {
     } catch (err: unknown) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const response = (err as {
-        response?: { status?: number; data?: { description?: string; parameters?: { retry_after?: number } } };
+        response?: { status?: number; data?: { ok?: boolean; error_code?: number; description?: string; parameters?: { retry_after?: number } } };
       })?.response;
       const httpStatus = typeof response?.status === "number" ? response.status : undefined;
       const apiDescription = typeof response?.data?.description === "string" ? response.data.description : undefined;
@@ -99,14 +106,16 @@ export class TelegramPublisher implements PlatformPublisher {
       const safeMessage = sanitizeProviderMessage(apiDescription ?? rawMessage, [this.config.telegramBotToken]);
       const failure = classifyFailure({ message: apiDescription ?? rawMessage, httpStatus, retryAfterSeconds });
       logger.error({ err: safeMessage, code: failure.code }, "Telegram upload failed");
-      return { success: false, error: safeMessage, errorCode: failure.code, retryAfterSeconds };
+      const code = response?.data?.error_code;
+      const rejected = response?.data?.ok === false && typeof code === "number" && code >= 400 && code < 500 && typeof httpStatus === "number" && ((httpStatus >= 400 && httpStatus < 500) || httpStatus === 200);
+      return { success: false, deliveryOutcome: rejected ? "not_accepted" : "unknown", error: safeMessage, errorCode: failure.code, retryAfterSeconds };
     }
   }
 
   // Telegram does not support scheduling via standard Bot API
   async scheduleVideo(params: PublishParams, _publishAt: Date): Promise<PublishResult> {
     void _publishAt;
-    logger.warn("Telegram does not support scheduled posts via Bot API; uploading immediately");
-    return this.uploadVideo(params);
+    void params;
+    return { success: false, deliveryOutcome: "not_accepted", errorCode: "payload_rejected", error: "Telegram native scheduling is unsupported; use managed due-time publishing" };
   }
 }

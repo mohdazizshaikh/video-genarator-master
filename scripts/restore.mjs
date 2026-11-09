@@ -4,10 +4,11 @@
  *
  * The restore path is fail-closed:
  *   1. archive checksum (sidecar, when present)
- *   2. gzip/tar integrity
- *   3. per-file size + SHA-256 against BACKUP_MANIFEST.json
+ *   2. bounded gzip + restricted USTAR entry validation before extraction
+ *   3. exact manifest inventory, totals, sizes and SHA-256
  *   4. explicit target directory — never the live data dir without --force
  *
+ * Restored files are prepared privately with mode 0600 before target publication.
  * Existing target contents are not overwritten in place: with --force they are
  * renamed to `<target>.pre-restore-<stamp>` first (the rollback artifact).
  *
@@ -24,18 +25,19 @@
  * Exit codes: 0 success, 2 verification/guard failure.
  */
 import crypto from "node:crypto";
+import { verifyFullArchive, hashFile } from "./full-backup-integrity.mjs";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 
-const FORMAT = "content-factory-full-backup-v1";
 const args = process.argv.slice(2);
 const valueFor = (flag) => {
   const index = args.indexOf(flag);
   if (index < 0) return undefined;
   const value = args[index + 1];
-  return value && !value.startsWith("--") ? value : undefined;
+  if (!value || value.startsWith("--")) {
+    throw new Error("missing argument value");
+  }
+  return value;
 };
 const hasFlag = (flag) => args.includes(flag);
 const finish = (result, code = 0) => {
@@ -43,88 +45,7 @@ const finish = (result, code = 0) => {
   stream(JSON.stringify(result, null, 2));
   process.exitCode = code;
 };
-const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
-const sha256File = (filePath) => {
-  const hash = crypto.createHash("sha256");
-  const fd = fs.openSync(filePath, "r");
-  try {
-    const buffer = Buffer.alloc(1024 * 1024);
-    let read;
-    while ((read = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) hash.update(buffer.subarray(0, read));
-  } finally {
-    fs.closeSync(fd);
-  }
-  return hash.digest("hex");
-};
-const run = (command, commandArgs) => {
-  const result = spawnSync(command, commandArgs, { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`${command} failed (${result.status}): ${(result.stderr || result.stdout || "").trim().slice(0, 400)}`);
-  return result;
-};
-const listFiles = (root, relative = "") => {
-  const entries = fs.readdirSync(path.join(root, relative), { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    const nextRelative = relative ? path.join(relative, entry.name) : entry.name;
-    if (entry.isSymbolicLink()) continue;
-    if (entry.isDirectory()) files.push(...listFiles(root, nextRelative));
-    else if (entry.isFile()) files.push(nextRelative);
-  }
-  return files;
-};
-
-/** Extract + fully verify an archive into a scratch directory; returns {manifest, extractDir, workDir}. */
-function verifyArchive(archive) {
-  if (!fs.existsSync(archive)) throw new Error(`backup archive not found: ${archive}`);
-  const sidecar = `${archive}.sha256`;
-  if (fs.existsSync(sidecar)) {
-    const expected = fs.readFileSync(sidecar, "utf8").trim().split(/\s+/)[0];
-    const actual = sha256File(archive);
-    if (expected !== actual) throw new Error(`archive checksum mismatch (expected ${expected.slice(0, 12)}…, got ${actual.slice(0, 12)}…)`);
-  }
-
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "cf-restore-"));
-  try {
-    let tarball = archive;
-    if (archive.endsWith(".enc")) {
-      const passphrase = process.env.BACKUP_PASSPHRASE || "";
-      if (passphrase.length < 12) throw new Error("BACKUP_PASSPHRASE (>= 12 chars) is required for an encrypted archive");
-      tarball = path.join(workDir, "archive.tar.gz");
-      run("openssl", ["enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-pass", "env:BACKUP_PASSPHRASE", "-in", archive, "-out", tarball]);
-    }
-    const extractDir = path.join(workDir, "extract");
-    fs.mkdirSync(extractDir, { recursive: true });
-    run("tar", ["-xzf", tarball, "-C", extractDir]);
-    const manifestPath = path.join(extractDir, "BACKUP_MANIFEST.json");
-    if (!fs.existsSync(manifestPath)) throw new Error("BACKUP_MANIFEST.json missing from archive");
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-    if (manifest.format !== FORMAT) throw new Error(`unexpected manifest format: ${manifest.format}`);
-    const mismatches = [];
-    for (const entry of manifest.files || []) {
-      const filePath = path.join(extractDir, entry.path);
-      if (!fs.existsSync(filePath)) {
-        mismatches.push({ path: entry.path, error: "missing" });
-        continue;
-      }
-      const bytes = fs.readFileSync(filePath);
-      if (bytes.byteLength !== entry.bytes || sha256(bytes) !== entry.sha256) mismatches.push({ path: entry.path, error: "checksum-or-size-mismatch" });
-    }
-    const listed = new Set((manifest.files || []).map((entry) => entry.path));
-    const extras = listFiles(extractDir).map((relative) => relative.split(path.sep).join("/")).filter((relative) => relative !== "BACKUP_MANIFEST.json" && !listed.has(relative));
-    if (mismatches.length > 0 || extras.length > 0) {
-      const error = new Error("archive failed content verification");
-      error.detail = { mismatches, extras };
-      throw error;
-    }
-    return { manifest, extractDir, workDir };
-  } catch (error) {
-    fs.rmSync(workDir, { recursive: true, force: true });
-    if (!error.detail) error.detail = {};
-    throw error;
-  }
-}
-
-function restore() {
+async function restore() {
   const startedAt = Date.now();
   const archiveArg = valueFor("--backup");
   const verifyOnly = hasFlag("--verify-only");
@@ -135,17 +56,18 @@ function restore() {
 
   let verified;
   try {
-    verified = verifyArchive(archive);
-  } catch (error) {
-    return finish({ mode: "restore", restored: false, verified: false, archive, error: String(error.message), ...(error.detail || {}) }, 2);
+    verified = await verifyFullArchive(archive);
+  } catch {
+    return finish({ mode: "restore", restored: false, verified: false, archive, error: "archive_validation_failed" }, 2);
   }
-  const { manifest, extractDir, workDir } = verified;
+  const { manifest, extractDir, workDir, authenticated } = verified;
 
   try {
     if (verifyOnly) {
       return finish({
         mode: "verify-only",
         verified: true,
+        authenticated,
         archive,
         fileCount: manifest.files.length,
         dataBytes: manifest.totals?.bytes ?? 0,
@@ -162,31 +84,46 @@ function restore() {
       return finish({ mode: "restore", restored: false, verified: true, archive, error: "target is the live data directory; stop the app and pass --force to restore over it", target }, 2);
     }
 
-    let preRestoreArchive;
-    if (fs.existsSync(target)) {
-      const existing = fs.readdirSync(target);
-      if (existing.length > 0) {
-        if (!force) return finish({ mode: "restore", restored: false, verified: true, archive, error: "target exists and is not empty; pass --force to archive it and restore over it", target }, 2);
-        preRestoreArchive = `${target}.pre-restore-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+    // Canonical parent and static symlink checks precede target publication.
+    fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
+    const parent = fs.realpathSync(path.dirname(target));
+    const canonicalTarget = path.join(parent, path.basename(target));
+    const liveCanonical = fs.existsSync(liveDataDir) ? fs.realpathSync(liveDataDir) : path.join(fs.existsSync(path.dirname(liveDataDir)) ? fs.realpathSync(path.dirname(liveDataDir)) : path.dirname(liveDataDir), path.basename(liveDataDir));
+    if ((canonicalTarget === liveCanonical || liveCanonical.startsWith(`${canonicalTarget}${path.sep}`) || canonicalTarget.startsWith(`${liveCanonical}${path.sep}`)) && !force) throw new Error("live target requires force");
+    const targetStat = fs.lstatSync(target, { throwIfNoEntry: false });
+    if (targetStat && (targetStat.isSymbolicLink() || !targetStat.isDirectory())) throw new Error("target must be a regular directory");
+    if (targetStat && fs.readdirSync(target).length && !force) throw new Error("nonempty target requires force");
+    const staging = fs.mkdtempSync(path.join(parent, ".cf-restore-incomplete-")); fs.chmodSync(staging, 0o700);
+    let preRestoreArchive, mediaFiles = 0;
+    try {
+      for (const entry of manifest.files) {
+        const destination = path.join(staging, entry.path);
+        fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
+        fs.copyFileSync(path.join(extractDir, entry.path), destination, fs.constants.COPYFILE_EXCL);
+        // Archive permission metadata cannot make restored credential files public.
+        fs.chmodSync(destination, 0o600);
+        if (fs.statSync(destination).size !== entry.bytes || hashFile(destination) !== entry.sha256) throw new Error("restored staging checksum mismatch");
+        if (entry.path.startsWith("videos/")) mediaFiles++;
+      }
+      if (fs.existsSync(target)) {
+        preRestoreArchive = `${target}.pre-restore-${crypto.randomUUID()}`;
         fs.renameSync(target, preRestoreArchive);
       }
-    }
-    fs.mkdirSync(target, { recursive: true });
-
-    let mediaFiles = 0;
-    for (const entry of manifest.files) {
-      const source = path.join(extractDir, entry.path);
-      const destination = path.join(target, entry.path);
-      fs.mkdirSync(path.dirname(destination), { recursive: true });
-      fs.copyFileSync(source, destination);
-      fs.chmodSync(destination, parseInt(entry.mode || "644", 8));
-      if (entry.path.startsWith("videos/")) mediaFiles += 1;
-    }
+      try { fs.renameSync(staging, target); }
+      catch (error) {
+        if (preRestoreArchive && !fs.existsSync(target)) {
+          try { fs.renameSync(preRestoreArchive, target); }
+          catch { const recoveryError = new Error("rollback publication failed"); recoveryError.recoveryDirectory = preRestoreArchive; throw recoveryError; }
+        }
+        throw error;
+      }
+    } finally { fs.rmSync(staging, { recursive: true, force: true }); }
 
     return finish({
       mode: "restore",
       restored: true,
       verified: true,
+      authenticated,
       archive,
       target,
       preRestoreArchive: preRestoreArchive ?? null,
@@ -202,4 +139,4 @@ function restore() {
   }
 }
 
-restore();
+restore().catch((error) => finish({ mode: "restore", restored: false, error: "restore_validation_or_io_failed", ...(error.recoveryDirectory ? { recoveryDirectory: error.recoveryDirectory } : {}) }, 2));

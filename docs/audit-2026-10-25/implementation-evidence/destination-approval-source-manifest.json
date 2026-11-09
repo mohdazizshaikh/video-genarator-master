@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-28",
+  "files": {
+    "src/db/ReleaseStore.ts": "55b0040f95cd9e814888aac053ba33a3057a3c0fd69601640c73b98f318b93e6",
+    "src/services/ReleaseAuthorization.ts": "f9d7f7729c918a9bd8cb4364654c23f3137f57f2bb348b579451dda44e7acbf4",
+    "src/server/routers/releases.ts": "be1340fa9847dd80f33892807e79df2713e7d615fe721991a34f235887d24d61",
+    "src/workers/PublishWorker.ts": "71fcecf655bcaf0e1af333a83c121ec660fbb36064a8bb4e5c89581fcb4da58c",
+    "src/server/testing/publicationFixture.ts": "b2ebb3518b1c601fee4a17598bb3ad289c0311d77ff9854b8c2d5c0336d6c2db",
+    "src/ui/pages/ReleasesPage.tsx": "b5e5bf3cfdec39f10d12c1af255a54f5017edbaefd3031fe2b5fa093f53ca65a",
+    "src/server/routers/releaseRecovery.test.ts": "1836a0ffc941db32039e48f6c51ff66207ef04bf55534501a4ec1fb0aa87c3e4",
+    "src/workers/PublishWorkerRecovery.test.ts": "ced57739d7c1cf7085df27a3f9b50c714c7aa683b07177c9b0ac4893df3d166d"
+  }
+}

@@ -210,6 +210,8 @@ Live API surface derived from source (315 routes).
 | `POST` | `/api/schedule` | scheduleRouter |
 | `DELETE` | `/api/schedule/:id` | scheduleRouter |
 | `GET` | `/api/schedule/:id` | scheduleRouter |
+| `GET` | `/api/schedule/:id/outputs/:artifactId` | scheduleRouter |
+| `POST` | `/api/schedule/:id/confirm-assets` | scheduleRouter |
 | `PATCH` | `/api/schedule/:id` | scheduleRouter |
 | `POST` | `/api/schedule/:id/run` | scheduleRouter |
 | `PATCH` | `/api/schedule/:id/status` | scheduleRouter |
@@ -449,33 +451,30 @@ Update engagement metrics.
 
 ### Schedule
 
+Schedule routes require workspace authentication. Responses and mutations are scoped to the authenticated workspace.
+
 #### `GET /api/schedule`
-List schedules.
+List owned schedules, including the current execution and most recent completed output when available.
 
 #### `POST /api/schedule`
-Create a persistent schedule.
+Create a persistent schedule. Supply an ISO date for `publishAt`. The current runner supports at most one platform, category and language per run.
 
 ```json
 {
   "name": "Daily Tech Content",
-  "platforms": ["youtube", "instagram"],
+  "platforms": ["youtube"],
   "categories": ["Technology"],
   "languages": ["en"],
+  "contentType": "video",
+  "recurrence": "cron",
+  "timezone": "Asia/Kolkata",
   "cronExpression": "0 9 * * *",
-  "engines": {
-    "enableHashtagOptimization": true,
-    "enableCommentCTA": true,
-    "enableViralElements": true
-  },
-  "quality": {
-    "targetLUFS": -14,
-    "visualQualityTier": "premium"
-  }
+  "publishAt": "2026-12-01T09:00:00+05:30"
 }
 ```
 
 #### `GET /api/schedule/stats`
-Schedule statistics (active count, runs today, success rate).
+Schedule totals by status, plus aggregate recorded runs and failures.
 
 #### `PATCH /api/schedule/:id/status`
 Update schedule status.
@@ -484,7 +483,15 @@ Update schedule status.
 ```
 
 #### `POST /api/schedule/:id/run`
-Trigger a manual schedule run.
+Trigger a manual schedule run. For a video, `success: true` means the request was accepted and the video ID was checkpointed. Poll `GET /api/schedule/:id`: `execution.pendingOutput.state: "video-queued"` is pending; `lastOutput.state: "video-completed"` records verified render completion with `videoId`, `videoArtifactId`, and `contentVersionId`. Compare the current execution with the latest completed output: an older receipt can remain visible during a new pending run. Render completion does not imply approval or publication.
+
+#### `GET /api/schedule/:id/outputs/:artifactId`
+Download an owned SVG listed in the current checkpoint or completed output. This route does not serve the MP4.
+
+#### `POST /api/schedule/:id/confirm-assets`
+Confirm already-generated SVG outputs using `executionId`, `evidenceReference`, and `verifiedOutcome: true`. Requires `schedule:reconcile`, `workspace:admin`, or `admin`. This endpoint cannot confirm a video or rerun generation.
+
+The content-version API reserves `render:` signatures and `createdBy: "render"` for the renderer. Producer versions are readable by their workspace; public draft and render PATCH routes reject edits to them with HTTP 409.
 
 #### `GET /api/schedule/:id`
 Get schedule details.

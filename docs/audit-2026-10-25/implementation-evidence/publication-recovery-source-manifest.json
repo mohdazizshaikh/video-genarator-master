@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-28",
+  "files": {
+    "src/db/PublishExecutionStore.ts": "08da8f6c6715365a7b98497bc269a3230fe0ea047528f7f30548a4bdc43c1450",
+    "src/db/PublishJobStore.ts": "fbe0532874a9c194dfb783bc0e4f4d1c5279a7cea4d709fe63139c51aeb1feb5",
+    "src/db/ReleaseStore.ts": "a9ee92da3669d29ec05bf330ee864c702028de077d11f1267a846f3384a1deb8",
+    "src/db/ReleaseLifecycle.test.ts": "72cfe70338e045d0e3142aa5ad370bcf224a4144530d31a08c29b951b827a63c",
+    "src/services/PublishDeliveryService.ts": "18442d7070611981d7788defc041c463a02e49730a2a35ff7a4ba208fdaf0147",
+    "src/services/PublishDeliveryService.test.ts": "1138ecc1d85e775d95af0938176325d464d8d2aa566e5238133c57661da21f39",
+    "src/workers/PublishWorker.ts": "3d90e8bf5f81b11c43d5526d42f39c9333edd5994eb696a4c6ac74f941af1171",
+    "src/workers/PublishWorkerRecovery.test.ts": "d9a2bf9a4f117f761cf6dc4bffd8b4791072128f979f3520b607f68153c599f5",
+    "src/workers/DeadLetterWorker.ts": "418448bf4da57d80a0c8c857fce5cfee5cbebc50237eaeb52d7355030f51d14b",
+    "src/workers/DeadLetterRecovery.test.ts": "95eb0525edcd65e336e9dc9b62863159d8966cc335f90819fd525ea9f446087c",
+    "src/server/testing/publicationFixture.ts": "5de6d9a13124c50399bfd858517846915bf143d2244859b47ac7ff9b9516441f",
+    "src/server/routers/releases.ts": "710334aab2996c7b59bd49b82e87a98ca70f0b93674b1d3083384d8f0dac9942",
+    "src/server/routers/releaseRecovery.test.ts": "97489b8c383392cd11e92b7fc5fa289b9f73bff925e41124177d6c7416ec2580",
+    "src/publishers/TelegramPublisher.ts": "c0188d37002c09e80b323ab8af22e4cbe244f88077df4e640c60d854b35b7e07",
+    "src/publishers/TelegramPublisher.test.ts": "9de8fbaf7605c3d90c8cfe30fab3d3c3dd23b139aa3366dffddc7a7147321f1a",
+    "src/publishers/PlatformPublisher.ts": "28ba064933fa26c9a6d0115872c1bd857103db2e44b32609a2cffa6548f91b8c",
+    "src/types/shorts.ts": "61a24831cea7ffdb7dcdf94b3df2cbd12869f63a0328d1c68889fae2a6501ba4",
+    "src/types/ownership.ts": "54ab61018e82e5c6539272f9526c240366d1b44fa631f975c148d3f0e66a5680",
+    "src/ui/pages/ReleasesPage.tsx": "e7f104546c9f328eeae25df5916b8e7e65f0a20810c0b882f2faa8beff66f201"
+  }
+}

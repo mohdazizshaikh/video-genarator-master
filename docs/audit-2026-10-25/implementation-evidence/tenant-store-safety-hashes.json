@@ -1,0 +1,7 @@
+{
+  "src/db/TenantStore.ts": "5a6ef04e4d1848390ea6b916cbec55863baa172fde3ae77f0bf919b3326eb0ea",
+  "src/db/jsonArrayFile.ts": "205cd7d62c35b1e9301e6b5f8949e54269cb2b7b1646c22fb6410c094ee0668c",
+  "src/db/TenantStoreSafety.test.ts": "61d394f80a947c54855c0f4f4f13aa146abb18f04a40ba06ad8a50caab586eda",
+  "src/server/routers/tenants.ts": "4b4dd45ffd193790f601cb58913ea5998e0b91145bc08e018ce966dc05a5e18e",
+  "src/server/routers/tenantStoreSafety.test.ts": "6ef7116e78ad4bb6586a2aa6254adba115d6a9128b9e9c4f52716ec0155aa7ee"
+}

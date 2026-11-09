@@ -20,6 +20,7 @@ import {
   Tooltip,
   IconButton,
   LinearProgress,
+  Link,
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import VideoLibraryIcon from "@mui/icons-material/VideoLibrary";
@@ -41,6 +42,10 @@ const STATUS_COLORS: Record<string, "default" | "warning" | "success" | "error" 
   queued: "warning",
   completed: "success",
   failed: "error",
+  reconciling: "warning",
+  rendered: "success",
+  ready: "success",
+  skipped: "error",
 };
 
 function formatDate(iso: string): string {
@@ -94,6 +99,7 @@ export const ScheduledJobsList: React.FC<ScheduledJobsListProps> = ({
               <TableRow sx={{ bgcolor: "grey.50" }}>
                 <TableCell>Job ID</TableCell>
                 <TableCell>Category</TableCell>
+                <TableCell>Output</TableCell>
                 <TableCell>Orientation</TableCell>
                 <TableCell>Type</TableCell>
                 <TableCell>Status</TableCell>
@@ -103,7 +109,7 @@ export const ScheduledJobsList: React.FC<ScheduledJobsListProps> = ({
             <TableBody>
               {renderJobs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3, color: "text.secondary" }}>
                     No render jobs found
                   </TableCell>
                 </TableRow>
@@ -116,6 +122,11 @@ export const ScheduledJobsList: React.FC<ScheduledJobsListProps> = ({
                       </Typography>
                     </TableCell>
                     <TableCell>{job.category}</TableCell>
+                    <TableCell>
+                      {job.status === "rendered" && job.videoId && job.artifactId && job.contentVersionId
+                        ? <Link href={`/video/${encodeURIComponent(job.videoId)}`}>Open video</Link>
+                        : job.status === "reconciling" ? <Tooltip title={job.error || "Render outcome needs review"}><span>Needs review</span></Tooltip> : "—"}
+                    </TableCell>
                     <TableCell>{job.orientation}</TableCell>
                     <TableCell>{job.videoType}</TableCell>
                     <TableCell>

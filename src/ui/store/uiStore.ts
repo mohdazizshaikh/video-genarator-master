@@ -3,7 +3,6 @@
  */
 
 import { create } from "zustand";
-import crypto from "crypto";
 
 export type NotificationType = "success" | "error" | "info" | "warning";
 
@@ -47,7 +46,7 @@ export const useUIStore = create<UIState>((set) => ({
   notifications: [],
   addNotification: (notification) =>
     set((state) => {
-      const id = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+      const id = `${Date.now()}-${globalThis.crypto.randomUUID().slice(0, 8)}`;
       const newNotification = { id, ...notification };
       const duration = notification.duration ?? 5000;
 

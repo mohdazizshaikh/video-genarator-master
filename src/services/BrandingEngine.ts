@@ -98,7 +98,7 @@ export class BrandingEngine {
   }
 
   getBranding(tenantId: string): BrandingConfig {
-    return this.brandingMap.get(tenantId) || DEFAULT_BRANDING;
+    return this.brandingMap.get(tenantId) || { ...DEFAULT_BRANDING, tenantId };
   }
 
   updateBranding(tenantId: string, updates: Partial<BrandingConfig>): BrandingConfig {

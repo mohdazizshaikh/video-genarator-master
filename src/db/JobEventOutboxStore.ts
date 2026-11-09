@@ -26,16 +26,19 @@ function ownerOf(tenantId: string): string {
 export class JobEventOutboxStore {
   private readonly filePath: string;
   private rows: OutboxEvent[] = [];
-  private loaded = false;
 
   constructor(dataDirPath: string) {
     this.filePath = path.join(dataDirPath, "job-event-outbox.json");
   }
 
   private load(): void {
-    if (this.loaded) return;
-    this.loaded = true;
-    const raw = fs.readJsonSync(this.filePath, { throws: false });
+    const raw = fs.existsSync(this.filePath)
+      ? fs.readJsonSync(this.filePath)
+      : [];
+    if (!Array.isArray(raw))
+      throw new Error(
+        "Invalid lifecycle store; restore or reconcile before writing",
+      );
     if (Array.isArray(raw)) {
       this.rows = raw.filter((row) =>
         row && typeof row.id === "string" && typeof row.tenantId === "string" &&
@@ -52,11 +55,17 @@ export class JobEventOutboxStore {
     fs.moveSync(temp, this.filePath, { overwrite: true });
   }
 
-  enqueue(input: { tenantId: string; eventId: string; availableAt?: string }): OutboxEvent {
+  enqueue(input: {
+    tenantId: string;
+    eventId: string;
+    availableAt?: string;
+  }): OutboxEvent {
     this.load();
     const tenantId = ownerOf(input.tenantId);
     if (!input.eventId) throw new Error("eventId is required");
-    const existing = this.rows.find((row) => row.tenantId === tenantId && row.eventId === input.eventId);
+    const existing = this.rows.find(
+      (row) => row.tenantId === tenantId && row.eventId === input.eventId,
+    );
     if (existing) return existing;
     const now = new Date().toISOString();
     const row: OutboxEvent = {
@@ -74,12 +83,22 @@ export class JobEventOutboxStore {
     return row;
   }
 
-  listPending(tenantId: string, now = new Date().toISOString(), limit = 100): OutboxEvent[] {
+  listPending(
+    tenantId: string,
+    now = new Date().toISOString(),
+    limit = 100,
+  ): OutboxEvent[] {
     const owner = ownerOf(tenantId);
-    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error("limit must be between 1 and 1000");
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
+      throw new Error("limit must be between 1 and 1000");
     this.load();
     return this.rows
-      .filter((row) => row.tenantId === owner && row.state === "pending" && row.availableAt <= now)
+      .filter(
+        (row) =>
+          row.tenantId === owner &&
+          row.state === "pending" &&
+          row.availableAt <= now,
+      )
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .slice(0, limit);
   }
@@ -88,12 +107,22 @@ export class JobEventOutboxStore {
     return this.transition(tenantId, outboxId, "delivered");
   }
 
-  retry(tenantId: string, outboxId: string, error: string, availableAt: string, maxAttempts = 5): OutboxEvent | null {
+  retry(
+    tenantId: string,
+    outboxId: string,
+    error: string,
+    availableAt: string,
+    maxAttempts = 5,
+  ): OutboxEvent | null {
     const owner = ownerOf(tenantId);
-    if (!error || !availableAt) throw new Error("error and availableAt are required");
-    if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error("maxAttempts must be positive");
+    if (!error || !availableAt)
+      throw new Error("error and availableAt are required");
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1)
+      throw new Error("maxAttempts must be positive");
     this.load();
-    const row = this.rows.find((candidate) => candidate.tenantId === owner && candidate.id === outboxId);
+    const row = this.rows.find(
+      (candidate) => candidate.tenantId === owner && candidate.id === outboxId,
+    );
     if (!row) return null;
     row.attempts += 1;
     row.lastError = error;
@@ -104,12 +133,19 @@ export class JobEventOutboxStore {
     return row;
   }
 
-  requeue(tenantId: string, outboxId: string, availableAt = new Date().toISOString()): OutboxEvent | null {
+  requeue(
+    tenantId: string,
+    outboxId: string,
+    availableAt = new Date().toISOString(),
+  ): OutboxEvent | null {
     const owner = ownerOf(tenantId);
     this.load();
-    const row = this.rows.find((candidate) => candidate.tenantId === owner && candidate.id === outboxId);
+    const row = this.rows.find(
+      (candidate) => candidate.tenantId === owner && candidate.id === outboxId,
+    );
     if (!row) return null;
-    if (row.state !== "dead_letter") throw new Error("only dead-letter events can be requeued");
+    if (row.state !== "dead_letter")
+      throw new Error("only dead-letter events can be requeued");
     row.state = "pending";
     row.availableAt = availableAt;
     row.updatedAt = new Date().toISOString();
@@ -120,13 +156,21 @@ export class JobEventOutboxStore {
   listForTenant(tenantId: string, state?: OutboxState): OutboxEvent[] {
     const owner = ownerOf(tenantId);
     this.load();
-    return this.rows.filter((row) => row.tenantId === owner && (!state || row.state === state));
+    return this.rows.filter(
+      (row) => row.tenantId === owner && (!state || row.state === state),
+    );
   }
 
-  private transition(tenantId: string, outboxId: string, state: OutboxState): OutboxEvent | null {
+  private transition(
+    tenantId: string,
+    outboxId: string,
+    state: OutboxState,
+  ): OutboxEvent | null {
     const owner = ownerOf(tenantId);
     this.load();
-    const row = this.rows.find((candidate) => candidate.tenantId === owner && candidate.id === outboxId);
+    const row = this.rows.find(
+      (candidate) => candidate.tenantId === owner && candidate.id === outboxId,
+    );
     if (!row) return null;
     row.state = state;
     row.updatedAt = new Date().toISOString();

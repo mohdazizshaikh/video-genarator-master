@@ -1,0 +1,8 @@
+{
+  "scripts/migrations/remediation-plan.mjs": "eb175428d074090d7cb5ecba87c322f6bb6c564ea519ffce8d31ebb2f7e84eb2",
+  "scripts/migrations/reconciliation-decision.mjs": "e8ee4e262fe064ff56ae9954e54afe05fc2dda49ac8a4871a0a9695f2cd3fce1",
+  "scripts/migrations/evidence.mjs": "ac014aaf04fd2b74cf3e945c57f5f16d9f375475c74a53d77ab5f907cbb7ed46",
+  "scripts/migrations/backup.mjs": "8d2163f50b4481b034d168ffacbc1efe35ddc0e4a709c92b1c70bc2dadf8335c",
+  "src/integration/MigrationReviewHelpers.test.ts": "cd550fb752544974bdfc08581c555b2e8c119150abe94d1b3f741b47fc6dc31f",
+  "docs/MIGRATION_RUNBOOK.md": "1c721078db1f97d305fc744d157522a2ddb807620ce10b81dd270c620812517a"
+}

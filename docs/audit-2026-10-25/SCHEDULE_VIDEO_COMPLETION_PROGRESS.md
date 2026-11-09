@@ -1,0 +1,11 @@
+# Schedule video completion — twenty-ninth increment, 10 November 2026
+
+New video occurrences persist the enqueue checkpoint and stay claimed. They do not advance counters, recurrence, or a one-time schedule's terminal status at enqueue. Pending runs are excluded from due dispatch. The minute runner checks already-bound renders, including paused runs and restarted routers. Its completion verifier has no producer or enqueue capability.
+
+Positive completion requires owned video metadata, an active owned MP4 manifest, a ready version with the renderer's identity and exact video signature/path, and matching bytes. The verifier checks storage containment, rejects symlink substitutions, hashes a bounded stream using the expected file size, checks for changes, and verifies every required supplementary SVG. The commit rechecks the execution token, checkpoint digest and counter inside the schedule-store mutation. It records the video, artifact and content version IDs once. The content-version API reserves producer identity and protects those versions from public PATCH requests.
+
+The UI distinguishes queued work from verified renders. API and operations docs explain accepted requests, pending receipts, and recovery checks. No provider action or real production schedule was run.
+
+Production verification passed **764 tests across 127 files**, backend/UI typechecks, production build and route consistency for **353 registrations across 46 routers**. Changed-file ESLint and whitespace checks passed. Nine new tests cover restart and pause, concurrent commits, missing/foreign/partial/changed evidence, symlinks and producer API identity protection. The earlier Graph publisher timeout came from loading its factory during a timed test; static import now loads it during test collection, with the same assertions and network stub. Evidence logs and source hashes are under `implementation-evidence/schedule-video-completion-*`.
+
+Remaining: historical enqueue-only records are not backfilled. Failed or unbound renders and partial checkpoints remain held, with no operator retry/cancellation workflow. Queue durability, cross-process transactions, browser/deployed acceptance, and pre-completion freshness bookkeeping remain open. No phase is complete.

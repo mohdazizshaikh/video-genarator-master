@@ -138,6 +138,7 @@ export class Config {
   public redisPassword: string = "";
   public redisEnabled: boolean = false;
   public renderWorkerConcurrency: number = 1;
+  public renderJobTimeoutMs: number = 30 * 60 * 1000;
   public publishWorkerConcurrency: number = 3;
 
   // Phase 5: Publishing credentials
@@ -240,6 +241,8 @@ export class Config {
   this.renderWorkerConcurrency = process.env.RENDER_WORKER_CONCURRENCY
     ? parseInt(process.env.RENDER_WORKER_CONCURRENCY)
     : 1;
+  this.renderJobTimeoutMs = process.env.RENDER_JOB_TIMEOUT_MS ? Number(process.env.RENDER_JOB_TIMEOUT_MS) : 30 * 60 * 1000;
+  if (!Number.isFinite(this.renderJobTimeoutMs) || this.renderJobTimeoutMs < 1000 || this.renderJobTimeoutMs > 86400000) throw new Error("RENDER_JOB_TIMEOUT_MS must be between 1000 and 86400000");
   this.publishWorkerConcurrency = process.env.PUBLISH_WORKER_CONCURRENCY
     ? parseInt(process.env.PUBLISH_WORKER_CONCURRENCY)
     : 3;

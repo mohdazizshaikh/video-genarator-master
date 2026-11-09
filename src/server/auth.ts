@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../logger";
+import { verifyVideoAccessToken } from "../services/VideoAccessToken";
 import { verifyRenderMediaToken } from "../services/RenderMediaToken";
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
@@ -31,7 +32,8 @@ export function adminKeyConfigured(): boolean {
  * Requires the X-Admin-Key header to match ADMIN_API_KEY.
  * If the server has no ADMIN_API_KEY configured, the endpoint is disabled (403).
  */
-export function requireAdminKey(req: Request, res: Response, next: NextFunction) {
+export function requireAdminKey(req: Request, res: Response, next: NextFunction,
+) {
   if (!ADMIN_API_KEY) {
     return res.status(403).json({
       error: "Admin API key is not configured on the server (set ADMIN_API_KEY)",
@@ -44,15 +46,40 @@ export function requireAdminKey(req: Request, res: Response, next: NextFunction)
   next();
 }
 
-/**
- * Non-blocking token validation. When a valid `Authorization: Bearer` token is
- * supplied it is attached to the request as `req.auth`. Requests without a
- * token (or with an invalid one) are NOT rejected so the existing UI keeps
- * working while clients migrate to authenticated calls.
- */
+/** Require a verified workspace identity on tenant-owned operations. */
+export function requireWorkspace(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  if (!getAuthenticatedTenantId(req)?.trim()) {
+    return res
+      .status(401)
+      .json({
+        error: "Authenticated workspace is required",
+        code: "AUTH_REQUIRED",
+      });
+  }
+  next();
+}
+
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const auth = (req as Request & { auth?: AuthClaims }).auth;
   if (isAdminRequest(req)) {
+    next();
+    return;
+  }
+  const videoPath = /^\/short-video\/([a-zA-Z0-9_-]+)$/.exec(req.path);
+  const videoToken =
+    typeof req.query.videoToken === "string" ? req.query.videoToken : "";
+  const videoClaims =
+    (req.method === "GET" || req.method === "HEAD") && videoPath && videoToken
+      ? verifyVideoAccessToken(videoToken, videoPath[1])
+      : null;
+  if (videoClaims) {
+    (req as Request & { auth?: AuthClaims }).auth = {
+      tenantId: videoClaims.tenantId,
+    };
     next();
     return;
   }
@@ -60,7 +87,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     next();
     return;
   }
-  if (!auth?.tenantId) {
+  if (!auth?.tenantId?.trim()) {
     return res.status(401).json({
       error: "Authentication required",
       code: "AUTH_REQUIRED",
@@ -78,7 +105,9 @@ function isValidRenderMediaRequest(req: Request): boolean {
   return verifyRenderMediaToken(token, undefined, fileName);
 }
 
-export function validateTokenIfPresent(req: Request, res: Response, next: NextFunction) {
+export function validateTokenIfPresent(req: Request, res: Response, next: NextFunction,
+  dataDirPath?: string,
+) {
   const header = req.get("Authorization");
   if (!header || !header.startsWith("Bearer ")) {
     return next();
@@ -88,9 +117,9 @@ export function validateTokenIfPresent(req: Request, res: Response, next: NextFu
     // Lazy require to avoid a circular dependency on module load.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { verifyJwtToken } = require("../services/AuthEngine") as {
-      verifyJwtToken: (t: string) => unknown;
+      verifyJwtToken: (t: string, directory?: string) => unknown;
     };
-    const payload = verifyJwtToken(token);
+    const payload = verifyJwtToken(token, dataDirPath);
     if (payload) {
       (req as Request & { auth?: AuthClaims }).auth = payload as AuthClaims;
     }

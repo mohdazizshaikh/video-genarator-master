@@ -1,6 +1,6 @@
 /**
- * FacebookPublisher – Full Facebook Graph API implementation
- * Supports Reels, regular video posts, scheduled publishing, and Crossposting
+ * FacebookPublisher – Conservative Facebook publication adapter
+ * Regular video/Reel acknowledgement; live platform acceptance is separate.
  */
 import type { Config } from "../config";
 import type {
@@ -12,6 +12,8 @@ import type {
 } from "./PlatformPublisher";
 import { logger } from "../logger";
 import fs from "fs-extra";
+import { graphRequest, requiredProviderId, requiredVideoUrl } from "./graphTransport";
+import { canonicalPublication, providerFailure, verifyProviderCredentials } from "./providerContracts";
 
 export class FacebookPublisher implements PlatformPublisher {
   readonly platform = "facebook" as const;
@@ -20,23 +22,16 @@ export class FacebookPublisher implements PlatformPublisher {
   private apiBase = "https://graph.facebook.com/v19.0";
 
   constructor(config: Config) {
-    this.pageAccessToken = config.facebookAccessToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || "";
-    this.pageId = config.facebookPageId || process.env.FACEBOOK_PAGE_ID || "";
+    this.pageAccessToken = config.facebookAccessToken || "";
+    this.pageId = config.facebookPageId || "";
   }
 
   async validateCredentials(): Promise<boolean> {
     if (!this.pageAccessToken || !this.pageId) return false;
-    try {
-      const res = await fetch(
-        `${this.apiBase}/${this.pageId}?fields=id,name&access_token=${this.pageAccessToken}`,
-        { signal: AbortSignal.timeout(8000) },
-      );
-      if (!res.ok) return false;
-      const data = (await res.json()) as { id?: string };
-      return Boolean(data?.id);
-    } catch {
-      return false;
-    }
+    return verifyProviderCredentials(async () => {
+      const data = await graphRequest(`${this.apiBase}/${this.pageId}?fields=id,name&access_token=${encodeURIComponent(this.pageAccessToken)}`, {}, 8000);
+      try { requiredProviderId(data.id); } catch { throw new Error("Credential verification response unavailable"); }
+    }, [this.pageAccessToken]);
   }
 
   async refreshToken(): Promise<void> {
@@ -45,15 +40,14 @@ export class FacebookPublisher implements PlatformPublisher {
       const appId = process.env.FACEBOOK_APP_ID;
       const appSecret = process.env.FACEBOOK_APP_SECRET;
       if (!appId || !appSecret) throw new Error("FACEBOOK_APP_ID / FACEBOOK_APP_SECRET not set");
-      const res = await fetch(
-        `${this.apiBase}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&access_token=${this.pageAccessToken}`,
-      );
-      const data = (await res.json()) as { access_token?: string; error?: { message: string } };
-      if (data.error) throw new Error(data.error.message);
-      if (data.access_token) this.pageAccessToken = data.access_token;
+      const query = new URLSearchParams({ grant_type: "fb_exchange_token", client_id: appId, client_secret: appSecret, access_token: this.pageAccessToken });
+      const data = await graphRequest(`${this.apiBase}/oauth/access_token?${query}`, {}, 8000);
+      if (typeof data.access_token !== "string" || !data.access_token.trim()) throw new Error("Token refresh response unavailable");
+      this.pageAccessToken = data.access_token;
     } catch (err) {
-      logger.error(err, "Facebook token refresh failed");
-      throw err;
+      const failure = providerFailure(err, [this.pageAccessToken, process.env.FACEBOOK_APP_SECRET || ""], "not_accepted");
+      logger.error({ error: failure.error }, "Facebook token refresh failed");
+      throw new Error(failure.error);
     }
   }
 
@@ -76,265 +70,103 @@ export class FacebookPublisher implements PlatformPublisher {
       supportsScheduling: true,
       supportsReels: true,
       supportsCarousel: false,
-      supportsStories: true,
-      supportsLive: true,
-      supportsThumbnailUpload: true,
+      supportsStories: false,
+      supportsLive: false,
+      supportsThumbnailUpload: false,
       supportsFirstComment: false,
       maxHashtags: 30,
     };
   }
 
   async uploadVideo(params: PublishParams): Promise<PublishResult> {
-    if (!this.pageAccessToken || !this.pageId) {
-      return { success: false, error: "Facebook credentials not configured. Set FACEBOOK_PAGE_ACCESS_TOKEN and FACEBOOK_PAGE_ID." };
-    }
+    if (!this.pageAccessToken || !this.pageId) return { success: false, deliveryOutcome: "not_accepted", errorCode: "credentials_invalid", error: "Facebook credentials are unavailable" };
+    const state = { started: false };
     try {
-      // Prefer Reels endpoint for vertical 9:16 content
-      const isReels = params.aspectRatio === "9:16" || params.description?.toLowerCase().includes("reel");
-      if (isReels) {
-        return this.uploadReel(params);
-      }
-      return this.uploadRegularVideo(params);
-    } catch (err) {
-      logger.error(err, "Facebook upload failed");
-      return { success: false, error: err instanceof Error ? err.message : "Upload failed" };
+      return await (params.aspectRatio === "9:16" ? this.uploadReel(params, state) : this.uploadRegularVideo(params, state));
+    } catch (error) {
+      const failure = providerFailure(error, [this.pageAccessToken], state.started ? "unknown" : "not_accepted");
+      logger.error({ error: failure.error, code: failure.errorCode }, "Facebook upload failed");
+      return failure;
     }
   }
 
-  private async uploadRegularVideo(params: PublishParams): Promise<PublishResult> {
-    const description = this.buildDescription(params);
-    const body: Record<string, unknown> = {
-      description,
-      title: params.title?.slice(0, 255),
-      access_token: this.pageAccessToken,
-    };
-
-    if (params.videoUrl) {
-      body.file_url = params.videoUrl;
-    }
-
-    const endpoint = `${this.apiBase}/${this.pageId}/videos`;
-    let fetchOpts: RequestInit;
-
-    if (params.videoUrl) {
-      fetchOpts = {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      };
-    } else {
-      // File upload via resumable upload session
-      return this.resumableUpload(params, description);
-    }
-
-    const res = await fetch(endpoint, fetchOpts);
-    if (!res.ok) {
-      const err = (await res.json()) as { error?: { message: string } };
-      return { success: false, error: err.error?.message || "Facebook video upload failed" };
-    }
-    const data = (await res.json()) as { id: string };
-    logger.info({ videoId: data.id }, "Facebook video uploaded");
-    return {
-      success: true,
-      platformVideoId: data.id,
-      publishedUrl: `https://www.facebook.com/video/${data.id}`,
-    };
+  private post(url: string, body: Record<string, unknown>) {
+    return graphRequest(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   }
 
-  private async uploadReel(params: PublishParams): Promise<PublishResult> {
-    const description = this.buildDescription(params);
-    // Step 1: Initialize upload session
-    const initRes = await fetch(
-      `${this.apiBase}/${this.pageId}/video_reels`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          upload_phase: "start",
-          access_token: this.pageAccessToken,
-        }),
-      },
-    );
-    if (!initRes.ok) {
-      const err = (await initRes.json()) as { error?: { message: string } };
-      return { success: false, error: err.error?.message || "Failed to init Reels upload" };
-    }
-    const initData = (await initRes.json()) as { video_id: string; upload_url?: string };
-    const videoId = initData.video_id;
-
-    // Step 2: Upload video if file path provided
-    if (params.videoFilePath && !params.videoUrl) {
-      try {
-        const fileBuffer = await fs.readFile(params.videoFilePath);
-        const uploadRes = await fetch(
-          initData.upload_url || `${this.apiBase}/${this.pageId}/video_reels`,
-          {
-            method: "POST",
-            headers: {
-              "Authorization": `OAuth ${this.pageAccessToken}`,
-              "Content-Type": "video/mp4",
-              "offset": "0",
-              "file_size": String(fileBuffer.length),
-            },
-            body: fileBuffer,
-          },
-        );
-        if (!uploadRes.ok) {
-          logger.warn("Facebook Reels file upload failed, attempting URL method");
-        }
-      } catch (err) {
-        logger.warn(err, "Facebook Reels file upload skipped");
-      }
-    }
-
-    // Step 3: Finish and publish
-    const publishBody: Record<string, unknown> = {
-      upload_phase: "finish",
-      video_id: videoId,
-      description,
-      access_token: this.pageAccessToken,
-      published: true,
-    };
-    if (params.videoUrl) {
-      publishBody.file_url = params.videoUrl;
-    }
-    const finishRes = await fetch(
-      `${this.apiBase}/${this.pageId}/video_reels`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(publishBody),
-      },
-    );
-    if (!finishRes.ok) {
-      const err = (await finishRes.json()) as { error?: { message: string } };
-      return { success: false, error: err.error?.message || "Failed to publish Reel" };
-    }
-    logger.info({ videoId }, "Facebook Reel published");
-    return {
-      success: true,
-      platformVideoId: videoId,
-      publishedUrl: `https://www.facebook.com/reel/${videoId}`,
-    };
+  private async uploadRegularVideo(params: PublishParams, state: { started: boolean }): Promise<PublishResult> {
+    if (!params.videoUrl) return this.resumableUpload(params, state);
+    const fileUrl = requiredVideoUrl(params.videoUrl);
+    state.started = true;
+    const data = await this.post(`${this.apiBase}/${this.pageId}/videos`, { file_url: fileUrl, description: this.buildDescription(params), title: params.title?.slice(0, 255), access_token: this.pageAccessToken });
+    return canonicalPublication(data.id, (id) => `https://www.facebook.com/video/${encodeURIComponent(id)}`);
   }
 
-  private async resumableUpload(params: PublishParams, description: string): Promise<PublishResult> {
-    try {
-      const fileBuffer = await fs.readFile(params.videoFilePath);
-      const fileSize = fileBuffer.length;
-
-      // Initialize resumable upload
-      const initRes = await fetch(
-        `https://graph-video.facebook.com/v19.0/${this.pageId}/videos`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            upload_phase: "start",
-            file_size: fileSize,
-            access_token: this.pageAccessToken,
-          }),
-        },
-      );
-      if (!initRes.ok) {
-        const err = (await initRes.json()) as { error?: { message: string } };
-        return { success: false, error: err.error?.message || "Failed to init upload" };
-      }
-      const initData = (await initRes.json()) as { upload_session_id: string; start_offset: string; end_offset: string };
-      const sessionId = initData.upload_session_id;
-
-      // Upload chunks
-      let startOffset = parseInt(initData.start_offset);
-      let endOffset = parseInt(initData.end_offset);
-      while (startOffset < fileSize) {
-        const chunk = fileBuffer.slice(startOffset, endOffset);
-        const chunkRes = await fetch(
-          `https://graph-video.facebook.com/v19.0/${this.pageId}/videos`,
-          {
-            method: "POST",
-            headers: {
-              "Authorization": `OAuth ${this.pageAccessToken}`,
-              "Content-Type": "multipart/form-data",
-            },
-            body: (() => {
-              const form = new FormData();
-              form.append("upload_phase", "transfer");
-              form.append("upload_session_id", sessionId);
-              form.append("start_offset", String(startOffset));
-              form.append("video_file_chunk", new Blob([chunk], { type: "video/mp4" }));
-              return form;
-            })(),
-          },
-        );
-        if (!chunkRes.ok) break;
-        const chunkData = (await chunkRes.json()) as { start_offset: string; end_offset: string };
-        startOffset = parseInt(chunkData.start_offset);
-        endOffset = parseInt(chunkData.end_offset);
-      }
-
-      // Finish upload
-      const finishForm = new FormData();
-      finishForm.append("upload_phase", "finish");
-      finishForm.append("upload_session_id", sessionId);
-      finishForm.append("access_token", this.pageAccessToken);
-      finishForm.append("description", description);
-      finishForm.append("title", params.title?.slice(0, 255) || "");
-      const finishRes = await fetch(
-        `https://graph-video.facebook.com/v19.0/${this.pageId}/videos`,
-        { method: "POST", body: finishForm },
-      );
-      if (!finishRes.ok) {
-        const err = (await finishRes.json()) as { error?: { message: string } };
-        return { success: false, error: err.error?.message || "Failed to finish upload" };
-      }
-      const finishData = (await finishRes.json()) as { success?: boolean; video_id?: string };
-      if (!finishData.success) return { success: false, error: "Facebook upload finish failed" };
-      const videoId = finishData.video_id || sessionId;
-      logger.info({ videoId }, "Facebook video uploaded via resumable");
-      return { success: true, platformVideoId: videoId, publishedUrl: `https://www.facebook.com/video/${videoId}` };
-    } catch (err) {
-      logger.error(err, "Facebook resumable upload error");
-      return { success: false, error: err instanceof Error ? err.message : "Resumable upload failed" };
+  private async uploadReel(params: PublishParams, state: { started: boolean }): Promise<PublishResult> {
+    const fileUrl = params.videoUrl ? requiredVideoUrl(params.videoUrl) : undefined;
+    const file = fileUrl ? undefined : await fs.readFile(params.videoFilePath);
+    if (file && !file.length) throw new Error("Invalid empty video file");
+    const initialized = await this.post(`${this.apiBase}/${this.pageId}/video_reels`, { upload_phase: "start", access_token: this.pageAccessToken });
+    const videoId = requiredProviderId(initialized.video_id);
+    if (file) {
+      const upload = new URL(typeof initialized.upload_url === "string" ? initialized.upload_url : "");
+      if (upload.protocol !== "https:" || upload.username || upload.password || upload.port || !(upload.hostname === "facebook.com" || upload.hostname.endsWith(".facebook.com"))) throw new Error("Invalid Facebook upload endpoint");
+      const transferred = await graphRequest(upload.href, { method: "POST", headers: { Authorization: `OAuth ${this.pageAccessToken}`, "Content-Type": "video/mp4", offset: "0", file_size: String(file.length) }, body: file });
+      if (transferred.success !== true) throw new Error("Video transfer was not acknowledged");
     }
+    state.started = true;
+    const finished = await this.post(`${this.apiBase}/${this.pageId}/video_reels`, { upload_phase: "finish", video_id: videoId, description: this.buildDescription(params), access_token: this.pageAccessToken, published: true, ...(fileUrl ? { file_url: fileUrl } : {}) });
+    if (finished.success !== true) throw new Error("Reel publication was not acknowledged");
+    return canonicalPublication(videoId, (id) => `https://www.facebook.com/reel/${encodeURIComponent(id)}`);
+  }
+
+  private async resumableUpload(params: PublishParams, state: { started: boolean }): Promise<PublishResult> {
+    const file = await fs.readFile(params.videoFilePath);
+    if (!file.length) throw new Error("Invalid empty video file");
+    const endpoint = `https://graph-video.facebook.com/v19.0/${this.pageId}/videos`;
+    const initialized = await this.post(endpoint, { upload_phase: "start", file_size: file.length, access_token: this.pageAccessToken });
+    const sessionId = requiredProviderId(initialized.upload_session_id);
+    const offset = (value: unknown) => {
+      if ((typeof value !== "string" && typeof value !== "number") || !/^\d+$/.test(String(value))) throw new Error("Invalid video transfer offset");
+      const number = Number(value);
+      if (!Number.isSafeInteger(number) || number < 0 || number > file.length) throw new Error("Invalid video transfer offset");
+      return number;
+    };
+    let start = offset(initialized.start_offset), end = offset(initialized.end_offset);
+    if (start !== 0) throw new Error("Invalid initial video transfer offset");
+    const deadline = Date.now() + 300000;
+    let transfers = 0;
+    while (start < file.length) {
+      if (end <= start || ++transfers > 10000 || Date.now() >= deadline) throw new Error("Video transfer did not make bounded progress");
+      const form = new FormData();
+      form.append("upload_phase", "transfer"); form.append("upload_session_id", sessionId); form.append("start_offset", String(start));
+      form.append("video_file_chunk", new Blob([file.subarray(start, end)], { type: "video/mp4" }));
+      const transferred = await graphRequest(endpoint, { method: "POST", headers: { Authorization: `OAuth ${this.pageAccessToken}` }, body: form }, Math.min(30000, deadline - Date.now()));
+      const next = offset(transferred.start_offset), nextEnd = offset(transferred.end_offset);
+      if (next !== end || next <= start || nextEnd < next) throw new Error("Invalid video transfer acknowledgement");
+      start = next; end = nextEnd;
+    }
+    const finish = new FormData();
+    finish.append("upload_phase", "finish"); finish.append("upload_session_id", sessionId); finish.append("access_token", this.pageAccessToken);
+    finish.append("description", this.buildDescription(params)); finish.append("title", params.title?.slice(0, 255) || "");
+    state.started = true;
+    const finished = await graphRequest(endpoint, { method: "POST", body: finish });
+    if (finished.success !== true) throw new Error("Video publication was not acknowledged");
+    // A session identifier is never a publication receipt.
+    return canonicalPublication(finished.video_id || initialized.video_id, (id) => `https://www.facebook.com/video/${encodeURIComponent(id)}`);
   }
 
   async scheduleVideo(params: PublishParams, publishAt: Date): Promise<PublishResult> {
-    if (!this.pageAccessToken || !this.pageId) {
-      return { success: false, error: "Facebook credentials not configured" };
-    }
-    const now = Date.now();
-    const diffMs = publishAt.getTime() - now;
-    if (diffMs < 10 * 60 * 1000) {
-      return { success: false, error: "Facebook scheduling requires at least 10 minutes in advance" };
-    }
-
+    const state = { started: false };
     try {
-      const description = this.buildDescription(params);
-      const publishTime = Math.floor(publishAt.getTime() / 1000);
-      const body: Record<string, unknown> = {
-        description,
-        title: params.title?.slice(0, 255),
-        published: false,
-        scheduled_publish_time: publishTime,
-        access_token: this.pageAccessToken,
-      };
-      if (params.videoUrl) body.file_url = params.videoUrl;
-
-      const res = await fetch(
-        `${this.apiBase}/${this.pageId}/videos`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
-      );
-      if (!res.ok) {
-        const err = (await res.json()) as { error?: { message: string } };
-        return { success: false, error: err.error?.message || "Schedule failed" };
-      }
-      const data = (await res.json()) as { id: string };
-      logger.info({ videoId: data.id, publishAt }, "Facebook video scheduled");
-      return { success: true, platformVideoId: data.id, scheduledFor: publishAt.toISOString() };
-    } catch (err) {
-      logger.error(err, "Facebook schedule error");
-      return { success: false, error: err instanceof Error ? err.message : "Schedule failed" };
-    }
+      if (!this.pageAccessToken || !this.pageId) throw new Error("Facebook credentials are unavailable");
+      if (!Number.isFinite(publishAt.getTime()) || publishAt.getTime() - Date.now() < 600000) throw new Error("Invalid Facebook schedule: use a future date at least ten minutes away");
+      const fileUrl = requiredVideoUrl(params.videoUrl);
+      state.started = true;
+      const data = await this.post(`${this.apiBase}/${this.pageId}/videos`, { file_url: fileUrl, title: params.title?.slice(0, 255), description: this.buildDescription(params), published: false, scheduled_publish_time: Math.floor(publishAt.getTime() / 1000), access_token: this.pageAccessToken });
+      const result = canonicalPublication(data.id);
+      return result.success ? { ...result, scheduledFor: publishAt.toISOString() } : result;
+    } catch (error) { return providerFailure(error, [this.pageAccessToken], state.started ? "unknown" : "not_accepted"); }
   }
 
   private buildDescription(params: PublishParams): string {

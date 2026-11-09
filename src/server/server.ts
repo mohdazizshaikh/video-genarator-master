@@ -68,10 +68,20 @@ export class Server {
   private app: express.Application;
   private config: Config;
   private shortCreatorReady = false;
+  private httpServer?: http.Server;
+  private scheduleRouter?: ScheduleRouter;
+  private mcpRouter?: MCPRouter;
+  private sessionClose?: Promise<void>;
+  private shuttingDown = false;
+  private closePromise?: Promise<void>;
 
   constructor(config: Config, shortCreatorPromise: Promise<ShortCreator>) {
     this.config = config;
     this.app = express();
+    this.app.use((_req, res, next) => {
+      if (this.shuttingDown) { res.setHeader("Connection", "close"); res.status(503).json({ error: "Server is shutting down" }); return; }
+      next();
+    });
     // Trust proxies only when explicitly enabled (behind a reverse proxy).
     // When disabled, req.ip comes from the socket and rate limiting cannot be
     // bypassed by spoofing X-Forwarded-For.
@@ -91,7 +101,7 @@ export class Server {
           logger.trace(
             {
               method: req.method,
-              path: req.originalUrl,
+              path: req.path,
               status: res.statusCode,
               durationMs,
               ip: req.ip,
@@ -104,12 +114,13 @@ export class Server {
     });
 
     // Optional token validation (non-blocking) + global API rate limit.
-    this.app.use(validateTokenIfPresent);
+    this.app.use((req, res, next) => validateTokenIfPresent(req, res, next, config.dataDirPath));
     this.app.use("/api", apiRateLimiter);
     this.app.use("/mcp", apiRateLimiter);
 
     // Mark ready once the promise resolves
     shortCreatorPromise.then(() => {
+      if (this.shuttingDown) return;
       this.shortCreatorReady = true;
       readiness.videoEngineReady = true;
     }).catch((err) => {
@@ -159,6 +170,7 @@ export class Server {
     const watermarkRouter = new WatermarkRouter();
     const videoLibraryRouter = new VideoLibraryRouter(config);
     const scheduleRouter = new ScheduleRouter(config);
+    this.scheduleRouter = scheduleRouter;
     const pipelineRouter = new PipelineRouter(config);
     const competitorRouter = new CompetitorRouter(config);
     const enginesRouter = new EnginesRouter(config);
@@ -274,8 +286,10 @@ export class Server {
 
     // When ShortCreator is ready, swap in the real handlers
     shortCreatorPromise.then((shortCreator) => {
+      if (this.shuttingDown) return;
       const apiRouter = new APIRouter(config, shortCreator);
       const mcpRouter = new MCPRouter(shortCreator);
+      this.mcpRouter = mcpRouter;
       const queueRouter = new QueueRouter(config, shortCreator);
       apiHandler = apiRouter.router;
       mcpHandler = mcpRouter.router;
@@ -349,6 +363,7 @@ export class Server {
   }
 
   public start(): http.Server {
+    if (this.shuttingDown || this.httpServer) throw new Error("Server cannot be started in its current state");
     const server = this.app.listen(this.config.port, () => {
       logger.info(
         { port: this.config.port, mcp: "/mcp", api: "/api" },
@@ -359,11 +374,30 @@ export class Server {
       );
     });
 
+    this.httpServer = server;
     server.on("error", (error: Error) => {
       logger.error(error, "Error starting server");
     });
 
     return server;
+  }
+
+  public stopAccepting(): void {
+    this.shuttingDown = true;
+    readiness.shuttingDown = true;
+    this.scheduleRouter?.stop();
+    this.sessionClose = this.mcpRouter?.close();
+    // Start closing ingress immediately; drain() observes the same promise.
+    void this.drain().catch((error) => logger.error(error, "HTTP drain failed"));
+  }
+
+  public drain(): Promise<void> {
+    if (!this.closePromise) this.closePromise = Promise.all([this.sessionClose, new Promise<void>((resolve, reject) => {
+      if (!this.httpServer?.listening) { resolve(); return; }
+      this.httpServer.close((error) => error ? reject(error) : resolve());
+      this.httpServer.closeIdleConnections();
+    })]).then(() => undefined);
+    return this.closePromise;
   }
 
   public getApp() {

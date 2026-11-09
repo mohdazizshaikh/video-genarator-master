@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { Request, Response } from "express";
+import type { Request } from "express";
 import type { Config } from "../../config";
 import { BrandingEngine } from "../../services/BrandingEngine";
 import { logger } from "../../logger";
@@ -23,6 +23,17 @@ export class BrandingRouter {
 
   private registerRoutes() {
     this.router.use(requireAuth);
+    this.router.use((req, res, next) => {
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId && !isAdminRequest(req))
+        return res.status(401).json({ error: "Authentication required" });
+      // The path tenant is checked before Express reaches any mutable handler.
+      const requested = req.path.split("/").filter(Boolean)[0];
+      if (requested && requested !== tenantId && !isAdminRequest(req)) {
+        return res.status(404).json({ error: "Branding not found" });
+      }
+      next();
+    });
 
     // GET /api/branding/:tenantId — get branding config
     this.router.get("/:tenantId", (_req, res) => {
@@ -49,7 +60,8 @@ export class BrandingRouter {
     // PUT /api/branding/:tenantId — update branding
     this.router.put("/:tenantId", (req, res) => {
       try {
-        const { name, description, logo, colors, typography, domain, customDomain, favicon } = req.body;
+        const { name, description, logo, colors, typography, domain, customDomain, favicon,
+        } = req.body;
         if (!name || !colors || !domain) {
           return res.status(400).json({ error: "name, colors, and domain are required" });
         }
@@ -83,7 +95,11 @@ export class BrandingRouter {
     // GET /api/branding/all — get all tenant branding (admin only)
     this.router.get("/", (_req, res) => {
       try {
-        const all = this.engine.getAllBranding();
+        const all = isAdminRequest(_req)
+          ? this.engine.getAllBranding()
+          : {
+              [tenantIdFrom(_req)]: this.engine.getBranding(tenantIdFrom(_req)),
+            };
         res.json({ branding: all });
       } catch (err) {
         logger.error({ err }, "GET /branding failed");

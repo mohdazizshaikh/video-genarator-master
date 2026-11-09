@@ -1,4 +1,4 @@
-import fs from "fs-extra";
+import { initializeJsonArray, readJsonArray, writeJsonArray } from "./jsonArrayFile";
 import path from "path";
 import cuid from "cuid";
 
@@ -27,30 +27,29 @@ export interface TenantRecord {
   updatedAt: string;
 }
 
+export class TenantProfileConflictError extends Error {}
+
 export class TenantStore {
   private storePath: string;
 
   constructor(basePath: string) {
     this.storePath = path.join(basePath, "tenants.json");
-    fs.ensureFileSync(this.storePath);
-    if (!fs.readFileSync(this.storePath, "utf-8").trim()) {
-      fs.writeFileSync(this.storePath, "[]", "utf-8");
-    }
+    initializeJsonArray(this.storePath);
   }
 
-  private async readAll(): Promise<TenantRecord[]> {
-    const content = await fs.readFile(this.storePath, "utf-8");
-    if (!content.trim()) return [];
-    try {
-      return JSON.parse(content) as TenantRecord[];
-    } catch {
-      await fs.writeFile(this.storePath, "[]", "utf-8");
-      return [];
+  /** No await within read/modify/replace: same-process callers cannot interleave. */
+  private readAll(): TenantRecord[] {
+    const records = readJsonArray<TenantRecord>(this.storePath);
+    const identities = new Set<string>();
+    for (const record of records) {
+      if (typeof record.id !== "string" || !record.id.trim() || identities.has(record.id)) throw new Error("Invalid tenant profile identities");
+      identities.add(record.id);
     }
+    return records;
   }
 
-  private async writeAll(records: TenantRecord[]): Promise<void> {
-    await fs.writeFile(this.storePath, JSON.stringify(records, null, 2), "utf-8");
+  private writeAll(records: TenantRecord[]): void {
+    writeJsonArray(this.storePath, records);
   }
 
   async create(params: {
@@ -62,7 +61,7 @@ export class TenantStore {
     description?: string;
     logoUrl?: string;
   }): Promise<TenantRecord> {
-    const current = await this.readAll();
+    const current = this.readAll();
     const now = new Date().toISOString();
     const tenant: TenantRecord = {
       id: params.id ?? cuid(),
@@ -76,17 +75,19 @@ export class TenantStore {
       createdAt: now,
       updatedAt: now,
     };
+    if (!tenant.id.trim()) throw new Error("Tenant profile identity is empty");
+    if (current.some((record) => record.id === tenant.id)) throw new TenantProfileConflictError("Tenant profile identity already exists");
     current.push(tenant);
-    await this.writeAll(current);
+    this.writeAll(current);
     return tenant;
   }
 
   async list(): Promise<TenantRecord[]> {
-    return await this.readAll();
+    return this.readAll();
   }
 
   async get(id: string): Promise<TenantRecord | undefined> {
-    return (await this.readAll()).find((t) => t.id === id);
+    return (this.readAll()).find((t) => t.id === id);
   }
 
   /** Return a tenant only when the requested resource belongs to the auth tenant. */
@@ -107,11 +108,11 @@ export class TenantStore {
     updates: { workspaceName?: string; description?: string; logoUrl?: string },
   ): Promise<TenantRecord | undefined> {
     if (!authTenantId || authTenantId !== requestedTenantId) return undefined;
-    const current = await this.readAll();
+    const current = this.readAll();
     const idx = current.findIndex((t) => t.id === requestedTenantId);
     if (idx < 0) return undefined;
     current[idx] = { ...current[idx], ...updates, updatedAt: new Date().toISOString() };
-    await this.writeAll(current);
+    this.writeAll(current);
     return current[idx];
   }
 
@@ -121,7 +122,7 @@ export class TenantStore {
   }
 
   async updateKeys(id: string, apiKeys: Record<string, string>): Promise<TenantRecord | undefined> {
-    const current = await this.readAll();
+    const current = this.readAll();
     const idx = current.findIndex((t) => t.id === id);
     if (idx < 0) return undefined;
     current[idx] = {
@@ -129,7 +130,7 @@ export class TenantStore {
       apiKeys: { ...current[idx].apiKeys, ...apiKeys },
       updatedAt: new Date().toISOString(),
     };
-    await this.writeAll(current);
+    this.writeAll(current);
     return current[idx];
   }
 
@@ -146,7 +147,7 @@ export class TenantStore {
     id: string,
     engineConfig: TenantRecord["engineConfig"],
   ): Promise<TenantRecord | undefined> {
-    const current = await this.readAll();
+    const current = this.readAll();
     const idx = current.findIndex((t) => t.id === id);
     if (idx < 0) return undefined;
     current[idx] = {
@@ -157,7 +158,7 @@ export class TenantStore {
       },
       updatedAt: new Date().toISOString(),
     };
-    await this.writeAll(current);
+    this.writeAll(current);
     return current[idx];
   }
 
@@ -168,18 +169,18 @@ export class TenantStore {
 
   async deleteEncryptedKeyForTenant(authTenantId: string, requestedTenantId: string, keyId: string): Promise<TenantRecord | undefined> {
     if (!authTenantId || authTenantId !== requestedTenantId) return undefined;
-    const current = await this.readAll();
+    const current = this.readAll();
     const idx = current.findIndex((t) => t.id === requestedTenantId);
     if (idx < 0) return undefined;
     const next = { ...(current[idx].encryptedApiKeys ?? {}) };
     delete next[keyId];
     current[idx] = { ...current[idx], encryptedApiKeys: next, updatedAt: new Date().toISOString() };
-    await this.writeAll(current);
+    this.writeAll(current);
     return current[idx];
   }
 
   async updateEncryptedKeys(id: string, encryptedApiKeys: Record<string, string>): Promise<TenantRecord | undefined> {
-    const current = await this.readAll();
+    const current = this.readAll();
     const idx = current.findIndex((t) => t.id === id);
     if (idx < 0) return undefined;
     current[idx] = {
@@ -190,7 +191,7 @@ export class TenantStore {
       },
       updatedAt: new Date().toISOString(),
     };
-    await this.writeAll(current);
+    this.writeAll(current);
     return current[idx];
   }
 
@@ -207,7 +208,7 @@ export class TenantStore {
     id: string,
     quotas: NonNullable<TenantRecord["quotas"]>,
   ): Promise<TenantRecord | undefined> {
-    const current = await this.readAll();
+    const current = this.readAll();
     const idx = current.findIndex((t) => t.id === id);
     if (idx < 0) return undefined;
     current[idx] = {
@@ -218,7 +219,7 @@ export class TenantStore {
       },
       updatedAt: new Date().toISOString(),
     };
-    await this.writeAll(current);
+    this.writeAll(current);
     return current[idx];
   }
 }

@@ -6,6 +6,10 @@ import type {
 import fs from "fs-extra";
 import path from "path";
 
+import { verifyRenderMediaToken } from "../../services/RenderMediaToken";
+import { createVideoAccessToken } from "../../services/VideoAccessToken";
+import { streamVideo } from "../videoStream";
+
 import { validateCreateShortInput, validateVideoId } from "../validator";
 import { ShortCreator } from "../../short-creator/ShortCreator";
 import { logger } from "../../logger";
@@ -14,11 +18,13 @@ import { ReportStore } from "../../db/ReportStore";
 import { ScriptPlanStore } from "../../db/ScriptPlanStore";
 import { VideoMetadataStore } from "../../db/VideoMetadataStore";
 import { CustomNewsSourceStore } from "../../db/CustomNewsSourceStore";
-import { ContentAutomationRuleStore, type ContentAutomationRule } from "../../db/ContentAutomationRuleStore";
+import { ContentAutomationRuleStore, type ContentAutomationRule,
+} from "../../db/ContentAutomationRuleStore";
 import { ReportMerger } from "../../aggregator/ReportMerger";
 import { RssFetcher } from "../../news-fetcher/RssFetcher";
-import { AiLlmGenerator, configureLlmDefaults, type AutoScriptStyle, type HookOption } from "../../script-generator/AiLlmGenerator";
-import { getAuthenticatedTenantId } from "../auth";
+import { AiLlmGenerator, configureLlmDefaults, type AutoScriptStyle, type HookOption,
+} from "../../script-generator/AiLlmGenerator";
+import { getAuthenticatedTenantId, requireWorkspace } from "../auth";
 
 // Resolve a user-supplied file name safely inside a base directory,
 // rejecting any path traversal attempt (e.g. ../../.env or %2e%2e).
@@ -50,7 +56,8 @@ export class APIRouter {
     this.scriptPlanStore = new ScriptPlanStore(config.dataDirPath);
     this.videoMetadataStore = new VideoMetadataStore(config.dataDirPath);
     this.customNewsSourceStore = new CustomNewsSourceStore(config.dataDirPath);
-    this.automationRuleStore = new ContentAutomationRuleStore(config.dataDirPath);
+    this.automationRuleStore = new ContentAutomationRuleStore(config.dataDirPath,
+    );
 
     configureLlmDefaults({
       provider: config.aiLlmProvider,
@@ -66,6 +73,15 @@ export class APIRouter {
   }
 
   private setupRoutes() {
+    this.router.use(["/short-video", "/short-videos"], requireWorkspace);
+    this.router.param("videoId", (req, res, next, videoId: string) => {
+      const tenantId = getAuthenticatedTenantId(req);
+      if (!tenantId || !this.shortCreator.ownsVideo(tenantId, videoId)) {
+        res.status(404).json({ error: "Video not found" });
+        return;
+      }
+      next();
+    });
     this.router.post(
       "/short-video",
       async (req: ExpressRequest, res: ExpressResponse) => {
@@ -83,6 +99,7 @@ export class APIRouter {
             input.config,
             input.config.videoType,
             input.config.subtitleLanguage,
+            getAuthenticatedTenantId(req),
           );
 
           res.status(201).json({
@@ -149,7 +166,8 @@ export class APIRouter {
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
           const videoId = validateVideoId(req.params.videoId);
-          const metadata = await this.videoMetadataStore.get(videoId, getAuthenticatedTenantId(req) ?? undefined);
+          const metadata = await this.videoMetadataStore.get(videoId, getAuthenticatedTenantId(req) ?? undefined,
+          );
           if (!metadata) {
             res.status(404).json({ error: "Video metadata not found" });
             return;
@@ -163,6 +181,17 @@ export class APIRouter {
         }
       },
     );
+
+    this.router.get("/short-video/:videoId/playback", (req, res) => {
+        const token = createVideoAccessToken(
+        getAuthenticatedTenantId(req)!,
+        req.params.videoId,
+      );
+          res.setHeader("Cache-Control", "no-store");
+          res.json({
+        url: `/api/short-video/${encodeURIComponent(req.params.videoId)}?videoToken=${encodeURIComponent(token)}`,
+      });
+    });
 
     this.router.get(
       "/short-video/:videoId/render-path",
@@ -184,7 +213,9 @@ export class APIRouter {
     this.router.get(
       "/short-videos",
       (req: ExpressRequest, res: ExpressResponse) => {
-        const videos = this.shortCreator.listAllVideos();
+        const videos = this.shortCreator.listAllVideos(
+          getAuthenticatedTenantId(req)!,
+        );
         res.status(200).json({
           videos,
         });
@@ -216,6 +247,18 @@ export class APIRouter {
           res.status(400).json({
             error: "tmpFile is required",
           });
+          return;
+        }
+        const mediaToken =
+          typeof req.query.mediaToken === "string" ? req.query.mediaToken : "";
+        if (
+          !verifyRenderMediaToken(
+            mediaToken,
+            getAuthenticatedTenantId(req),
+            tmpFile,
+          )
+        ) {
+          res.status(404).json({ error: "tmpFile not found" });
           return;
         }
         const tmpFilePath = safePathInDir(this.config.tempDirPath, tmpFile);
@@ -294,13 +337,11 @@ export class APIRouter {
             });
             return;
           }
-          const video = this.shortCreator.getVideo(videoId);
-          res.setHeader("Content-Type", "video/mp4");
           res.setHeader(
             "Content-Disposition",
-            `inline; filename=${videoId}.mp4`,
+            `inline; filename="${videoId}.mp4"`,
           );
-          res.send(video);
+          streamVideo(this.shortCreator.getVideoPath(videoId), req, res);
         } catch (error: unknown) {
           logger.error(error, "Error getting video");
           res.status(404).json({
@@ -313,63 +354,116 @@ export class APIRouter {
     this.router.get(
       "/news-sources",
       async (req: ExpressRequest, res: ExpressResponse) => {
-        const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
+        const rssFetcher = new RssFetcher(
+          this.config.dataDirPath,
+          getAuthenticatedTenantId(req) ?? undefined,
+        );
         res.status(200).json(rssFetcher.listSourcesSync());
       },
     );
-    this.router.get("/automation/rules", (req: ExpressRequest, res: ExpressResponse) => {
-      res.status(200).json({ rules: this.automationRuleStore.listForTenant(getAuthenticatedTenantId(req) ?? "") });
-    });
-    this.router.post("/automation/rules", (req: ExpressRequest, res: ExpressResponse) => {
-      try {
-        const tenantId = getAuthenticatedTenantId(req) ?? "";
-        const body = req.body as Partial<ContentAutomationRule>;
-        if (!body.name || !body.category || !body.niche || !body.platform || !body.tone || !Array.isArray(body.sourceIds)) {
-          res.status(400).json({ error: "name, sourceIds, category, niche, platform, and tone are required" });
+    this.router.get(
+      "/automation/rules",
+      (req: ExpressRequest, res: ExpressResponse) => {
+        res
+          .status(200)
+          .json({
+            rules: this.automationRuleStore.listForTenant(
+              getAuthenticatedTenantId(req) ?? "",
+            ),
+          });
+      },
+    );
+    this.router.post(
+      "/automation/rules",
+      (req: ExpressRequest, res: ExpressResponse) => {
+        try {
+          const tenantId = getAuthenticatedTenantId(req) ?? "";
+          const body = req.body as Partial<ContentAutomationRule>;
+          if (
+            !body.name ||
+            !body.category ||
+            !body.niche ||
+            !body.platform ||
+            !body.tone ||
+            !Array.isArray(body.sourceIds)
+          ) {
+            res
+              .status(400)
+              .json({
+                error:
+                  "name, sourceIds, category, niche, platform, and tone are required",
+              });
+            return;
+          }
+          const videoType = body.videoType === "long" ? "long" : "short";
+          const rule = this.automationRuleStore.create({
+            tenantId,
+            name: String(body.name),
+            sourceIds: body.sourceIds.map(String),
+            category: String(body.category),
+            niche: String(body.niche),
+            platform: String(body.platform),
+            tone: String(body.tone),
+            videoType,
+            enabled: body.enabled !== false,
+            maxDraftsPerTick: Number(body.maxDraftsPerTick || 1),
+          });
+          res.status(201).json({ rule });
+        } catch (error: unknown) {
+          res
+            .status(400)
+            .json({
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Invalid automation rule",
+            });
+        }
+      },
+    );
+    this.router.patch(
+      "/automation/rules/:id",
+      (req: ExpressRequest, res: ExpressResponse) => {
+        const enabled = req.body?.enabled;
+        if (typeof enabled !== "boolean") {
+          res.status(400).json({ error: "enabled must be boolean" });
           return;
         }
-        const videoType = body.videoType === "long" ? "long" : "short";
-        const rule = this.automationRuleStore.create({
+        const rule = this.automationRuleStore.setEnabled(
+          getAuthenticatedTenantId(req) ?? "",
+          req.params.id,
+          enabled,
+        );
+        if (!rule) {
+          res.status(404).json({ error: "Automation rule not found" });
+          return;
+        }
+        res.status(200).json({ rule });
+      },
+    );
+    this.router.get(
+      "/automation/status",
+      (req: ExpressRequest, res: ExpressResponse) => {
+        const tenantId = getAuthenticatedTenantId(req) ?? "";
+        const sources = new RssFetcher(
+          this.config.dataDirPath,
           tenantId,
-          name: String(body.name),
-          sourceIds: body.sourceIds.map(String),
-          category: String(body.category),
-          niche: String(body.niche),
-          platform: String(body.platform),
-          tone: String(body.tone),
-          videoType,
-          enabled: body.enabled !== false,
-          maxDraftsPerTick: Number(body.maxDraftsPerTick || 1),
+        ).listSourcesSync();
+        const rules = this.automationRuleStore.listForTenant(tenantId);
+        const configuredSourceIds = new Set(
+          rules.flatMap((rule) => rule.sourceIds),
+        );
+        res.status(200).json({
+          scheduler: { mode: "review_queue_only", publishingEnabled: false },
+          rules,
+          sources: sources.map((source) => ({
+            ...source,
+            configured: configuredSourceIds.has(source.id),
+            health: "unknown",
+          })),
         });
-        res.status(201).json({ rule });
-      } catch (error: unknown) {
-        res.status(400).json({ error: error instanceof Error ? error.message : "Invalid automation rule" });
-      }
-    });
-    this.router.patch("/automation/rules/:id", (req: ExpressRequest, res: ExpressResponse) => {
-      const enabled = req.body?.enabled;
-      if (typeof enabled !== "boolean") {
-        res.status(400).json({ error: "enabled must be boolean" });
-        return;
-      }
-      const rule = this.automationRuleStore.setEnabled(getAuthenticatedTenantId(req) ?? "", req.params.id, enabled);
-      if (!rule) {
-        res.status(404).json({ error: "Automation rule not found" });
-        return;
-      }
-      res.status(200).json({ rule });
-    });
-    this.router.get("/automation/status", (req: ExpressRequest, res: ExpressResponse) => {
-      const tenantId = getAuthenticatedTenantId(req) ?? "";
-      const sources = new RssFetcher(this.config.dataDirPath, tenantId).listSourcesSync();
-      const rules = this.automationRuleStore.listForTenant(tenantId);
-      const configuredSourceIds = new Set(rules.flatMap((rule) => rule.sourceIds));
-      res.status(200).json({
-        scheduler: { mode: "review_queue_only", publishingEnabled: false },
-        rules,
-        sources: sources.map((source) => ({ ...source, configured: configuredSourceIds.has(source.id), health: "unknown" })),
-      });
-    });
+      },
+    );
 
     this.router.post(
       "/news-sources/custom",
@@ -377,7 +471,9 @@ export class APIRouter {
         try {
           const { name, url, category, subCategory } = req.body;
           if (!name || !url || !category) {
-            res.status(400).json({ error: "name, url, and category are required" });
+            res
+              .status(400)
+              .json({ error: "name, url, and category are required" });
             return;
           }
 
@@ -390,14 +486,23 @@ export class APIRouter {
           }
 
           if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-            res.status(400).json({ error: "Source URL must use http or https" });
+            res
+              .status(400)
+              .json({ error: "Source URL must use http or https" });
             return;
           }
 
-          const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
-          const validation = await rssFetcher.validateFeedUrl(parsedUrl.toString());
+          const rssFetcher = new RssFetcher(
+            this.config.dataDirPath,
+            getAuthenticatedTenantId(req) ?? undefined,
+          );
+          const validation = await rssFetcher.validateFeedUrl(
+            parsedUrl.toString(),
+          );
           if (!validation.ok) {
-            res.status(400).json({ error: `Feed validation failed: ${validation.reason}` });
+            res
+              .status(400)
+              .json({ error: `Feed validation failed: ${validation.reason}` });
             return;
           }
 
@@ -412,7 +517,10 @@ export class APIRouter {
           res.status(201).json({ source: record });
         } catch (error: unknown) {
           logger.error(error, "Error adding custom news source");
-          const message = error instanceof Error ? error.message : "Failed to add custom news source";
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Failed to add custom news source";
           const statusCode = message.includes("already exists") ? 400 : 500;
           res.status(statusCode).json({ error: message });
         }
@@ -423,7 +531,9 @@ export class APIRouter {
       "/reports",
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
-          const reports = await this.reportStore.listForTenant(getAuthenticatedTenantId(req) ?? "");
+          const reports = await this.reportStore.listForTenant(
+            getAuthenticatedTenantId(req) ?? "",
+          );
           res.status(200).json({ reports });
         } catch (error: unknown) {
           logger.error(error, "Error listing reports");
@@ -436,7 +546,10 @@ export class APIRouter {
       "/reports/:reportId",
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
-          const report = await this.reportStore.getForTenant(getAuthenticatedTenantId(req) ?? "", req.params.reportId);
+          const report = await this.reportStore.getForTenant(
+            getAuthenticatedTenantId(req) ?? "",
+            req.params.reportId,
+          );
           if (!report) {
             res.status(404).json({ error: "Report not found" });
             return;
@@ -453,11 +566,18 @@ export class APIRouter {
       "/reports/fetch",
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
-          const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
+          const rssFetcher = new RssFetcher(
+            this.config.dataDirPath,
+            getAuthenticatedTenantId(req) ?? undefined,
+          );
           const availableSources = rssFetcher.listSourcesSync();
           const sourceId = req.body.sourceId || availableSources[0]?.id;
           if (!sourceId) {
-            res.status(400).json({ error: "No sourceId provided and no default source available" });
+            res
+              .status(400)
+              .json({
+                error: "No sourceId provided and no default source available",
+              });
             return;
           }
 
@@ -502,19 +622,37 @@ export class APIRouter {
           const category = req.body.category || "World";
           const maxDuration = Number(req.body.maxDuration) || 120;
 
-          const reports = await this.reportStore.listForTenant(getAuthenticatedTenantId(req) ?? "");
+          const reports = await this.reportStore.listForTenant(
+            getAuthenticatedTenantId(req) ?? "",
+          );
           if (reports.length === 0) {
             res.status(404).json({ error: "No reports available to merge" });
             return;
           }
 
-          const plan = ReportMerger.mergeReports(reports, category, maxDuration);
-          const saved = await this.scriptPlanStore.add({ ...plan, tenantId: getAuthenticatedTenantId(req) ?? "" });
+          const plan = ReportMerger.mergeReports(
+            reports,
+            category,
+            maxDuration,
+          );
+          const saved = await this.scriptPlanStore.add({
+            ...plan,
+            tenantId: getAuthenticatedTenantId(req) ?? "",
+          });
 
           await Promise.all(
             reports
-              .filter((item) => item.category.toLowerCase() === category.toLowerCase())
-              .map((item) => this.reportStore.updateStatusForTenant(getAuthenticatedTenantId(req) ?? "", item.id, "merged")),
+              .filter(
+                (item) =>
+                  item.category.toLowerCase() === category.toLowerCase(),
+              )
+              .map((item) =>
+                this.reportStore.updateStatusForTenant(
+                  getAuthenticatedTenantId(req) ?? "",
+                  item.id,
+                  "merged",
+                ),
+              ),
           );
 
           res.status(201).json({ plan: saved });
@@ -529,7 +667,9 @@ export class APIRouter {
       "/script-plans",
       async (req: ExpressRequest, res: ExpressResponse) => {
         try {
-          const plans = await this.scriptPlanStore.listForTenant(getAuthenticatedTenantId(req) ?? "");
+          const plans = await this.scriptPlanStore.listForTenant(
+            getAuthenticatedTenantId(req) ?? "",
+          );
           res.status(200).json({ plans });
         } catch (error: unknown) {
           logger.error(error, "Error listing script plans");
@@ -553,7 +693,11 @@ export class APIRouter {
           } = req.body;
 
           if (!text || !sourceLanguage || !targetLanguage) {
-            res.status(400).json({ error: "text, sourceLanguage, and targetLanguage are required" });
+            res
+              .status(400)
+              .json({
+                error: "text, sourceLanguage, and targetLanguage are required",
+              });
             return;
           }
 
@@ -562,12 +706,23 @@ export class APIRouter {
             return;
           }
 
-          const aiLlm = new AiLlmGenerator(this.config.aiLlmUrl, this.config.aiLlmModel);
-          const translated = await aiLlm.translateText(String(text), String(sourceLanguage), String(targetLanguage));
+          const aiLlm = new AiLlmGenerator(
+            this.config.aiLlmUrl,
+            this.config.aiLlmModel,
+          );
+          const translated = await aiLlm.translateText(
+            String(text),
+            String(sourceLanguage),
+            String(targetLanguage),
+          );
           res.status(200).json({ text: translated });
         } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : String(error);
-          logger.error({ err: message, body: req.body }, "Error in preview translation");
+          const message =
+            error instanceof Error ? error.message : String(error);
+          logger.error(
+            { err: message, body: req.body },
+            "Error in preview translation",
+          );
           res.status(500).json({
             error: "Failed to translate preview text",
             message,
@@ -591,30 +746,50 @@ export class APIRouter {
             category?: string;
             keywords?: string[];
           } = req.body;
-          const selectedSourceIds = Array.from(new Set(
-            (Array.isArray(sourceIds) ? sourceIds : [])
-              .concat(sourceId ? [sourceId] : [])
-              .filter(Boolean),
-          ));
+          const selectedSourceIds = Array.from(
+            new Set(
+              (Array.isArray(sourceIds) ? sourceIds : [])
+                .concat(sourceId ? [sourceId] : [])
+                .filter(Boolean),
+            ),
+          );
           if (selectedSourceIds.length === 0) {
-            res.status(400).json({ error: "sourceId or sourceIds is required" });
+            res
+              .status(400)
+              .json({ error: "sourceId or sourceIds is required" });
             return;
           }
 
-          const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
-          const stories = await rssFetcher.fetchStoriesFromSources(selectedSourceIds);
+          const rssFetcher = new RssFetcher(
+            this.config.dataDirPath,
+            getAuthenticatedTenantId(req) ?? undefined,
+          );
+          const stories =
+            await rssFetcher.fetchStoriesFromSources(selectedSourceIds);
           if (stories.length === 0) {
-            res.status(404).json({ error: "No news stories found for this source" });
+            res
+              .status(404)
+              .json({ error: "No news stories found for this source" });
             return;
           }
 
-          const aiLlm = new AiLlmGenerator(this.config.aiLlmUrl, this.config.aiLlmModel);
-          const topics = await aiLlm.suggestTopics(stories, { category, keywords });
+          const aiLlm = new AiLlmGenerator(
+            this.config.aiLlmUrl,
+            this.config.aiLlmModel,
+          );
+          const topics = await aiLlm.suggestTopics(stories, {
+            category,
+            keywords,
+          });
 
           res.status(200).json({ topics });
         } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : String(error);
-          logger.error({ err: message, body: req.body }, "Error in auto-script topic generation");
+          const message =
+            error instanceof Error ? error.message : String(error);
+          logger.error(
+            { err: message, body: req.body },
+            "Error in auto-script topic generation",
+          );
           res.status(500).json({
             error: "Failed to generate topics",
             message,
@@ -643,30 +818,52 @@ export class APIRouter {
             keywords?: string[];
           } = req.body;
 
-          const selectedSourceIds = Array.from(new Set(
-            (Array.isArray(sourceIds) ? sourceIds : [])
-              .concat(sourceId ? [sourceId] : [])
-              .filter(Boolean),
-          ));
+          const selectedSourceIds = Array.from(
+            new Set(
+              (Array.isArray(sourceIds) ? sourceIds : [])
+                .concat(sourceId ? [sourceId] : [])
+                .filter(Boolean),
+            ),
+          );
           if (selectedSourceIds.length === 0) {
-            res.status(400).json({ error: "sourceId or sourceIds is required" });
+            res
+              .status(400)
+              .json({ error: "sourceId or sourceIds is required" });
             return;
           }
 
-          const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
-          const stories = await rssFetcher.fetchStoriesFromSources(selectedSourceIds);
+          const rssFetcher = new RssFetcher(
+            this.config.dataDirPath,
+            getAuthenticatedTenantId(req) ?? undefined,
+          );
+          const stories =
+            await rssFetcher.fetchStoriesFromSources(selectedSourceIds);
           if (stories.length === 0) {
-            res.status(404).json({ error: "No news stories found for this source" });
+            res
+              .status(404)
+              .json({ error: "No news stories found for this source" });
             return;
           }
 
-          const aiLlm = new AiLlmGenerator(this.config.aiLlmUrl, this.config.aiLlmModel);
-          const hooks: HookOption[] = await aiLlm.suggestHooks(stories, { category, topic, style, keywords });
+          const aiLlm = new AiLlmGenerator(
+            this.config.aiLlmUrl,
+            this.config.aiLlmModel,
+          );
+          const hooks: HookOption[] = await aiLlm.suggestHooks(stories, {
+            category,
+            topic,
+            style,
+            keywords,
+          });
 
           res.status(200).json({ hooks });
         } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : String(error);
-          logger.error({ err: message, body: req.body }, "Error in auto-script hook generation");
+          const message =
+            error instanceof Error ? error.message : String(error);
+          logger.error(
+            { err: message, body: req.body },
+            "Error in auto-script hook generation",
+          );
           res.status(500).json({
             error: "Failed to generate hooks",
             message,
@@ -702,27 +899,43 @@ export class APIRouter {
             videoType?: "short" | "long";
             durationLimit?: number;
           } = req.body;
-          const selectedSourceIds = Array.from(new Set(
-            (Array.isArray(sourceIds) ? sourceIds : [])
-              .concat(sourceId ? [sourceId] : [])
-              .filter(Boolean),
-          ));
+          const selectedSourceIds = Array.from(
+            new Set(
+              (Array.isArray(sourceIds) ? sourceIds : [])
+                .concat(sourceId ? [sourceId] : [])
+                .filter(Boolean),
+            ),
+          );
           if (selectedSourceIds.length === 0) {
-            res.status(400).json({ error: "sourceId or sourceIds is required" });
+            res
+              .status(400)
+              .json({ error: "sourceId or sourceIds is required" });
             return;
           }
 
-          logger.info({ selectedSourceIds, scriptLanguage }, "Auto-generating script from news");
+          logger.info(
+            { selectedSourceIds, scriptLanguage },
+            "Auto-generating script from news",
+          );
 
-          const rssFetcher = new RssFetcher(this.config.dataDirPath, getAuthenticatedTenantId(req) ?? undefined);
-          const stories = await rssFetcher.fetchStoriesFromSources(selectedSourceIds);
+          const rssFetcher = new RssFetcher(
+            this.config.dataDirPath,
+            getAuthenticatedTenantId(req) ?? undefined,
+          );
+          const stories =
+            await rssFetcher.fetchStoriesFromSources(selectedSourceIds);
 
           if (stories.length === 0) {
-            res.status(404).json({ error: "No news stories found for this source" });
+            res
+              .status(404)
+              .json({ error: "No news stories found for this source" });
             return;
           }
 
-          const aiLlm = new AiLlmGenerator(this.config.aiLlmUrl, this.config.aiLlmModel);
+          const aiLlm = new AiLlmGenerator(
+            this.config.aiLlmUrl,
+            this.config.aiLlmModel,
+          );
           const scenes = await aiLlm.generateScript(stories, {
             category,
             topic,
@@ -736,10 +949,19 @@ export class APIRouter {
 
           res.status(200).json({ scenes });
         } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : String(error);
-          const details = error instanceof Error ? error.stack ?? "No stack trace available" : "No stack trace available";
-          const rawOllamaOutput = (error as { rawResponse?: string }).rawResponse || "No output captured";
-          logger.error({ err: message, body: req.body }, "Error in auto-script generation");
+          const message =
+            error instanceof Error ? error.message : String(error);
+          const details =
+            error instanceof Error
+              ? (error.stack ?? "No stack trace available")
+              : "No stack trace available";
+          const rawOllamaOutput =
+            (error as { rawResponse?: string }).rawResponse ||
+            "No output captured";
+          logger.error(
+            { err: message, body: req.body },
+            "Error in auto-script generation",
+          );
           res.status(500).json({
             error: "Failed to generate script",
             message,
@@ -750,5 +972,4 @@ export class APIRouter {
       },
     );
   }
-
 }

@@ -59,19 +59,16 @@ Most endpoints are rate-limited (120 req/min). Admin endpoints require \`X-Admin
     "/api/health": {
       get: {
         tags: ["Health"],
-        summary: "System health check",
-        description: "Returns overall system health including all services, disk, and queue status",
+        summary: "Application readiness",
+        description: "Returns 200 only when the video engine and configured Redis workers are ready; otherwise 503. /api/health/live reports process liveness. Host and queue details are restricted to operations access.",
         responses: {
           200: {
-            description: "System health status",
+            description: "Application is ready",
             content: {
               "application/json": {
                 example: {
-                  status: "ok",
-                  version: "12.0.0",
-                  uptime: 3600,
-                  memory: { used: 512, total: 4096 },
-                  services: { redis: "connected", pexels: "ok" },
+                  status: "ready",
+                  ready: true,
                 },
               },
             },

@@ -73,4 +73,23 @@ describe("TelegramPublisher", () => {
     const result = await publisher().uploadVideo({ videoFilePath: "/tmp/video.mp4", title: "Network test", description: "Network test", tags: [], category: "Technology", language: "en" as any });
     expect(result).toMatchObject({ success: false, errorCode: "provider_unavailable" });
   });
+  it("holds a successful response without a canonical message ID", async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: { ok: true, result: {} } });
+    expect(await publisher().uploadVideo({ videoFilePath: "/tmp/video.mp4" } as any)).toMatchObject({ success: false, deliveryOutcome: "unknown" });
+  });
+  it("distinguishes a confirmed rejection from an ambiguous transport failure", async () => {
+    mockedAxios.post.mockResolvedValueOnce({ status: 200, data: { ok: false, error_code: 429, description: "Too Many Requests" } });
+    expect(await publisher().uploadVideo({ videoFilePath: "/tmp/video.mp4" } as any)).toMatchObject({ deliveryOutcome: "not_accepted" });
+    mockedAxios.post.mockRejectedValueOnce(new Error("socket closed"));
+    expect(await publisher().uploadVideo({ videoFilePath: "/tmp/video.mp4" } as any)).toMatchObject({ deliveryOutcome: "unknown" });
+  });
+  it("propagates transient verification failure without declaring credentials invalid", async () => {
+    mockedAxios.get.mockRejectedValueOnce(new Error("connection timeout"));
+    await expect(publisher().validateCredentials()).rejects.toThrow();
+  });
+  it("rejects native scheduling without sending a video", async () => {
+    expect(await publisher().scheduleVideo({} as any, new Date())).toMatchObject({ success: false, deliveryOutcome: "not_accepted" });
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+
 });

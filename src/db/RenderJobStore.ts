@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import cuid from "cuid";
+import crypto from "node:crypto";
 import type { RenderJobRecord, RenderJobStatus, VideoType, OrientationEnum } from "../types/shorts";
 
 export class RenderJobStore {
@@ -8,25 +9,27 @@ export class RenderJobStore {
 
   constructor(basePath: string) {
     this.storePath = path.join(basePath, "renderJobs.json");
-    fs.ensureFileSync(this.storePath);
-    if (!fs.readFileSync(this.storePath, "utf-8").trim()) {
-      fs.writeFileSync(this.storePath, "[]", "utf-8");
-    }
+    fs.ensureDirSync(basePath);
+    if (!fs.existsSync(this.storePath)) fs.writeFileSync(this.storePath, "[]", { flag: "wx", mode: 0o600 });
   }
 
-  private async readAll(): Promise<RenderJobRecord[]> {
-    const content = await fs.readFile(this.storePath, "utf-8");
-    if (!content.trim()) return [];
+  private readSync(): RenderJobRecord[] {
+    const records: unknown = fs.readJsonSync(this.storePath);
+    if (!Array.isArray(records)) throw new Error("Invalid render job store; reconciliation is required");
+    return records as RenderJobRecord[];
+  }
+
+  private async readAll(): Promise<RenderJobRecord[]> { return this.readSync(); }
+
+  private mutate<T>(change: (records: RenderJobRecord[]) => T): T {
+    const records = this.readSync();
+    const result = change(records);
+    const temporary = `${this.storePath}.${crypto.randomUUID()}.tmp`;
     try {
-      return JSON.parse(content) as RenderJobRecord[];
-    } catch {
-      await fs.writeFile(this.storePath, "[]", "utf-8");
-      return [];
-    }
-  }
-
-  private async writeAll(records: RenderJobRecord[]): Promise<void> {
-    await fs.writeFile(this.storePath, JSON.stringify(records, null, 2), "utf-8");
+      fs.writeFileSync(temporary, JSON.stringify(records, null, 2), { flag: "wx", mode: 0o600 });
+      fs.renameSync(temporary, this.storePath);
+    } finally { fs.removeSync(temporary); }
+    return result;
   }
 
   public async create(params: {
@@ -39,7 +42,8 @@ export class RenderJobStore {
     category: string;
     namingKey: string;
   }): Promise<RenderJobRecord> {
-    const records = await this.readAll();
+    if (!params.tenantId?.trim()) throw new Error("Render job workspace is required");
+    return this.mutate((records) => {
     const now = new Date().toISOString();
     const record: RenderJobRecord = {
       ...params,
@@ -53,8 +57,8 @@ export class RenderJobStore {
       updatedAt: now,
     };
     records.push(record);
-    await this.writeAll(records);
     return record;
+    });
   }
 
   public async get(id: string): Promise<RenderJobRecord | undefined> {
@@ -92,39 +96,38 @@ export class RenderJobStore {
   public async updateStatus(
     id: string,
     status: RenderJobStatus,
-    extras: Partial<Pick<RenderJobRecord, "outputPath" | "error" | "attemptCount">> = {},
+    extras: Partial<Pick<RenderJobRecord, "outputPath" | "error" | "attemptCount" | "executionId" | "videoId" | "artifactId" | "contentVersionId">> = {},
   ): Promise<RenderJobRecord | undefined> {
-    const records = await this.readAll();
-    const idx = records.findIndex((r) => r.id === id);
-    if (idx < 0) return undefined;
-    records[idx] = { ...records[idx], status, ...extras, updatedAt: new Date().toISOString() };
-    await this.writeAll(records);
-    return records[idx];
+    return this.mutate((records) => this.setStatus(records, records.findIndex((record) => record.id === id), status, extras));
+  }
+
+  private setStatus(records: RenderJobRecord[], index: number, status: RenderJobStatus, extras: Partial<Pick<RenderJobRecord, "outputPath" | "error" | "attemptCount" | "executionId" | "videoId" | "artifactId" | "contentVersionId">>) {
+    if (index < 0) return undefined;
+    records[index] = { ...records[index], ...extras, status, updatedAt: new Date().toISOString() };
+    return records[index];
   }
 
   public async updateStatusForTenant(
-    tenantId: string,
-    id: string,
-    status: RenderJobStatus,
-    extras: Partial<Pick<RenderJobRecord, "outputPath" | "error" | "attemptCount">> = {},
+    tenantId: string, id: string, status: RenderJobStatus,
+    extras: Partial<Pick<RenderJobRecord, "outputPath" | "error" | "attemptCount" | "executionId" | "videoId" | "artifactId" | "contentVersionId">> = {},
   ): Promise<RenderJobRecord | undefined> {
-    if (!(await this.getForTenant(tenantId, id))) return undefined;
-    return this.updateStatus(id, status, extras);
+    if (!tenantId) return undefined;
+    return this.mutate((records) => this.setStatus(records, records.findIndex((record) => record.tenantId === tenantId && record.id === id), status, extras));
   }
 
   public async incrementAttempt(id: string): Promise<RenderJobRecord | undefined> {
-    const records = await this.readAll();
-    const idx = records.findIndex((r) => r.id === id);
-    if (idx < 0) return undefined;
-    records[idx].attemptCount += 1;
-    records[idx].updatedAt = new Date().toISOString();
-    await this.writeAll(records);
-    return records[idx];
+    return this.mutate((records) => this.increment(records, records.findIndex((record) => record.id === id)));
+  }
+
+  private increment(records: RenderJobRecord[], index: number) {
+    if (index < 0) return undefined;
+    records[index] = { ...records[index], attemptCount: records[index].attemptCount + 1, updatedAt: new Date().toISOString() };
+    return records[index];
   }
 
   public async incrementAttemptForTenant(tenantId: string, id: string): Promise<RenderJobRecord | undefined> {
-    if (!(await this.getForTenant(tenantId, id))) return undefined;
-    return this.incrementAttempt(id);
+    if (!tenantId) return undefined;
+    return this.mutate((records) => this.increment(records, records.findIndex((record) => record.tenantId === tenantId && record.id === id)));
   }
 
   /** Find existing job with same idempotency key */

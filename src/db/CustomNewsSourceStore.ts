@@ -1,5 +1,6 @@
-import fs from "fs-extra";
+import { initializeJsonArray, readJsonArray, writeJsonArray } from "./jsonArrayFile";
 import path from "path";
+import { randomUUID } from "node:crypto";
 
 export interface CustomNewsSourceRecord {
   id: string;
@@ -18,25 +19,15 @@ export class CustomNewsSourceStore {
 
   constructor(basePath: string) {
     this.storePath = path.join(basePath, "customNewsSources.json");
-    fs.ensureFileSync(this.storePath);
-    if (!fs.readFileSync(this.storePath, "utf-8").trim()) {
-      fs.writeFileSync(this.storePath, "[]", "utf-8");
-    }
+    initializeJsonArray(this.storePath);
   }
 
   private readAllSync(): CustomNewsSourceRecord[] {
-    const content = fs.readFileSync(this.storePath, "utf-8");
-    if (!content.trim()) return [];
-    try {
-      return JSON.parse(content) as CustomNewsSourceRecord[];
-    } catch {
-      fs.writeFileSync(this.storePath, "[]", "utf-8");
-      return [];
-    }
+    return readJsonArray<CustomNewsSourceRecord>(this.storePath);
   }
 
   private writeAllSync(records: CustomNewsSourceRecord[]): void {
-    fs.writeFileSync(this.storePath, JSON.stringify(records, null, 2), "utf-8");
+    writeJsonArray(this.storePath, records);
   }
 
   private normalizeComparableUrl(url: string): string {
@@ -46,9 +37,10 @@ export class CustomNewsSourceStore {
       if ((parsed.protocol === "http:" && parsed.port === "80") || (parsed.protocol === "https:" && parsed.port === "443")) {
         parsed.port = "";
       }
-      return parsed.toString().replace(/\/+$/, "").toLowerCase();
+      parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+      return parsed.toString();
     } catch {
-      return url.trim().replace(/\/+$/, "").toLowerCase();
+      return url.trim();
     }
   }
 
@@ -70,7 +62,7 @@ export class CustomNewsSourceStore {
   }): Promise<CustomNewsSourceRecord> {
     const records = this.readAllSync();
     const normalizedUrl = this.normalizeComparableUrl(input.url);
-    const duplicate = records.find((record) => this.normalizeComparableUrl(record.url) === normalizedUrl);
+    const duplicate = records.find((record) => record.tenantId === input.tenantId && this.normalizeComparableUrl(record.url) === normalizedUrl);
     if (duplicate) {
       throw new Error(`Source already exists: ${duplicate.name}`);
     }
@@ -80,7 +72,7 @@ export class CustomNewsSourceStore {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 40) || "source";
-    const id = `custom_${slug}_${Date.now().toString(36)}`;
+    const id = `custom_${slug}_${randomUUID()}`;
     const record: CustomNewsSourceRecord = {
       id,
       name: input.name.trim(),

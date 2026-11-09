@@ -1,0 +1,83 @@
+{
+  "isolatedDataDir": "/var/folders/zf/ypc7b4756n12swkn8g4r1xz00000gn/T/creator-audit-5hsMFU",
+  "network": "No network requests; no notification dispatch performed",
+  "probes": [
+    {
+      "name": "unauthenticated system endpoint /assets",
+      "result": {
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "data": []
+        }
+      }
+    },
+    {
+      "name": "unauthenticated system endpoint /compliance/logs",
+      "result": {
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "data": []
+        }
+      }
+    },
+    {
+      "name": "in-flight render dedupe tenant isolation",
+      "sameVideoId": true,
+      "queueOwners": [
+        "workspace-A"
+      ]
+    },
+    {
+      "name": "independent cached event stores overwrite persisted events",
+      "AEvents": 0,
+      "BEvents": 1
+    },
+    {
+      "name": "webhook update changes immutable owner",
+      "AVisible": 0,
+      "BVisible": 1
+    },
+    {
+      "name": "registration accepts caller enterprise plan and returns apiKeyHash",
+      "plan": "enterprise",
+      "hashPresent": true,
+      "hashValue": "not emitted"
+    },
+    {
+      "name": "workspace A resets workspace B branding",
+      "result": {
+        "status": 200,
+        "returnedOwner": "workspace-B"
+      }
+    },
+    {
+      "name": "GET /short-videos as workspace A with fake video adapter",
+      "result": {
+        "status": 200,
+        "body": {
+          "videos": [
+            {
+              "id": "workspace-B-video",
+              "status": "ready"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "video deletion delegated without owner",
+      "id": "workspace-B-video"
+    },
+    {
+      "name": "DELETE /short-video/workspace-B-video as workspace A with fake video adapter",
+      "result": {
+        "status": 200,
+        "body": {
+          "success": true
+        }
+      }
+    }
+  ]
+}

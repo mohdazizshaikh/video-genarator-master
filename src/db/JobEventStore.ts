@@ -23,16 +23,19 @@ function tenant(tenantId: string): string {
 export class JobEventStore {
   private readonly filePath: string;
   private events: JobEvent[] = [];
-  private loaded = false;
 
   constructor(dataDirPath: string) {
     this.filePath = path.join(dataDirPath, "job-events.json");
   }
 
   private load(): void {
-    if (this.loaded) return;
-    this.loaded = true;
-    const raw = fs.readJsonSync(this.filePath, { throws: false });
+    const raw = fs.existsSync(this.filePath)
+      ? fs.readJsonSync(this.filePath)
+      : [];
+    if (!Array.isArray(raw))
+      throw new Error(
+        "Invalid lifecycle store; restore or reconcile before writing",
+      );
     if (Array.isArray(raw)) {
       this.events = raw.filter((event) =>
         event && typeof event.id === "string" && typeof event.tenantId === "string" && event.tenantId.trim() !== "",
@@ -42,7 +45,7 @@ export class JobEventStore {
 
   private persist(): void {
     fs.ensureDirSync(path.dirname(this.filePath));
-    const tempPath = `${this.filePath}.tmp`;
+    const tempPath = `${this.filePath}.${crypto.randomUUID()}.tmp`;
     fs.writeJsonSync(tempPath, this.events, { spaces: 2 });
     fs.moveSync(tempPath, this.filePath, { overwrite: true });
   }
@@ -54,10 +57,14 @@ export class JobEventStore {
       throw new Error("jobId, type, and idempotencyKey are required");
     }
     const existing = this.events.find(
-      (event) => event.tenantId === owner && event.idempotencyKey === input.idempotencyKey,
+      (event) =>
+        event.tenantId === owner &&
+        event.idempotencyKey === input.idempotencyKey,
     );
     if (existing) return existing;
-    const prior = this.events.filter((event) => event.tenantId === owner && event.jobId === input.jobId);
+    const prior = this.events.filter(
+      (event) => event.tenantId === owner && event.jobId === input.jobId,
+    );
     const event: JobEvent = {
       ...input,
       tenantId: owner,
@@ -74,7 +81,10 @@ export class JobEventStore {
     const owner = tenant(tenantId);
     this.load();
     return this.events
-      .filter((event) => event.tenantId === owner && (!jobId || event.jobId === jobId))
+      .filter(
+        (event) =>
+          event.tenantId === owner && (!jobId || event.jobId === jobId),
+      )
       .sort((a, b) => a.sequence - b.sequence);
   }
 }

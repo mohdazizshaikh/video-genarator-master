@@ -1,0 +1,8 @@
+{
+  "scripts/backup.mjs": "cbe77bd90ab2a021752207b22992e5bf30b6fa1135c766d45958131e1b1be1e7",
+  "scripts/restore.mjs": "e8d28f67e21381a51819e62ff5c310615165fd65fa29a1aae3c87d492856f360",
+  "scripts/full-backup-integrity.mjs": "508bc706821555c8d270d6ef752b3774fcb1edbbdada54821d7c059ba30e5111",
+  "src/integration/FullBackupRecovery.test.ts": "3c980f5c5d04030be0ff3036077786b0cd2fc52a8ef2f8027990c05dda056e68",
+  "eslint.config.mjs": "1df3a1e937db1f43d7149c681b5acb81a3eaf1b942e85cad4ae5ad130ce66990",
+  "docs/MIGRATION_RUNBOOK.md": "3b151305b4f61040577094fe69671cdf654a90969ee8a68332c9f34125b1e69b"
+}

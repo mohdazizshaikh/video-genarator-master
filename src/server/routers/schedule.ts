@@ -1,3 +1,4 @@
+import { completeScheduledVideo } from "../../services/ScheduleVideoCompletion";
 /**
  * ScheduleRouter – Full schedule persistence with cron-like runner
  *
@@ -12,35 +13,52 @@
  * PATCH  /api/schedule/:id/status   – pause/resume/complete
  * DELETE /api/schedule/:id          – delete schedule
  * POST   /api/schedule/:id/run      – trigger immediate run
+ * GET    /api/schedule/:id/outputs/:artifactId – download owned persisted bytes
+ * POST   /api/schedule/:id/confirm-assets – confirm a complete bound asset checkpoint
  */
 import { Router } from "express";
+import fs from "fs-extra";
+import path from "node:path";
+import crypto from "node:crypto";
+import { ScheduleAssetReconciliation } from "../../services/ScheduleAssetReconciliation";
+import { ArtifactManifestStore } from "../../db/ArtifactManifestStore";
 import type { Request, Response } from "express";
 import express from "express";
 import type { Config } from "../../config";
-import { ScheduleStore, type ScheduleRecord } from "../../db/ScheduleStore";
+import { ScheduleStore, ScheduleConflictError, scheduleConfigurationDigest, type ScheduleRecord, type ScheduleOutput } from "../../db/ScheduleStore";
+import { ScheduleValidationError, validateRecurrence } from "../../services/ScheduleRecurrence";
+import { TenantEngineScope, tenantEngineAt } from "../../services/TenantEngineScope";
 import { logger } from "../../logger";
-import { ImageEngine } from "../../services/ImageEngine";
+import { ImageEngine, type ImageRenderResult } from "../../services/ImageEngine";
 import { ContentFreshnessEngine } from "../../services/ContentFreshnessEngine";
 import { BestTimeLearningEngine } from "../../services/BestTimeLearningEngine";
 import type { ShortCreator } from "../../short-creator/ShortCreator";
-import { getAuthenticatedTenantId, requireAuth } from "../auth";
+import { getAuthenticatedTenantId, requireWorkspace, type AuthClaims } from "../auth";
 import { LanguageEnum, VideoTypeEnum, VoiceEnum, MusicVolumeEnum, TextModeEnum, OrientationEnum, MusicMoodEnum, CaptionPositionEnum } from "../../types/shorts";
 
 export class ScheduleRouter {
   public router: Router;
   private store: ScheduleStore;
+  private runnerBusy = false;
   private runnerInterval: NodeJS.Timeout | null = null;
   private imageEngine: ImageEngine;
-  private freshnessEngine: ContentFreshnessEngine;
-  private bestTimeEngine: BestTimeLearningEngine;
+  private artifacts: ArtifactManifestStore;
+  private dataDirectory: string;
+  private videosDirectory: string;
+  private freshnessEngine: TenantEngineScope<ContentFreshnessEngine>;
+  private bestTimeEngine: TenantEngineScope<BestTimeLearningEngine>;
+  private executing = new Set<string>();
   private shortCreator: ShortCreator | null = null;
 
   constructor(config: Config) {
     this.router = Router();
+    this.dataDirectory = config.dataDirPath;
+    this.videosDirectory = config.videosDirPath;
+    this.artifacts = new ArtifactManifestStore(config.dataDirPath);
     this.store = new ScheduleStore(config.dataDirPath);
     this.imageEngine = new ImageEngine();
-    this.freshnessEngine = new ContentFreshnessEngine(config.dataDirPath);
-    this.bestTimeEngine = new BestTimeLearningEngine(config.dataDirPath);
+    this.freshnessEngine = new TenantEngineScope(config.dataDirPath, (directory) => tenantEngineAt(directory, ContentFreshnessEngine));
+    this.bestTimeEngine = new TenantEngineScope(config.dataDirPath, (directory) => tenantEngineAt(directory, BestTimeLearningEngine));
     this.router.use(express.json());
     this.registerRoutes();
     this.startRunner();
@@ -53,7 +71,7 @@ export class ScheduleRouter {
   }
 
   private registerRoutes(): void {
-    this.router.use(requireAuth);
+    this.router.use(requireWorkspace);
 
     this.router.get("/stats", (req: Request, res: Response) => this.getStats(req, res));
     this.router.get("/due", (req: Request, res: Response) => this.getDue(req, res));
@@ -61,8 +79,10 @@ export class ScheduleRouter {
     this.router.get("/best-times", (req: Request, res: Response) => this.getBestTimes(req, res));
     this.router.get("/", (req: Request, res: Response) => this.listSchedules(req, res));
     this.router.post("/", (req: Request, res: Response) => this.createSchedule(req, res));
+    this.router.get("/:id/outputs/:artifactId", (req: Request, res: Response) => this.downloadOutput(req, res));
     this.router.get("/:id", (req: Request, res: Response) => this.getSchedule(req, res));
     this.router.patch("/:id/status", (req: Request, res: Response) => this.updateStatus(req, res));
+    this.router.post("/:id/confirm-assets", (req: Request, res: Response) => this.confirmAssets(req, res));
     this.router.post("/:id/run", (req: Request, res: Response) => this.triggerRun(req, res));
     this.router.patch("/:id", (req: Request, res: Response) => this.updateSchedule(req, res));
     this.router.delete("/:id", (req: Request, res: Response) => this.deleteSchedule(req, res));
@@ -71,16 +91,31 @@ export class ScheduleRouter {
   /** Background runner: checks due schedules every minute */
   private startRunner(): void {
     this.runnerInterval = setInterval(async () => {
+      if (this.runnerBusy) return;
+      this.runnerBusy = true;
       try {
+        for (const schedule of await this.store.pendingVideos()) {
+          if (!this.runnerInterval) break;
+          try { await completeScheduledVideo(this.dataDirectory, this.videosDirectory, schedule.tenantId!, schedule.id); }
+          catch { logger.warn({ scheduleId: schedule.id }, "Scheduled video completion could not be verified"); }
+        }
         const due = (await this.store.getDueSchedules()).filter((schedule) => Boolean(schedule.tenantId));
         for (const sched of due) {
+          if (!this.runnerInterval) break;
           logger.info({ scheduleId: sched.id, name: sched.name }, "Schedule triggered");
-          await this.executeSchedule(sched.id, sched.tenantId);
+          try { await this.executeSchedule(sched.id, sched.tenantId); }
+          catch (err) { logger.error({ err, scheduleId: sched.id }, "Schedule execution could not be recorded"); }
         }
       } catch (err) {
         logger.error(err, "Schedule runner error");
-      }
+      } finally { this.runnerBusy = false; }
     }, 60_000);
+    this.runnerInterval.unref();
+  }
+
+  public stop(): void {
+    if (this.runnerInterval) clearInterval(this.runnerInterval);
+    this.runnerInterval = null;
   }
 
   private deterministicRandom(seed: number): number {
@@ -88,21 +123,55 @@ export class ScheduleRouter {
     return x - Math.floor(x);
   }
 
-  private async executeSchedule(scheduleId: string, tenantId?: string): Promise<boolean> {
+  private async persistAsset(tenantId: string, result: ImageRenderResult): Promise<ScheduleOutput["artifacts"][number]> {
+    if (!result.success || !result.svgMarkup?.trim()) throw new Error("Scheduled asset producer returned no bytes");
+    const owner = crypto.createHash("sha256").update(tenantId).digest("hex");
+    const location = path.join(this.dataDirectory, "artifacts", "schedules", owner, `${crypto.randomUUID()}.svg`);
+    fs.ensureDirSync(path.dirname(location));
+    fs.writeFileSync(location, result.svgMarkup, { flag: "wx", mode: 0o600 });
+    const artifact = await this.artifacts.register({ tenantId, kind: "generated-image", localPath: location, mimeType: "image/svg+xml", lifecycle: "active" });
+    return { id: artifact.id, mimeType: artifact.mimeType, checksumSha256: artifact.checksumSha256, sizeBytes: artifact.sizeBytes };
+  }
+
+  private async executeSchedule(scheduleId: string, tenantId?: string, manual = false): Promise<boolean> {
     if (!tenantId) return false;
+    const executionKey = `${tenantId}:${scheduleId}`;
+    if (this.executing.has(executionKey)) return false;
+    this.executing.add(executionKey);
+    try {
     const sched = await this.store.getForTenant(tenantId, scheduleId);
     if (!sched || sched.status !== "active") return false;
+    validateRecurrence(sched);
+    const dueAt = sched.nextRun ?? (sched.runCount === 0 ? sched.publishAt : undefined);
+    if (!manual && (!dueAt || new Date(dueAt).getTime() > Date.now())) return false;
+    if (sched.execution && sched.execution.state !== "completed") return false;
+    const freshness = this.freshnessEngine.forTenant(tenantId);
+    let executionId: string | undefined;
+    let producerMayHaveEffects = false;
+    let output: ScheduleOutput | undefined;
 
     try {
+      output = { recordedAt: new Date().toISOString(), state: "assets-persisted", artifacts: [] };
+      if ([sched.platforms, sched.categories, sched.languages].some((values) => values.length > 1)) throw new Error("Multi-platform/category/language generation is not supported by this runner");
       const meta = sched.metadata as { contentType?: string; alsoGenerate?: Record<string, boolean> };
       const contentType: string = meta?.contentType || "video";
+      if (!["video", "image", "carousel", "banner"].includes(contentType)) throw new Error("Unsupported scheduled content type");
+      if (contentType === "video" && !this.shortCreator) throw new Error("Video renderer is not ready");
+      const saveAsset = async (result: ImageRenderResult) => {
+        if (!result.success || !result.svgMarkup?.trim()) throw new Error("Scheduled producer returned no bytes");
+        producerMayHaveEffects = true;
+        const artifact = await this.persistAsset(tenantId, result);
+        output!.artifacts.push(artifact);
+        await this.store.checkpointOutputForTenant(tenantId, scheduleId, executionId!, output!);
+        return artifact;
+      };
       const alsoGenerate: Record<string, boolean> = meta?.alsoGenerate || {};
       const category = sched.categories?.[0] || "General";
       const platform = sched.platforms?.[0] || "youtube";
       const language = (sched.languages?.[0] || "en") as LanguageEnum;
 
       // ── Freshness check ──────────────────────────────────────────
-      const freshnessResult = this.freshnessEngine.check(sched.name, category);
+      const freshnessResult = freshness.check(sched.name, category);
       if (!freshnessResult.allowed) {
         logger.warn(
           { scheduleId, reason: freshnessResult.reason, waitMs: freshnessResult.waitMs },
@@ -113,15 +182,18 @@ export class ScheduleRouter {
       }
 
       // ── Human Mimicry: random ±45 min timing variation ───────────
-      if (sched.engines?.enableHumanMimicry) {
+      if (!manual && sched.engines?.enableHumanMimicry && !sched.timingVariationApplied) {
         const variationMs = Math.floor((this.deterministicRandom(Date.now()) * 2 - 1) * 45 * 60 * 1000);
         if (variationMs > 3 * 60 * 1000) {
           logger.info({ scheduleId, variationMinutes: Math.round(variationMs / 60000) }, "Human mimicry: delaying schedule execution");
-          setTimeout(() => void this.executeSchedule(scheduleId, tenantId), Math.abs(variationMs));
+          await this.store.updateForTenant(tenantId, scheduleId, { nextRun: new Date(Date.now() + variationMs).toISOString(), timingVariationApplied: true });
           return true;
         }
       }
 
+      const claim = await this.store.claimForTenant(tenantId, scheduleId, sched.runCount, dueAt ?? sched.publishAt, { expectedAssets: (contentType === "video" ? 0 : 1) + (alsoGenerate.quoteCard ? 1 : 0) + (alsoGenerate.thumbnail ? 1 : 0), expectsVideo: contentType === "video" }, scheduleConfigurationDigest(sched));
+      if (!claim) return false;
+      executionId = claim.id;
       logger.info({ scheduleId, name: sched.name, contentType, platform }, "Executing schedule");
 
       // ── Content generation by type ───────────────────────────────
@@ -130,6 +202,7 @@ export class ScheduleRouter {
           quote: sched.name,
           author: category,
         });
+        await saveAsset(result);
         logger.info({ scheduleId, contentType, success: result.success }, "Schedule: quote card generated");
 
       } else if (contentType === "carousel") {
@@ -137,6 +210,7 @@ export class ScheduleRouter {
           topic: sched.name,
           slides: [{ slideNumber: 1, title: sched.name, body: `${category} content` }],
         });
+        await saveAsset(result);
         logger.info({ scheduleId, contentType, success: result.success }, "Schedule: carousel generated");
 
       } else if (contentType === "banner") {
@@ -147,6 +221,7 @@ export class ScheduleRouter {
           height: platform === "youtube" ? 1440 : 1080,
           platform,
         });
+        await saveAsset(result);
         logger.info({ scheduleId, contentType, success: result.success }, "Schedule: banner generated");
 
       } else {
@@ -159,6 +234,7 @@ export class ScheduleRouter {
             language,
             sourceLanguage: language,
           };
+          producerMayHaveEffects = true;
           const videoId = this.shortCreator.addToQueue(
             [scene],
             {
@@ -184,33 +260,81 @@ export class ScheduleRouter {
             },
             VideoTypeEnum.short,
             language,
+            tenantId,
           );
+          output.state = "video-queued"; output.videoId = videoId;
+          await this.store.checkpointOutputForTenant(tenantId, scheduleId, executionId!, output);
           logger.info({ scheduleId, videoId }, "Schedule: video job queued via ShortCreator");
         } else {
-          logger.info({ scheduleId }, "Schedule: video type — ShortCreator not yet ready, will retry next cycle");
+          throw new Error("Video renderer is not ready");
         }
       }
 
       // ── alsoGenerate: optional supplementary assets ──────────────
       if (alsoGenerate.quoteCard) {
-        this.imageEngine.generateQuoteCard({ quote: sched.name, author: category });
+        await saveAsset(this.imageEngine.generateQuoteCard({ quote: sched.name, author: category }));
         logger.debug({ scheduleId }, "alsoGenerate: quote card done");
       }
       if (alsoGenerate.thumbnail) {
-        this.imageEngine.generatePoster({ headline: sched.name, category });
+        await saveAsset(this.imageEngine.generatePoster({ headline: sched.name, category }));
         logger.debug({ scheduleId }, "alsoGenerate: thumbnail/poster done");
       }
 
       // ── Record freshness so this topic isn't repeated too soon ───
-      this.freshnessEngine.record(sched.name, category);
+      freshness.record(sched.name, category);
 
-      await this.store.recordRunForTenant(tenantId, scheduleId, true);
+      if (output.state === "video-queued") return true; // Accepted, still awaiting verified render output.
+      const recorded = await this.store.recordRunForTenant(tenantId, scheduleId, true, output, executionId);
+      if (!recorded) throw new Error("Schedule disappeared before output binding");
       return true;
     } catch (err) {
       logger.error(err, "Schedule execution failed");
-      await this.store.recordRunForTenant(tenantId, scheduleId, false);
+      if (executionId && producerMayHaveEffects) await this.store.holdExecutionForTenant(tenantId, scheduleId, executionId, output);
+      else await this.store.recordRunForTenant(tenantId, scheduleId, false, undefined, executionId);
       return false;
     }
+    } finally { this.executing.delete(executionKey); }
+  }
+
+  private async confirmAssets(req: Request, res: Response): Promise<void> {
+    const claims = (req as Request & { auth?: AuthClaims }).auth;
+    if (!claims?.permissions?.some((permission) => ["schedule:reconcile", "workspace:admin", "admin"].includes(permission))) { res.status(403).json({ error: "Schedule reconciliation permission required" }); return; }
+    const tenantId = getAuthenticatedTenantId(req) ?? "";
+    try {
+      const schedule = await this.store.getForTenant(tenantId, req.params.id);
+      if (!schedule) { res.status(404).json({ error: "Schedule not found" }); return; }
+      const { executionId, evidenceReference, verifiedOutcome } = req.body || {};
+      if (verifiedOutcome !== true || typeof executionId !== "string" || typeof evidenceReference !== "string" || !evidenceReference.trim() || evidenceReference.length > 500 || Array.from(evidenceReference).some((character) => character.charCodeAt(0) < 32)) { res.status(400).json({ error: "Verify the output and supply its execution ID and evidence reference" }); return; }
+      const confirmed = await new ScheduleAssetReconciliation(this.dataDirectory).confirm(tenantId, schedule.id, executionId, evidenceReference.trim(), claims.name || tenantId);
+      res.json({ schedule: confirmed });
+    } catch { res.status(409).json({ error: "Bound scheduled assets could not be confirmed" }); }
+  }
+
+  private async downloadOutput(req: Request, res: Response): Promise<void> {
+    try {
+      const tenantId = getAuthenticatedTenantId(req) ?? "";
+      const schedule = await this.store.getForTenant(tenantId, req.params.id);
+      const output = schedule?.lastOutput?.artifacts.find((item) => item.id === req.params.artifactId) ?? schedule?.execution?.pendingOutput?.artifacts.find((item) => item.id === req.params.artifactId);
+      const artifact = output && this.artifacts.findForTenant(tenantId, output.id);
+      if (!output || !artifact) { res.status(404).json({ error: "Scheduled output not found" }); return; }
+      const root = fs.realpathSync(this.dataDirectory), location = fs.realpathSync(artifact.localPath);
+      const prefix = path.join(root, "artifacts", "schedules", crypto.createHash("sha256").update(tenantId).digest("hex"));
+      if (!location.startsWith(`${prefix}${path.sep}`) || artifact.mimeType !== "image/svg+xml" || artifact.kind !== "generated-image") throw new Error("Invalid scheduled artifact binding");
+      const descriptor = fs.openSync(location, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+      let bytes: Buffer;
+      try {
+        const stat = fs.fstatSync(descriptor);
+        if (!stat.isFile() || stat.size > 32 * 1024 * 1024 || stat.size !== artifact.sizeBytes || stat.size !== output.sizeBytes) throw new Error("Invalid scheduled artifact size");
+        bytes = fs.readFileSync(descriptor);
+      } finally { fs.closeSync(descriptor); }
+      const checksum = crypto.createHash("sha256").update(bytes).digest("hex");
+      if (checksum !== output.checksumSha256 || checksum !== artifact.checksumSha256) throw new Error("Scheduled artifact changed");
+      res.setHeader("Content-Type", "image/svg+xml");
+      res.setHeader("Content-Disposition", 'attachment; filename="scheduled-output.svg"');
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+      res.send(bytes);
+    } catch { res.status(409).json({ error: "Scheduled output unavailable" }); }
   }
 
   private async listSchedules(req: Request, res: Response): Promise<void> {
@@ -243,6 +367,8 @@ export class ScheduleRouter {
         engines = {},
         quality = {},
         cronExpression = "0 9 * * *",
+        timezone = "UTC",
+        recurrence = "cron",
         publishAt,
         metadata = {},
         contentType = "video",
@@ -269,6 +395,8 @@ export class ScheduleRouter {
           visualQualityTier?: "draft" | "standard" | "premium";
         };
         cronExpression?: string;
+        timezone?: string;
+        recurrence?: "cron" | "once";
         publishAt?: string;
         metadata?: Record<string, unknown>;
         contentType?: string;
@@ -280,7 +408,7 @@ export class ScheduleRouter {
         res.status(400).json({ error: "name is required" });
         return;
       }
-      if (!publishAt) {
+      if (!publishAt || !Number.isFinite(new Date(publishAt).getTime())) {
         res.status(400).json({ error: "publishAt is required (ISO date string)" });
         return;
       }
@@ -288,11 +416,11 @@ export class ScheduleRouter {
       // Smart schedule: adjust publish time using BestTimeLearningEngine
       let resolvedPublishAt = new Date(publishAt).toISOString();
       if (smartSchedule && Array.isArray(platforms) && platforms.length > 0) {
-        const bestTime = this.bestTimeEngine.getBestTimes(platforms[0], categories[0] || "General");
+        const bestTime = this.bestTimeEngine.forRequest(req).getBestTimes(platforms[0], categories[0] || "General");
         const bestHour = bestTime?.bestHours?.[0]?.hour;
         if (bestHour !== undefined) {
           const base = new Date(publishAt);
-          base.setHours(bestHour, 0, 0, 0);
+          base.setUTCHours(bestHour, 0, 0, 0);
           resolvedPublishAt = base.toISOString();
           logger.info({ platform: platforms[0], bestHour }, "Smart schedule: adjusted publish time");
         }
@@ -319,6 +447,8 @@ export class ScheduleRouter {
           visualQualityTier: quality.visualQualityTier ?? "standard",
         },
         cronExpression,
+        timezone,
+        recurrence,
         publishAt: resolvedPublishAt,
         status: "active",
         nextRun: resolvedPublishAt,
@@ -331,6 +461,7 @@ export class ScheduleRouter {
 
       res.status(201).json({ status: "ok", schedule: record });
     } catch (err) {
+      if (err instanceof ScheduleValidationError) { res.status(400).json({ error: err.message }); return; }
       logger.error(err, "Schedule: create failed");
       res.status(500).json({ status: "error", error: "Failed to create schedule" });
     }
@@ -352,8 +483,9 @@ export class ScheduleRouter {
 
   private async updateSchedule(req: Request, res: Response): Promise<void> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { tenantId: _tenantId, ...data } = req.body as Record<string, unknown>;
+      const body = req.body as Record<string, unknown>;
+      const allowed = ["name", "videoId", "platforms", "categories", "languages", "engines", "quality", "cronExpression", "timezone", "recurrence", "publishAt", "metadata"];
+      const data = Object.fromEntries(Object.entries(body).filter(([key]) => allowed.includes(key)));
       const updated = await this.store.updateForTenant(getAuthenticatedTenantId(req) ?? "", req.params.id, data);
       if (!updated) {
         res.status(404).json({ error: "Schedule not found" });
@@ -361,6 +493,8 @@ export class ScheduleRouter {
       }
       res.json({ status: "ok", schedule: updated });
     } catch (err) {
+      if (err instanceof ScheduleValidationError) { res.status(400).json({ error: err.message }); return; }
+      if (err instanceof ScheduleConflictError) { res.status(409).json({ error: err.message }); return; }
       logger.error(err, "Schedule: update failed");
       res.status(500).json({ status: "error", error: "Failed to update schedule" });
     }
@@ -381,6 +515,8 @@ export class ScheduleRouter {
       }
       res.json({ status: "ok", schedule: updated });
     } catch (err) {
+      if (err instanceof ScheduleValidationError) { res.status(400).json({ error: err.message }); return; }
+      if (err instanceof ScheduleConflictError) { res.status(409).json({ error: err.message }); return; }
       logger.error(err, "Schedule: updateStatus failed");
       res.status(500).json({ status: "error", error: "Failed to update status" });
     }
@@ -393,7 +529,7 @@ export class ScheduleRouter {
         res.status(404).json({ error: "Schedule not found" });
         return;
       }
-      const success = await this.executeSchedule(req.params.id, getAuthenticatedTenantId(req) ?? "");
+      const success = await this.executeSchedule(req.params.id, getAuthenticatedTenantId(req) ?? "", true);
       res.json({ status: "ok", triggered: true, success, scheduleId: req.params.id });
     } catch (err) {
       logger.error(err, "Schedule: triggerRun failed");
@@ -410,6 +546,7 @@ export class ScheduleRouter {
       }
       res.json({ status: "ok", message: "Schedule deleted successfully" });
     } catch (err) {
+      if (err instanceof ScheduleConflictError) { res.status(409).json({ error: err.message }); return; }
       logger.error(err, "Schedule: delete failed");
       res.status(500).json({ status: "error", error: "Failed to delete schedule" });
     }
@@ -448,7 +585,7 @@ export class ScheduleRouter {
       const enriched = upcoming.map((s) => {
         const platform = s.platforms?.[0] || "youtube";
         const category = s.categories?.[0] || "General";
-        const bestTime = this.bestTimeEngine.getBestTimes(platform, category);
+        const bestTime = this.bestTimeEngine.forRequest(req).getBestTimes(platform, category);
         const meta = s.metadata as { contentType?: string };
         return {
           ...s,
@@ -477,7 +614,7 @@ export class ScheduleRouter {
       const results: Record<string, unknown> = {};
       const targetPlatforms = platform === "all" ? allPlatforms : [platform];
       for (const p of targetPlatforms) {
-        const rec = this.bestTimeEngine.getBestTimes(p, category);
+        const rec = this.bestTimeEngine.forRequest(req).getBestTimes(p, category);
         results[p] = {
           platform: p,
           category,

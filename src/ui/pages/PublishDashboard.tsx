@@ -344,6 +344,10 @@ export const PublishDashboard: React.FC = () => {
         </Typography>
       </Box>
 
+      <Alert severity="info" sx={{ mb: 3 }} action={<Button color="inherit" onClick={() => navigate("/releases")}>Open Releases</Button>}>
+        Publishing requires an approved release and a verified destination. Use Releases to review and queue the rendered content.
+      </Alert>
+
       <Paper sx={{ p: 4 }}>
         <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
           {STEPS.map((label) => (

@@ -16,7 +16,7 @@
  */
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress,
+  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Checkbox, FormControlLabel,
   Container, Divider, FormControl, InputLabel, MenuItem, Paper,
   Select, Stack, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, TextField, Typography,
@@ -39,6 +39,7 @@ interface ReleaseRecord {
   contentVersionId: string;
   approvalStatus: string;
   status: string;
+  approvedDestinations?: { connectorId: string; destinationId: string; externalDestinationId: string; platform: string }[];
   approvedBy?: string;
   approvedAt?: string;
   createdAt: string;
@@ -56,6 +57,8 @@ interface ReleaseTarget {
   publishedUrl?: string;
   lastErrorCode?: string;
   attempts: number;
+  execution?: { requestId: string; state: string; attempt: number; observation?: { evidenceReference: string; recordedBy: string; recordedAt: string } };
+  retryDisposition?: "not_dispatched" | "not_accepted";
 }
 
 interface ConnectorRecord {
@@ -71,10 +74,12 @@ interface DestinationRecord {
   status: string;
 }
 
-const statusColor = (status: string): "success" | "warning" | "error" | "info" | "default" => {
+const statusColor = (status: string,
+): "success" | "warning" | "error" | "info" | "default" => {
   if (status === "approved" || status === "published" || status === "ready") return "success";
   if (status === "pending_approval" || status === "queued" || status === "rendering" || status === "draft") return "warning";
   if (status === "failed" || status === "rejected" || status === "retryable" || status === "cancelled") return "error";
+  if (status === "reconciling" || status === "partially_published") return "warning";
   if (status === "publishing") return "info";
   return "default";
 };
@@ -92,30 +97,34 @@ function ReleasesPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   // Add-target form state
+  const [approvalDestinations, setApprovalDestinations] = useState<{ connectorId: string; destinationId: string; label: string }[]>([]);
   const [connectorId, setConnectorId] = useState("");
   const [destinationId, setDestinationId] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState("");
 
   // Queue form state
   const [queueTargetId, setQueueTargetId] = useState("");
-  const [renderOutputPath, setRenderOutputPath] = useState("");
-  const [title, setTitle] = useState("");
-  const [tags, setTags] = useState("");
-
+  const [resolveTargetId, setResolveTargetId] = useState("");
+  const [observedId, setObservedId] = useState("");
+  const [evidenceReference, setEvidenceReference] = useState("");
+  const [verifiedOnProvider, setVerifiedOnProvider] = useState(false);
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const [versionsPayload, releasesPayload, connectorsPayload] = await Promise.all([
-        authenticatedJson<{ versions: ContentVersion[] }>("/api/content-versions"),
+        authenticatedJson<{ versions: ContentVersion[] }>("/api/content-versions",
+          ),
         authenticatedJson<{ releases: ReleaseRecord[] }>("/api/releases"),
-        authenticatedJson<{ connectors: ConnectorRecord[] }>("/api/connectors"),
+        authenticatedJson<{ connectors: ConnectorRecord[] }>("/api/connectors",
+          ),
       ]);
       setVersions(versionsPayload.versions || []);
       setReleases(releasesPayload.releases || []);
       setConnectors(connectorsPayload.connectors || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load releases data");
+      setError(err instanceof Error ? err.message : "Failed to load releases data",
+      );
     } finally {
       setLoading(false);
     }
@@ -127,17 +136,23 @@ function ReleasesPage() {
 
   const openRelease = async (release: ReleaseRecord) => {
     setSelected(release);
+    setApprovalDestinations([]);
+    setConnectorId(""); setDestinationId(""); setDestinations([]);
+    setTargets([]);
     setError(null);
     setNotice(null);
     setQueueTargetId("");
+    setResolveTargetId(""); setObservedId(""); setEvidenceReference(""); setVerifiedOnProvider(false);
     try {
-      const payload = await authenticatedJson<{ release: ReleaseRecord; targets: ReleaseTarget[] }>(
-        `/api/releases/${release.id}`,
-      );
+      const payload = await authenticatedJson<{ release: ReleaseRecord; targets: ReleaseTarget[];
+      }>(
+        `/api/releases/${release.id}`);
       setSelected(payload.release);
       setTargets(payload.targets || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load release detail");
+      setError(
+        err instanceof Error ? err.message : "Failed to load release detail",
+      );
     }
   };
 
@@ -150,7 +165,9 @@ function ReleasesPage() {
         "/api/releases",
         jsonPost({ contentVersionId: version.id }),
       );
-      setNotice(`Release ${payload.release.id} created with approval status "${payload.release.approvalStatus}".`);
+      setNotice(
+        `Release ${payload.release.id} created with approval status "${payload.release.approvalStatus}".`,
+      );
       await loadAll();
       await openRelease(payload.release);
     } catch (err) {
@@ -168,9 +185,11 @@ function ReleasesPage() {
     try {
       const payload = await authenticatedJson<{ release: ReleaseRecord }>(
         `/api/releases/${selected.id}/approve`,
-        { method: "POST" },
+        jsonPost({ destinations: approvalDestinations.map(({ connectorId, destinationId }) => ({ connectorId, destinationId })) }),
       );
-      setNotice(`Release ${payload.release.id} approved by ${payload.release.approvedBy}.`);
+      setNotice(
+        `Release ${payload.release.id} approved by ${payload.release.approvedBy}.`,
+      );
       await loadAll();
       await openRelease(payload.release);
     } catch (err) {
@@ -184,12 +203,14 @@ function ReleasesPage() {
     setConnectorId(selectedConnectorId);
     setDestinationId("");
     try {
-      const payload = await authenticatedJson<{ destinations: DestinationRecord[] }>(
-        `/api/connectors/${selectedConnectorId}/destinations`,
-      );
+      const payload = await authenticatedJson<{
+        destinations: DestinationRecord[];
+      }>(`/api/connectors/${selectedConnectorId}/destinations`);
       setDestinations(payload.destinations || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load destinations");
+      setError(
+        err instanceof Error ? err.message : "Failed to load destinations",
+      );
     }
   };
 
@@ -199,12 +220,15 @@ function ReleasesPage() {
     setError(null);
     setNotice(null);
     try {
-      const key = idempotencyKey.trim() || `target-${selected.id}-${destinationId}`;
+      const key =
+        idempotencyKey.trim() || `target-${selected.id}-${destinationId}`;
       const payload = await authenticatedJson<{ target: ReleaseTarget }>(
         `/api/releases/${selected.id}/targets`,
         jsonPost({ connectorId, destinationId, idempotencyKey: key }),
       );
-      setNotice(`Target ${payload.target.id} added (idempotency key "${payload.target.idempotencyKey}").`);
+      setNotice(
+        `Target ${payload.target.id} added (idempotency key "${payload.target.idempotencyKey}").`,
+      );
       setIdempotencyKey("");
       await openRelease(selected);
     } catch (err) {
@@ -215,25 +239,24 @@ function ReleasesPage() {
   };
 
   const queueTarget = async () => {
-    if (!selected || !queueTargetId || !renderOutputPath.trim() || !title.trim()) return;
+    if (!selected || !queueTargetId) return;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const tagList = tags.split(",").map((tag) => tag.trim()).filter(Boolean);
-      const payload = await authenticatedJson<{ jobId: string; targetId: string; queued: boolean }>(
+      const payload = await authenticatedJson<{
+        jobId: string;
+        targetId: string;
+        queued: boolean;
+      }>(
         `/api/releases/${selected.id}/queue`,
         jsonPost({
           targetId: queueTargetId,
-          renderOutputPath: renderOutputPath.trim(),
-          title: title.trim(),
-          tags: tagList,
         }),
       );
-      setNotice(`Publish job ${payload.jobId} queued for target ${payload.targetId}.`);
-      setRenderOutputPath("");
-      setTitle("");
-      setTags("");
+      setNotice(
+        `Publish job ${payload.jobId} queued for target ${payload.targetId}.`,
+      );
       await openRelease(selected);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Queueing failed");
@@ -242,35 +265,77 @@ function ReleasesPage() {
     }
   };
 
-  const verifiedDestinations = destinations.filter((d) => d.status === "verified");
-  const queueableTargets = targets.filter((t) => t.status === "queued" || t.status === "failed");
-  const canApprove = selected ? selected.approvalStatus !== "approved" : false;
+  const confirmPublication = async () => {
+    const target = targets.find((entry) => entry.id === resolveTargetId);
+    if (!selected || !target?.execution || !verifiedOnProvider) return;
+    setBusy(true); setError(null); setNotice(null);
+    try {
+      await authenticatedJson(`/api/releases/${selected.id}/targets/${target.id}/confirm-publication`, jsonPost({ requestId: target.execution.requestId, externalId: observedId.trim(), evidenceReference: evidenceReference.trim(), verifiedOnProvider }));
+      await loadAll(); await openRelease(selected);
+      setNotice("Verified publication recorded. No upload was sent.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Publication confirmation failed"); }
+    finally { setBusy(false); }
+  };
+
+  const verifiedDestinations = destinations.filter(
+    (d) => d.status === "verified",
+  );
+  const queueableTargets = targets.filter(
+    (t) => selected?.approvedDestinations?.some((entry) => entry.connectorId === t.connectorId && entry.destinationId === t.destinationId) && (t.status === "queued" || (t.status === "failed" && !!t.retryDisposition)),
+  );
+  const heldTargets = targets.filter((target) => target.execution?.state === "reconciling");
+  const canApprove = selected ? (selected.approvalStatus !== "approved" || !selected.approvedDestinations?.length) && targets.length === 0 : false;
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
         <RocketLaunchIcon color="primary" />
-        <Typography variant="h4" fontWeight={700}>Releases</Typography>
+        <Typography variant="h4" fontWeight={700}>
+          Releases
+        </Typography>
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         A release pins one approved content version to verified destinations.
-        Publishing requires a connected connector, a verified destination, and an approved release.
+        Publishing requires a connected connector, a verified destination, and
+        an approved release.
       </Typography>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {notice && <Alert severity="success" sx={{ mb: 2 }}>{notice}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+      {notice && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {notice}
+        </Alert>
+      )}
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Typography variant="h6" fontWeight={700}>Content Versions</Typography>
-            <Button size="small" startIcon={loading ? <CircularProgress size={16} /> : <RefreshIcon />} onClick={() => void loadAll()}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 2 }}
+          >
+            <Typography variant="h6" fontWeight={700}>
+              Content Versions
+            </Typography>
+            <Button
+              size="small"
+              startIcon={
+                loading ? <CircularProgress size={16} /> : <RefreshIcon />
+              }
+              onClick={() => void loadAll()}
+            >
               Reload
             </Button>
           </Stack>
           {versions.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              No content versions yet. Create one through the content pipeline before building a release.
+              No content versions yet. Create one through the content pipeline
+              before building a release.
             </Typography>
           ) : (
             <TableContainer component={Paper} variant="outlined">
@@ -288,11 +353,25 @@ function ReleasesPage() {
                   {versions.map((version) => (
                     <TableRow key={version.id} hover>
                       <TableCell>{version.title || "Untitled"}</TableCell>
-                      <TableCell><Chip size="small" label={version.status} color={statusColor(version.status)} /></TableCell>
-                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{version.id}</TableCell>
-                      <TableCell>{new Date(version.createdAt).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={version.status}
+                          color={statusColor(version.status)}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                        {version.id}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(version.createdAt).toLocaleString()}
+                      </TableCell>
                       <TableCell align="right">
-                        <Button size="small" disabled={busy} onClick={() => void createRelease(version)}>
+                        <Button
+                          size="small"
+                          disabled={busy}
+                          onClick={() => void createRelease(version)}
+                        >
                           Create Release
                         </Button>
                       </TableCell>
@@ -307,9 +386,13 @@ function ReleasesPage() {
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Workspace Releases</Typography>
+          <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+            Workspace Releases
+          </Typography>
           {releases.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">No releases yet for this workspace.</Typography>
+            <Typography variant="body2" color="text.secondary">
+              No releases yet for this workspace.
+            </Typography>
           ) : (
             <TableContainer component={Paper} variant="outlined">
               <Table size="small">
@@ -325,14 +408,41 @@ function ReleasesPage() {
                 </TableHead>
                 <TableBody>
                   {releases.map((release) => (
-                    <TableRow key={release.id} hover selected={selected?.id === release.id}>
-                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{release.id}</TableCell>
-                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{release.contentVersionId}</TableCell>
-                      <TableCell><Chip size="small" label={release.approvalStatus} color={statusColor(release.approvalStatus)} /></TableCell>
-                      <TableCell><Chip size="small" label={release.status} color={statusColor(release.status)} /></TableCell>
-                      <TableCell>{new Date(release.createdAt).toLocaleString()}</TableCell>
+                    <TableRow
+                      key={release.id}
+                      hover
+                      selected={selected?.id === release.id}
+                    >
+                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                        {release.id}
+                      </TableCell>
+                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                        {release.contentVersionId}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={release.approvalStatus}
+                          color={statusColor(release.approvalStatus)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={release.status}
+                          color={statusColor(release.status)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {new Date(release.createdAt).toLocaleString()}
+                      </TableCell>
                       <TableCell align="right">
-                        <Button size="small" onClick={() => void openRelease(release)}>Open</Button>
+                        <Button
+                          size="small"
+                          onClick={() => void openRelease(release)}
+                        >
+                          Open
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -347,26 +457,58 @@ function ReleasesPage() {
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-              Release Detail — <span style={{ fontFamily: "monospace", fontSize: 14 }}>{selected.id}</span>
+              Release Detail —{" "}
+              <span style={{ fontFamily: "monospace", fontSize: 14 }}>
+                {selected.id}
+              </span>
             </Typography>
             <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-              <Chip size="small" label={`approval: ${selected.approvalStatus}`} color={statusColor(selected.approvalStatus)} />
-              <Chip size="small" label={`status: ${selected.status}`} color={statusColor(selected.status)} />
-              {selected.approvedBy && <Chip size="small" label={`approved by ${selected.approvedBy}`} />}
+              <Chip
+                size="small"
+                label={`approval: ${selected.approvalStatus}`}
+                color={statusColor(selected.approvalStatus)}
+              />
+              <Chip
+                size="small"
+                label={`status: ${selected.status}`}
+                color={statusColor(selected.status)}
+              />
+              {selected.approvedBy && (
+                <Chip
+                  size="small"
+                  label={`approved by ${selected.approvedBy}`}
+                />
+              )}
             </Stack>
 
-            <Button variant="contained" disabled={busy || !canApprove} onClick={approveRelease} sx={{ mb: 2 }}>
-              {canApprove ? "Approve Release" : "Approved"}
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              {selected.approvedDestinations?.length ? `Approved destinations: ${selected.approvedDestinations.map((entry) => `${entry.platform}: ${entry.externalDestinationId}`).join(", ")}` : "Select destinations below and include each in approval before approving."}
+            </Typography>
+            {approvalDestinations.map((entry) => <Chip key={`${entry.connectorId}-${entry.destinationId}`} label={entry.label} onDelete={() => setApprovalDestinations((current) => current.filter((item) => item !== entry))} sx={{ mr: 1, mb: 1 }} />)}
+            {!selected.approvedDestinations?.length && targets.length > 0 && <Alert severity="warning" sx={{ mb: 2 }}>This legacy release has no destination approval. Create a new release, select its destinations, then approve it before publishing.</Alert>}
+            <Button
+              variant="contained"
+              disabled={busy || !canApprove || !approvalDestinations.length}
+              onClick={approveRelease}
+              sx={{ mb: 2 }}
+            >
+              {canApprove ? "Approve Content and Destinations" : "Approval Locked"}
             </Button>
 
             <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Targets</Typography>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+              Targets
+            </Typography>
             {targets.length === 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 No targets yet. Add a verified destination below.
               </Typography>
             ) : (
-              <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+              <TableContainer
+                component={Paper}
+                variant="outlined"
+                sx={{ mb: 2 }}
+              >
                 <Table size="small">
                   <TableHead>
                     <TableRow>
@@ -381,13 +523,35 @@ function ReleasesPage() {
                   <TableBody>
                     {targets.map((target) => (
                       <TableRow key={target.id} hover>
-                        <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{target.id}</TableCell>
-                        <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{target.connectorId}</TableCell>
-                        <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>{target.destinationId}</TableCell>
-                        <TableCell><Chip size="small" label={target.status} color={statusColor(target.status)} /></TableCell>
+                        <TableCell
+                          sx={{ fontFamily: "monospace", fontSize: 12 }}
+                        >
+                          {target.id}
+                        </TableCell>
+                        <TableCell
+                          sx={{ fontFamily: "monospace", fontSize: 12 }}
+                        >
+                          {target.connectorId}
+                        </TableCell>
+                        <TableCell
+                          sx={{ fontFamily: "monospace", fontSize: 12 }}
+                        >
+                          {target.destinationId}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={target.status}
+                            color={statusColor(target.status)}
+                          />
+                        </TableCell>
                         <TableCell>{target.attempts}</TableCell>
                         <TableCell sx={{ fontSize: 12 }}>
-                          {target.publishedUrl || (target.lastErrorCode ? `error: ${target.lastErrorCode}` : "—")}
+                          {target.publishedUrl ||
+                            (target.lastErrorCode
+                              ? `error: ${target.lastErrorCode}`
+                              : "—")}
+                          {target.execution?.observation && <Typography variant="caption" component="div">Confirmed by {target.execution.observation.recordedBy}: {target.execution.observation.evidenceReference}</Typography>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -396,69 +560,137 @@ function ReleasesPage() {
               </TableContainer>
             )}
 
-            <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
+            <Box
+              sx={{
+                display: "flex",
+                gap: 2,
+                flexWrap: "wrap",
+                alignItems: "center",
+                mb: 2,
+              }}
+            >
               <FormControl size="small" sx={{ minWidth: 200 }}>
                 <InputLabel>Connector</InputLabel>
-                <Select value={connectorId} label="Connector" onChange={(e) => void loadDestinations(e.target.value)}>
-                  {connectors.map((connector) => (
+                <Select
+                  value={connectorId}
+                  label="Connector"
+                  onChange={(e) => void loadDestinations(e.target.value)}
+                >
+                  {connectors.filter((connector) => connector.status === "connected").map((connector) => (
                     <MenuItem key={connector.id} value={connector.id}>
-                      {connector.displayName} ({connector.platform} · {connector.status})
+                      {connector.displayName} ({connector.platform} ·{" "}
+                      {connector.status})
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
               <FormControl size="small" sx={{ minWidth: 220 }}>
                 <InputLabel>Verified destination</InputLabel>
-                <Select value={destinationId} label="Verified destination" onChange={(e) => setDestinationId(e.target.value)}>
+                <Select
+                  value={destinationId}
+                  label="Verified destination"
+                  onChange={(e) => setDestinationId(e.target.value)}
+                >
                   {verifiedDestinations.map((destination) => (
-                    <MenuItem key={destination.id} value={destination.id}>{destination.displayName}</MenuItem>
+                    <MenuItem key={destination.id} value={destination.id}>
+                      {destination.displayName}
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              <TextField size="small" label="Idempotency key (optional)" value={idempotencyKey} onChange={(e) => setIdempotencyKey(e.target.value)} />
-              <Button variant="outlined" onClick={addTarget} disabled={busy || !connectorId || !destinationId}>
-                Add Target
+              <TextField
+                size="small"
+                label="Idempotency key (optional)"
+                value={idempotencyKey}
+                onChange={(e) => setIdempotencyKey(e.target.value)}
+              />
+              <Button
+                variant="outlined"
+                onClick={canApprove ? () => {
+                  if (!approvalDestinations.some((entry) => entry.connectorId === connectorId && entry.destinationId === destinationId)) setApprovalDestinations((current) => [...current, { connectorId, destinationId, label: `${connectors.find((entry) => entry.id === connectorId)?.displayName}: ${destinations.find((entry) => entry.id === destinationId)?.displayName}` }]);
+                } : addTarget}
+                disabled={busy || !connectorId || !destinationId || (!canApprove && !selected.approvedDestinations?.some((entry) => entry.connectorId === connectorId && entry.destinationId === destinationId))}
+              >
+                {canApprove ? "Include in Approval" : "Add Approved Target"}
               </Button>
             </Box>
             {connectorId && verifiedDestinations.length === 0 && (
               <Alert severity="info" sx={{ mb: 2 }}>
-                This connector has no verified destinations yet. Verify one on the Connectors page first.
+                This connector has no verified destinations yet. Verify one on
+                the Connectors page first.
               </Alert>
             )}
 
             <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Queue Publish</Typography>
+            {targets.some((target) => target.status === "reconciling") && (
+              <Alert severity="warning" sx={{ mb: 2 }}>A publication outcome needs review. Check the provider before attempting another upload; automatic retries are blocked.</Alert>
+            )}
+            {heldTargets.length > 0 && <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" fontWeight={700}>Confirm an Existing Publication</Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>Check the exact content and destination on the provider. Record the publication ID and a provider link or support case reference; exclude credentials. This records your observation without contacting the provider. A missing search result does not establish failure or permit another upload. Approval permission is required.</Typography>
+              <Stack spacing={2}>
+                <FormControl size="small">
+                  <InputLabel>Publication requiring review</InputLabel>
+                  <Select value={resolveTargetId} label="Publication requiring review" onChange={(event) => { setResolveTargetId(event.target.value); setObservedId(""); setEvidenceReference(""); setVerifiedOnProvider(false); }}>
+                    {heldTargets.map((target) => <MenuItem key={target.id} value={target.id}>{target.id} — request {target.execution?.requestId}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <TextField size="small" label="Provider publication ID" value={observedId} inputProps={{ maxLength: 500 }} onChange={(event) => setObservedId(event.target.value)} />
+                <TextField size="small" label="Provider link or case reference" value={evidenceReference} inputProps={{ maxLength: 500 }} onChange={(event) => setEvidenceReference(event.target.value)} />
+                <FormControlLabel control={<Checkbox checked={verifiedOnProvider} onChange={(event) => setVerifiedOnProvider(event.target.checked)} />} label="I verified this exact publication and destination on the provider" />
+                <Button variant="outlined" disabled={busy || !resolveTargetId || !observedId.trim() || evidenceReference.trim().length < 10 || !verifiedOnProvider} onClick={confirmPublication}>Record Verified Publication</Button>
+              </Stack>
+            </Box>}
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+              Queue Publish
+            </Typography>
             {queueableTargets.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
-                No queued targets. Add a target to an approved release to make it queueable.
+                No queued targets. Add a target to an approved release to make
+                it queueable.
               </Typography>
             ) : (
-              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 2,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
                 <FormControl size="small" sx={{ minWidth: 220 }}>
                   <InputLabel>Queued target</InputLabel>
-                  <Select value={queueTargetId} label="Queued target" onChange={(e) => setQueueTargetId(e.target.value)}>
+                  <Select
+                    value={queueTargetId}
+                    label="Queued target"
+                    onChange={(e) => setQueueTargetId(e.target.value)}
+                  >
                     {queueableTargets.map((target) => (
-                      <MenuItem key={target.id} value={target.id}>{target.id} — {target.status}</MenuItem>
+                      <MenuItem key={target.id} value={target.id}>
+                        {target.id} — {target.status}
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
-                <TextField size="small" label="Render output path (absolute)" value={renderOutputPath} onChange={(e) => setRenderOutputPath(e.target.value)} sx={{ minWidth: 280 }} />
-                <TextField size="small" label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-                <TextField size="small" label="Tags (comma separated)" value={tags} onChange={(e) => setTags(e.target.value)} />
                 <Button
                   variant="contained"
                   color="secondary"
                   onClick={queueTarget}
-                  disabled={busy || !queueTargetId || !renderOutputPath.trim() || !title.trim()}
+                  disabled={busy || !queueTargetId}
                 >
                   Queue Publish
                 </Button>
               </Box>
             )}
             {queueableTargets.some((target) => target.status === "failed") && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                Re-queueing a failed target is an operator recovery of a dead-lettered publish. It re-runs the same
-                approval and credential checks; a target mid-flight or already published stays rejected.
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 1, display: "block" }}
+              >
+                Re-queueing a failed target requires a confirmed rejection or proof that no upload started. It re-runs the same approval and
+                credential checks; a target mid-flight or already published
+                stays rejected.
               </Typography>
             )}
           </CardContent>

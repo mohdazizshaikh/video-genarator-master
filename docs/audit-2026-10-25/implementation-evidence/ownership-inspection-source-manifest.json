@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-28",
+  "files": {
+    "scripts/migrations/inspect-data.mjs": "8b613c2e70b1e6958e2fb2474fea842613b0b00867672d42c38814af1717b1e3",
+    "scripts/migrations/readiness.mjs": "e3188a542929449d7ce899a672424e306e0a3a3f9852cc1b2e814abd3843b84e",
+    "scripts/migrations/reconcile.mjs": "72be6b306328637031ead63c98be8b384b7a1c6a0f93586df860f90830fe4fd3",
+    "scripts/migrations/ownership-policy.mjs": "066407c71a5aab228989566d560991303f103223d04569a8d58be37b149e2c06",
+    "src/integration/MigrationOwnership.test.ts": "476308747ca0f4d1d8433ffee455575e30209d914863e9a7f70babf15ee5494d",
+    "src/integration/MigrationGuards.test.ts": "eddfe325eec0b410408891ac9d9d32484521afa9eb01f02947b04f78d65e8446"
+  }
+}

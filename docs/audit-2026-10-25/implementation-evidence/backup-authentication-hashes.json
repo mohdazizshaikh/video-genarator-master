@@ -1,0 +1,10 @@
+{
+  "scripts/backup.mjs": "91084c4bc4cd34c8029067038f63ac9bcf09054052271976dadf10fbcffd8aa5",
+  "scripts/restore.mjs": "de7852ca3ba5a7902e3c52bec75a20aaa76a4234ab05f6955e0cd17d9e0c5845",
+  "scripts/full-backup-integrity.mjs": "bb8d908d11ef406bab0c17fa8b9164ef48cf72c6b6732f6b5821b7f1d433bac6",
+  "scripts/full-backup-auth.mjs": "be4ccef51694de93ddc1e6bfda9efc4fa2fc487315663aa5a8682e7fc1c9e761",
+  "src/integration/FullBackupRecovery.test.ts": "5998a22343834d4e961ba14b47b2003257f81d0b3b414cd2caf03a60bccd79a2",
+  "eslint.config.mjs": "56ecaa63035d7c7c7e53780c513383559ef3ccb12fe9b83cba4ceda82756b119",
+  ".env.example": "ece8ec5141b41816f6111fc9a25eaa88ddba478a43ad29700643605ff810aa45",
+  "docs/MIGRATION_RUNBOOK.md": "db8e6e526b4640295f67935423fa1fcffb1c0101d494c4d1d8a471a18a820f7d"
+}

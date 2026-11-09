@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-31",
+  "files": [
+    {
+      "path": "src/db/ContentVersionStore.ts",
+      "sha256": "3b6afc6eed52159b1475226a213a58f5223e818e1098d4069bbf3dd6c7e6005c"
+    },
+    {
+      "path": "src/db/ContentVersionStoreSafety.test.ts",
+      "sha256": "ede960237702ca90582ab23bd1b4763ed3f364a7cf1f71aca8bcb1d96c16921c"
+    }
+  ]
+}

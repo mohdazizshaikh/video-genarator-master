@@ -1,0 +1,250 @@
+[
+  {
+    "id": "A01",
+    "priority": "P0",
+    "title": "System assets and compliance bypass authentication",
+    "file": "src/server/routers/systemengines.ts",
+    "evidence": "Asset CRUD and compliance read/write handlers are registered before the general requireAuth middleware. server.ts mounts this router without a parent auth guard. Isolated unauthenticated GET /assets and /compliance/logs both returned 200. Asset records have no tenant owner; compliance accepts caller-supplied tenantId.",
+    "remediation": "Move public bootstrap into an explicit public router; guard all other handlers before registration. Derive compliance ownership from claims; protect global operations with the admin guard. Test unauthenticated reads and mutations."
+  },
+  {
+    "id": "A02",
+    "priority": "P0",
+    "title": "Core video API does not enforce resource ownership",
+    "file": "src/server/routers/rest.ts",
+    "evidence": "POST /short-video omits tenantId when calling addToQueue. GET /short-videos lists all files; status, video download, render-path, and delete use video IDs without a tenant lookup. Most file actions do not validate IDs. The isolated router probe confirms A can list and delegate deletion of a B-labelled fake video. This is a source/adapter proof, not deletion of real user media. Metadata reads do use tenant scope, so direct creates produce unowned records that scoped metadata reads cannot retrieve.",
+    "remediation": "Require a nonempty authenticated owner throughout create, status, list, media, path, and delete; authorize each ID against an owner record. Remove raw path authority and apply the same policy to MCP."
+  },
+  {
+    "id": "A03",
+    "priority": "P0",
+    "title": "Publishing accepts caller-selected local media and bypasses approved content identity",
+    "file": "src/server/routers/releases.ts",
+    "evidence": "Release queueing accepts renderOutputPath and thumbnailPath from the request without resolving an owned artifact or requiring equality to the approved content version. Legacy /api/publish also accepts raw paths and has no release-approval requirement. Extension/file-size validation exists but does not restrict the source directory or authorize the owner. PublishWorker passes paths to provider upload adapters; Telegram streams the supplied file. The global publisher branch remains reachable when no connector/account is supplied, independently of the per-account fallback flag. This creates a local-file upload/exfiltration path when usable provider credentials and a reachable destination exist. No external upload was attempted.",
+    "remediation": "Accept an opaque owned artifact ID, verify manifest, file type/realpath, content-version binding, destination, and approval in both enqueue and worker. Gate or remove the global legacy publish path."
+  },
+  {
+    "id": "A04",
+    "priority": "P1",
+    "title": "In-flight render deduplication crosses tenants",
+    "file": "src/short-creator/ShortCreator.ts",
+    "evidence": "addToQueue matches queued work using only content/config signature. It never compares item.tenantId. Two isolated calls for A and B returned the same video ID and left only A in the queue. Completed-record dedupe is scoped, which does not repair the in-flight branch.",
+    "remediation": "Include tenantId in both signature namespace and queue match; reject missing ownership. Test identical content submitted by two tenants."
+  },
+  {
+    "id": "A05",
+    "priority": "P1",
+    "title": "Branding allows cross-tenant reads and writes",
+    "file": "src/server/routers/branding.ts",
+    "evidence": "Authentication is present, but handlers trust :tenantId instead of checking the authenticated tenant. List returns all branding. An A-authenticated isolated POST /workspace-B/reset returned 200 and reset B branding. Imported tenant/admin helpers are not applied.",
+    "remediation": "Derive tenant from claims or enforce an explicit admin exception for path tenant; scope list, CSS, reset, and update."
+  },
+  {
+    "id": "A06",
+    "priority": "P1",
+    "title": "Residual mutable engine stores remain global",
+    "file": "src/server/routers/recycle.ts",
+    "evidence": "Recycle/freshness records, content buckets, shadowban account metrics, best-time/hashtag history, trend-hijack history, custom hook mutation, cost summaries/record attribution/tenant-cost lookup, and knowledge-base mutation lack an authenticated owner boundary in their route/service contracts. Login alone does not provide tenant isolation. Shared read-only reference rules are different from user-authored or account-derived records.",
+    "remediation": "Classify reference data separately; add owner to mutable tenant data, quarantine legacy records, and exercise cross-tenant read/write denial per family."
+  },
+  {
+    "id": "A07",
+    "priority": "P1",
+    "title": "Webhook requests have no effective SSRF policy",
+    "file": "src/services/WebhookNotificationEngine.ts",
+    "evidence": "Custom, Slack, and Discord destinations are passed directly to axios. HTTPS/public-address checks, DNS pinning, provider-host checks, and redirect restrictions are absent from the dispatch path. The pre-existing untracked webhookSecurity.ts contains helper implementations but no source imports it. No live SSRF request was made.",
+    "remediation": "Integrate and test URL validation and a pinned transport for create, update, and each send; disable redirects and sanitize transport errors. Preserve the existing untracked work while integrating."
+  },
+  {
+    "id": "A08",
+    "priority": "P1",
+    "title": "Webhook updates can reassign ownership; test dispatch targets other hooks",
+    "file": "src/services/WebhookNotificationEngine.ts",
+    "evidence": "updateWebhook spreads arbitrary updates over the stored record, allowing tenantId to change. Isolated A-owned update moved a webhook into B visibility. testWebhook invokes tenant-wide notify(video.ready), so it can send to all matching hooks rather than the selected hook; selected hooks without video.ready may not be tested. Credentials are masked in API responses but persisted as plaintext in webhooks.json; raw error messages are stored/logged.",
+    "remediation": "Allowlist mutable fields and preserve immutable tenant/id. Send tests directly to one selected hook with try/finally restoration. Encrypt secrets and redact errors."
+  },
+  {
+    "id": "A09",
+    "priority": "P1",
+    "title": "Independent cached JSON stores lose events and serve stale timelines",
+    "file": "src/db/JobEventStore.ts",
+    "evidence": "Each worker and the job-events router constructs a separate JobEventStore/OutboxStore, each lazily reading once. Two isolated event-store instances loaded the same file; after A then B appended, a fresh reader saw zero A events and one B event. This fails within one process, before considering horizontal scaling. Router reads can remain stale after their first read. Atomic rename prevents partial files, not lost updates.",
+    "remediation": "Use one coordinated writer as an interim measure and transactional durable storage for authority. Add multiple-instance read/write tests; event+outbox writes must be one transaction."
+  },
+  {
+    "id": "A10",
+    "priority": "P1",
+    "title": "Future publish times can publish immediately",
+    "file": "src/workers/PublishWorker.ts",
+    "evidence": "Queue producers add jobs without delay based on scheduleAt. Worker delegates to scheduleVideo. Telegram, LinkedIn, and X scheduleVideo upload immediately; YouTube uses provider scheduling. A future date therefore has inconsistent, potentially early-publication semantics.",
+    "remediation": "Persist due time and delay/claim execution at that time for providers without native scheduling. Reject unsupported schedules instead of publishing now."
+  },
+  {
+    "id": "A11",
+    "priority": "P1",
+    "title": "Publish idempotency does not cover provider success before local persistence",
+    "file": "src/workers/PublishWorker.ts",
+    "evidence": "Worker skips targets already marked published, but provider upload occurs before local publish-job and release-target writes. A crash after provider acceptance and before either write can cause duplicate publication on retry. No provider request idempotency/reconciliation is used in this flow. RenderWorker similarly creates/polls new in-memory render work without a durable execution checkpoint or timeout. Earlier drill claims do not prove every crash window.",
+    "remediation": "Persist execution intent/request identity and reconcile ambiguous outcomes before retry. Add deterministic crash tests around provider response and every local commit boundary."
+  },
+  {
+    "id": "A12",
+    "priority": "P1",
+    "title": "Approval does not freeze the approved payload or roll up release state",
+    "file": "src/db/ContentVersionStore.ts",
+    "evidence": "updateDraft accepts edits regardless of version status or whether a release references the version. Release approval pins only an ID; queueing accepts unrelated path/title/metadata. ReleaseStore.updateTarget updates targets but does not recompute parent status, so releases may stay approved after all targets publish. Idempotency-key uniqueness is global rather than workspace-scoped.",
+    "remediation": "Make approved versions immutable or create new versions on change; bind approval to content/artifact digest. Enforce transitions and derive parent release status from targets."
+  },
+  {
+    "id": "A13",
+    "priority": "P1",
+    "title": "Migration entry points cannot load their required packages",
+    "file": "scripts/migrations/apply.mjs",
+    "evidence": "apply.mjs imports pg and artifacts.mjs imports @aws-sdk/client-s3. Neither is declared in package.json nor resolvable locally. Both commands fail with ERR_MODULE_NOT_FOUND before their safety gates run. Runtime repositories remain JSON-backed; Compose has app and Redis only. SQL schema and migration tooling exist, contrary to documents calling them wholly absent.",
+    "remediation": "Declare and lock required dependencies; verify non-executing guard behavior and isolated database/object-store integration. Implement adapters and reconciliation before cutover; do not enable primary reads during this audit."
+  },
+  {
+    "id": "A14",
+    "priority": "P1",
+    "title": "Shutdown can exit before worker close completes",
+    "file": "src/index.ts",
+    "evidence": "One signal listener awaits worker.close() through Promise.allSettled; a later independent listener calls process.exit(0) immediately after stopping the scheduler. EventEmitter does not await async listeners. The HTTP server handle is discarded; ScheduleRouter interval and Redis connection are not coordinated in shutdown.",
+    "remediation": "Use a single awaited shutdown sequence with server close, scheduler/interval stop, worker drain, Redis close, subprocess shutdown, and a bounded deadline."
+  },
+  {
+    "id": "A15",
+    "priority": "P1",
+    "title": "Registration accepts an enterprise plan selected by an anonymous caller",
+    "file": "src/services/AuthEngine.ts",
+    "evidence": "Public auth/register passes req.body.plan directly to registerTenant. An isolated enterprise registration received enterprise permissions and the returned tenant object included apiKeyHash because the spread is not stripped. Bootstrap also accepts caller tier. Commercial entitlements cannot rely on these inputs. Existing signed JWTs are not rechecked against current suspension/rotation state on each request.",
+    "remediation": "Assign server-side signup entitlement, separate billing/admin changes, remove hash fields explicitly, and define token revocation/rotation semantics."
+  },
+  {
+    "id": "A16",
+    "priority": "P1",
+    "title": "Browser caches are shared across authentication sessions",
+    "file": "src/ui/services/apiClient.ts",
+    "evidence": "GET cache and in-flight deduplication keys contain only URL. Logout/login do not clear or namespace them. Different users on one running page can receive cached protected responses for up to the TTL. authenticatedFetch also attaches a bearer token to any input URL; the Axios external-origin check uses startsWith(baseURL), so with the default empty baseURL every absolute URL passes its supposed external check. Current first-party callers do not establish a live third-party leak, but the shared helper contract is unsafe.",
+    "remediation": "Namespace cache/in-flight work by session and parameters; clear/abort on auth change. Resolve URLs and compare parsed origins before adding credentials in both helpers."
+  },
+  {
+    "id": "A17",
+    "priority": "P1",
+    "title": "Video playback/download omit the bearer credential",
+    "file": "src/ui/pages/VideoDetails.tsx",
+    "evidence": "Status uses authenticated Axios, but video src and the download anchor directly request /api/short-video/:id. Browser media and anchor navigation do not use Axios interceptors. Server requireAuth accepts bearer/admin or a tmp/music token, not this bare video URL. A status-ready page can therefore fail to play or download under the current auth contract.",
+    "remediation": "Use an authenticated blob/object URL or a short-lived tenant-scoped video URL; support range streaming and revoke object URLs on cleanup."
+  },
+  {
+    "id": "A18",
+    "priority": "P1",
+    "title": "Browser tenant actions call a Node-only crypto module",
+    "file": "src/ui/pages/TenantConsole.tsx",
+    "evidence": "TenantConsole imports crypto from the Node core package and calls crypto.randomUUID in appendAudit. Vite build explicitly warns that the module was externalized for browser compatibility. A successful typecheck/build does not validate this browser action.",
+    "remediation": "Use globalThis.crypto.randomUUID and exercise tenant mutation interactions in a browser test."
+  },
+  {
+    "id": "A19",
+    "priority": "P1",
+    "title": "Passing gates do not validate the full workflow",
+    "file": "src/integration/pipeline.e2e.test.ts",
+    "evidence": "The end-to-end-labelled test only asserts membership of two strings in a hardcoded array. Route inventory verifies mount strings inside compiled server.js, not HTTP reachability, auth, response shape, or handler semantics. UI SSR shell tests do not execute effects, browser media, or mutations. npm run qa:check stops at 137 missing matching test files; separately run docs consistency reports nine errors, including parser false positives for multiline real routes.",
+    "remediation": "Add meaningful two-tenant workflow tests with mocked providers plus controlled integration drills. Use AST route discovery and actual request tests; classify doc-parser errors correctly."
+  },
+  {
+    "id": "A20",
+    "priority": "P1",
+    "title": "Lint and dependency auditing are nonblocking in main CI",
+    "file": ".github/workflows/ci.yml",
+    "evidence": "Current lint reports 78 errors and 24 warnings. CI lint appends || true; security workflow appends || true to the production dependency audit. Deploy install uses --prod and then builds using dev dependencies, and hardcodes git pull origin main even for master-triggered workflows. Browser typecheck, route behavior, and durable acceptance are not comprehensive deployment gates.",
+    "remediation": "Repair baseline and enforce appropriate gates; build immutable artifacts with build dependencies and deploy the tested revision. Keep separate advisory scans visibly advisory."
+  },
+  {
+    "id": "A21",
+    "priority": "P1",
+    "title": "Queue connectivity is reported as worker liveness",
+    "file": "src/server/routers/health.ts",
+    "evidence": "buildWorkerStatus lists ingest/planning as online when Redis is available; index.ts starts only render/publish/deadletter. With Redis disabled it marks workers online as well. getHealth may return HTTP 200 while videoEngine is initializing. Queue states expose global aggregate workload without auth and dashboard aggregates global state for a tenant. Redis ping has no explicit bounded deadline.",
+    "remediation": "Measure registered worker heartbeats and dependency deadlines; separate liveness/readiness; scope tenant metrics and protect global operational details."
+  },
+  {
+    "id": "A22",
+    "priority": "P1",
+    "title": "Persistent scheduler reports success without durable generated output",
+    "file": "src/server/routers/schedule.ts",
+    "evidence": "Image/carousel/banner generation results are logged and discarded rather than persisted into an artifact/content workflow. When ShortCreator is not ready, video path logs retry intent but still records freshness and a successful run. Video scheduling omits tenantId in addToQueue and only uses first platform/category/language. Human-mimicry delay can repeatedly create timers while the schedule remains due.",
+    "remediation": "Use a claimed durable execution record, persist outputs and owner, record success only after actual completion, and resolve each requested destination/language explicitly."
+  },
+  {
+    "id": "A23",
+    "priority": "P2",
+    "title": "Several AI and enhancement features are advisory or disconnected",
+    "file": "src/services/PipelineOrchestrator.ts",
+    "evidence": "Pipeline uses a templated script plus fixed assumed quality/audio/resolution/duration and engagement inputs; outputs are directives and scores, not an executed rendered-video pipeline. Thumbnail/editing/audio/visual/watermark engines often return plans or filter strings. Memory, feedback, predictive, asset fallback, metadata, beat-sync, and agent-loop services exist but runtime wiring appears only in the integration guide/types or other disconnected service files. Feature flags alone do not connect them. DEV mock audio/voice/scrape paths fail outside DEV; canvas is absent and image generation has an SVG fallback.",
+    "remediation": "Label heuristics and directives accurately; trace each selected control to a real producer/result. Integrate intended enhancements with input/output tests and measured evaluations."
+  },
+  {
+    "id": "A24",
+    "priority": "P2",
+    "title": "Provider result and failure contracts are inconsistent",
+    "file": "src/publishers/PlatformPublisher.ts",
+    "evidence": "Worker persists result.externalId; Instagram/Facebook/LinkedIn/X commonly return platformVideoId instead. X catches video upload failure and continues with a text-only post yet returns success. Some adapters refresh only in memory or do not implement refresh; provider validateCredentials returns false for transient failures and worker classifies it as terminal invalid credentials. No live provider compatibility was reverified in this audit.",
+    "remediation": "Normalize adapter results and failure taxonomy, require media for a video publish, persist refreshed credentials, and test transient validation errors separately from invalid auth."
+  },
+  {
+    "id": "A25",
+    "priority": "P2",
+    "title": "Durable-storage readiness gates and SQL ownership constraints need completion",
+    "file": "scripts/migrations/readiness.mjs",
+    "evidence": "Readiness computes authoritySafety but omits it from blockingGates; approvals use nonempty-string presence rather than === true. SQL checks workspace matches for release targets but does not require the target destination to belong to the selected connector; connector_destinations lacks a composite connector/workspace ownership constraint. SQL has no durable event/outbox/artifact tables yet, and content-version schema differs from current file records.",
+    "remediation": "Make every gate explicit and consistent; test false-string approvals and enabled-primary flags. Add composite ownership constraints and complete schema/model translation before migration."
+  },
+  {
+    "id": "A26",
+    "priority": "P2",
+    "title": "Local backup scope does not provide host-loss or queue recovery",
+    "file": "scripts/backup.mjs",
+    "evidence": "Backup/restore implement encrypted archives, content manifests, checksums, retention, and a rollback directory. They exclude Redis queue state and depend on separately held encryption/auth keys. Snapshots taken without pausing a writer are not transactionally consistent across JSON files. No current off-host replication, clean-room full recovery, or hostile-archive path validation was established. Redis Compose also publishes port 6379 without a configured password.",
+    "remediation": "Define and rehearse recovery for application state, queues, media, and held secrets; replicate off-host and verify consistency. Restrict Redis exposure. Validate archive/manifest paths before extraction/copy when accepting untrusted archives."
+  },
+  {
+    "id": "A27",
+    "priority": "P2",
+    "title": "Documentation gives contradictory current-state claims",
+    "file": "docs/REALITY_GAP_REGISTER.md",
+    "evidence": "CURRENT_STATUS, todo, promotion evidence, and reality-gap documents say /api/engines, /api/job-events, release control, migration runner, and artifact-producer wiring are absent. Current source contains these routes/stores, SQL, migration scripts, and image/repurpose manifest registration. They remain file-backed/partial, not absent or production-proven. Older inventories advertise fewer routes/pages and Windows-only links; footer says all 60 engines active without runtime proof.",
+    "remediation": "Keep historical snapshots dated and immutable, designate one current capability register, and derive inventories from code. Distinguish implemented, connected, locally tested, live tested, and durable."
+  },
+  {
+    "id": "A28",
+    "priority": "P2",
+    "title": "Team, subscription and integration controls are log actions rather than complete services",
+    "file": "src/ui/hooks/useTenantMutation.ts",
+    "evidence": "Invite/remove member, plan change, cancel subscription, and integration toggles post action objects to /api/tenants/:id/logs/:engine. Those calls log events rather than implement invitations, provider connection/revocation, billing or subscription lifecycle. TenantConsole audit entries are local UI state and are not an authoritative audit trail.",
+    "remediation": "Either implement the service workflows and role checks or label these actions as operational notes; use Connectors for real provider lifecycle and a durable server audit ledger."
+  },
+  {
+    "id": "A29",
+    "priority": "P1",
+    "title": "Translation cache collides on the first 50 characters",
+    "file": "src/services/TranslationEngine.ts",
+    "evidence": "The cache key uses only source/target language and text.substring(0,50), while the router uses one shared engine for all tenants. Distinct scripts with an identical 50-character prefix can return the first script translation, including a different private suffix. Fallback translation often merely prefixes a language name or replaces a few English words but returns a normal success result.",
+    "remediation": "Key by full-content digest and tenant/provider/model identity; distinguish unavailable or partial translation from a successfully translated result. Test different suffixes with the same prefix."
+  },
+  {
+    "id": "A30",
+    "priority": "P1",
+    "title": "Custom RSS validation makes unrestricted server-side requests",
+    "file": "src/news-fetcher/RssFetcher.ts",
+    "evidence": "Custom feed creation checks only http/https before validateFeedUrl calls rss-parser.parseURL on the submitted URL. There is no private/link-local/loopback address policy or pinned DNS transport in this path. A response must parse as a feed to be accepted, but the internal request already occurs during validation. No internal endpoint was contacted in this audit.",
+    "remediation": "Apply a shared server-side URL policy to initial feed validation, subsequent reads and redirects; bound time and response size and test internal-address rejection without network dispatch."
+  },
+  {
+    "id": "A31",
+    "priority": "P1",
+    "title": "Schedule recurrence ignores the configured cron expression",
+    "file": "src/db/ScheduleStore.ts",
+    "evidence": "recordRunForTenant and recordRun unconditionally set nextRun to current time plus one hour. Neither evaluates record.cronExpression. Daily/weekly schedules can therefore become hourly after the first execution, regardless of the cron builder settings.",
+    "remediation": "Calculate next due time using the configured cron and timezone, define one-shot semantics, and test daily/weekly/DST/failure-retry recurrence separately."
+  }
+]

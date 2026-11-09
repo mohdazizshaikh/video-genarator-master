@@ -128,3 +128,11 @@ describe("HealthDashboard", () => {
     expect(markup).toContain("health endpoint unavailable");
   });
 });
+
+it("renders workspace telemetry without operational resources or invented capacity", () => {
+  useHealthDashboardMock.mockReturnValue({ data: { ...dashboardFixture, scope: "workspace", uptime: null, version: null, workers: null, database: null, redis: null, system: null, alerts: [] }, loading: false, error: null, refresh: vi.fn() });
+  const markup = renderToStaticMarkup(<HealthDashboard />);
+  expect(markup).toContain("Counts and events are limited to this workspace");
+  expect(markup).toContain("Persisted jobs");
+  expect(markup).not.toContain("Worker status"); expect(markup).not.toContain("Database health"); expect(markup).not.toContain("System resources");
+});

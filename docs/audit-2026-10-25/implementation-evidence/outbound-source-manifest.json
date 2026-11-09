@@ -1,0 +1,10 @@
+{
+  "src/services/webhookSecurity.ts": "6aff78c08ff648c80ab535c0d2b399a655d25231847b2b6d03cdb28eb55e93f7",
+  "src/services/WebhookTransport.ts": "c45577539fe2e32bf51e4c44323616910f234576960cf96387680ee338b5a3c4",
+  "src/services/PublicFeedTransport.ts": "663fa19660a90b99734914019315ddf9e978861ca2da810382df4b645455140f",
+  "src/services/WebhookNotificationEngine.ts": "c83cd66db6c158344847295074ffb41704ccfbba0665ac3901c020dd19fe93c7",
+  "src/services/WebhookTransport.test.ts": "8ea82635e44de4a5f328aee2addcabf1a11507cceddc063447a423c204fd34b9",
+  "src/news-fetcher/RssFetcher.ts": "664b1551f017b08835cf50509ab622983d97f82bddff8a9f18fc4547091848e5",
+  "src/news-fetcher/RssFetcher.validation.test.ts": "64edc049f360b5f9f2d8e87ee61cb174847a51b40ed0a35801e3f2735630fb3d",
+  "src/server/routers/webhooks.ts": "40f9fcd267f2df5853c3b2074ba70628c7ba59f8ed4043dbee1a1f643e8acb45"
+}

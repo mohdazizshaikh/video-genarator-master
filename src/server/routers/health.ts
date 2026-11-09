@@ -1,9 +1,9 @@
 /**
  * HealthRouter – Phase 4.4
  *
- * GET  /api/health        – liveness + readiness
- * GET  /api/health/queue  – BullMQ queue sizes
- * GET  /api/metrics       – Prometheus text output
+ * GET  /api/health[/ready] – bounded readiness; /live – process liveness
+ * GET  /api/health/queue  – admin-only BullMQ queue sizes
+ * GET  /api/health/metrics – admin-only Prometheus text output
  */
 import { Router } from "express";
 import type { Request, Response } from "express";
@@ -18,11 +18,27 @@ import { RenderJobStore } from "../../db/RenderJobStore";
 import { PublishJobStore } from "../../db/PublishJobStore";
 import { AiLearningStore, type LearningEvent } from "../../db/AiLearningStore";
 import { readiness } from "../readiness";
-import { getAuthenticatedTenantId, requireAuth } from "../auth";
+import { workerHealth } from "../../workers/WorkerHealth";
+import { getAuthenticatedTenantId, requireAuth, requireWorkspace, requireAdminKey, isAdminRequest } from "../auth";
 
 export class HealthRouter {
   public router: Router;
   private startedAt = Date.now();
+  private redisProbe?: Promise<boolean>;
+  private async bounded<T>(pending: Promise<T>, timeoutMs = 1500): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try { return await Promise.race([pending, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Health dependency deadline exceeded")), timeoutMs); })]); }
+    finally { if (timer) clearTimeout(timer); }
+  }
+  private async redisAvailable(): Promise<boolean> {
+    if (!this.config.redisEnabled) return false;
+    if (!this.redisProbe) {
+      const probe = Promise.resolve().then(() => testRedisConnection(this.config)).catch(() => false);
+      this.redisProbe = probe;
+      void probe.finally(() => { if (this.redisProbe === probe) this.redisProbe = undefined; });
+    }
+    return this.bounded(this.redisProbe).catch(() => false);
+  }
   private renderJobStore: RenderJobStore;
   private publishJobStore: PublishJobStore;
   private aiLearningStore: AiLearningStore;
@@ -37,42 +53,26 @@ export class HealthRouter {
 
   private registerRoutes(): void {
     this.router.get("/", (req: Request, res: Response) => this.getHealth(req, res));
-    this.router.get("/queue", (req: Request, res: Response) => this.getQueueStats(req, res));
-    this.router.get("/queue/states", (req: Request, res: Response) => this.getQueueStates(req, res));
+    this.router.get("/live", (_req, res) => res.json({ status: "alive" }));
+    this.router.get("/ready", (req, res) => this.getHealth(req, res));
+    this.router.get("/queue", requireAdminKey, (req: Request, res: Response) => this.getQueueStats(req, res));
+    this.router.get("/queue/states", requireWorkspace, (req: Request, res: Response) => this.getQueueStates(req, res));
     this.router.get("/dashboard", requireAuth, (req: Request, res: Response) => this.getDashboard(req, res));
-    this.router.get("/metrics", (req: Request, res: Response) => this.getMetrics(req, res));
+    this.router.get("/metrics", requireAdminKey, (req: Request, res: Response) => this.getMetrics(req, res));
   }
 
   private async getHealth(_req: Request, res: Response): Promise<void> {
-    const redisOk = this.config.redisEnabled
-      ? await testRedisConnection(this.config).catch(() => false)
-      : null;
+    const redisOk = await this.redisAvailable();
+    const observed = workerHealth.snapshot(redisOk);
+    const workersReady = !this.config.redisEnabled || ["render", "publish", "deadletter"].every((id) => observed.items.some((worker) => worker.id === id && worker.online));
+    const ready = workersReady && !readiness.shuttingDown && readiness.videoEngineReady && !readiness.videoEngineError && (!this.config.redisEnabled || redisOk);
+    res.status(ready ? 200 : 503).json({ status: readiness.shuttingDown ? "shutting_down" : ready ? "ready" : "not_ready", ready });
+  }
 
-    const uptimeSeconds = Math.floor((Date.now() - this.startedAt) / 1000);
-    const freeMb = Math.floor(os.freemem() / 1024 / 1024);
-    const totalMb = Math.floor(os.totalmem() / 1024 / 1024);
-
-    const redisHealthy = !this.config.redisEnabled || redisOk === true;
-    const videoEngineHealthy = !readiness.videoEngineError;
-
-    const healthy = redisHealthy && videoEngineHealthy;
-
-    res.status(healthy ? 200 : 503).json({
-      status: readiness.videoEngineError
-        ? "degraded"
-        : readiness.videoEngineReady
-          ? "ok"
-          : "initializing",
-      uptime: uptimeSeconds,
-      redis: this.config.redisEnabled ? (redisOk ? "ok" : "error") : "disabled",
-      videoEngine: readiness.videoEngineError
-        ? "error"
-        : readiness.videoEngineReady
-          ? "ready"
-          : "initializing",
-      memory: { freeMb, totalMb, usedPercent: Math.round((1 - freeMb / totalMb) * 100) },
-      version: process.env.npm_package_version ?? "unknown",
-    });
+  private async queueCounts() {
+    const render = createRenderQueue(this.config), publish = createPublishQueue(this.config);
+    try { return await this.bounded(Promise.all([render.getJobCounts("active", "waiting", "completed", "failed", "delayed", "paused"), publish.getJobCounts("active", "waiting", "completed", "failed", "delayed", "paused")])); }
+    finally { void render.close().catch(() => undefined); void publish.close().catch(() => undefined); }
   }
 
   private async getQueueStats(_req: Request, res: Response): Promise<void> {
@@ -81,13 +81,7 @@ export class HealthRouter {
       return;
     }
     try {
-      const renderQueue = createRenderQueue(this.config);
-      const publishQueue = createPublishQueue(this.config);
-
-      const [renderCounts, publishCounts] = await Promise.all([
-        renderQueue.getJobCounts("active", "waiting", "completed", "failed", "delayed", "paused"),
-        publishQueue.getJobCounts("active", "waiting", "completed", "failed", "delayed", "paused"),
-      ]);
+      const [renderCounts, publishCounts] = await this.queueCounts();
 
       res.json({
         render: renderCounts,
@@ -96,15 +90,15 @@ export class HealthRouter {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       logger.error({ err: message }, "Failed to fetch queue stats");
-      res.status(500).json({ error: message });
+      res.status(503).json({ error: "Health dependency unavailable" });
     }
   }
 
-  private async getQueueStates(_req: Request, res: Response): Promise<void> {
+  private async getQueueStates(req: Request, res: Response): Promise<void> {
     try {
       const [renderJobs, publishJobs] = await Promise.all([
-        this.renderJobStore.list(),
-        this.publishJobStore.listJobs(),
+        this.renderJobStore.listForTenant(getAuthenticatedTenantId(req)!),
+        this.publishJobStore.listJobsForTenant(getAuthenticatedTenantId(req)!),
       ]);
 
       const summarize = (records: Array<{ status: string }>) =>
@@ -120,30 +114,29 @@ export class HealthRouter {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       logger.error({ err: message }, "Failed to fetch queue state visibility");
-      res.status(500).json({ error: message });
+      res.status(503).json({ error: "Health dependency unavailable" });
     }
   }
 
   private async getDashboard(req: Request, res: Response): Promise<void> {
-    const tenantId = getAuthenticatedTenantId(req);
-    if (!tenantId) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
+    const tenantId = getAuthenticatedTenantId(req) || "";
+    if (!tenantId && !isAdminRequest(req)) { res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" }); return; }
+    if (!isAdminRequest(req)) { await this.getWorkspaceDashboard(tenantId, res); return; }
     try {
-      const redisOk = this.config.redisEnabled
-        ? await testRedisConnection(this.config).catch(() => false)
-        : false;
+      const redisOk = await this.redisAvailable();
 
-      const [queueStats, queueStates, database, redis, system, events] = await Promise.all([
+      const [queueStats, queueStates, database, redis, system, events] = await this.bounded(Promise.all([
         this.buildQueueStats(redisOk),
         this.buildQueueStates(),
         this.buildDatabaseHealth(tenantId),
         this.buildRedisHealth(redisOk),
         this.buildSystemHealth(),
         this.aiLearningStore.listEventsForTenant(tenantId, 500),
-      ]);
+      ]));
 
       const errors = this.buildErrorSummary(events);
       const slowRequests = this.buildSlowRequests(events);
-      const workers = this.buildWorkerStatus(queueStats);
+      const workers = this.buildWorkerStatus(redisOk);
       const alerts = this.buildAlerts({
         redisStatus: redis.status,
         databaseStatus: database.status,
@@ -156,6 +149,7 @@ export class HealthRouter {
       const healthy = alerts.every((alert) => alert.severity !== "critical");
 
       res.json({
+        scope: "operations",
         status: healthy ? "ok" : "degraded",
         generatedAt: new Date().toISOString(),
         uptime: Math.floor((Date.now() - this.startedAt) / 1000),
@@ -173,8 +167,23 @@ export class HealthRouter {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       logger.error({ err: message }, "Failed to build health dashboard snapshot");
-      res.status(500).json({ error: message });
+      res.status(503).json({ error: "Health dependency unavailable" });
     }
+  }
+
+  private async getWorkspaceDashboard(tenantId: string, res: Response): Promise<void> {
+    try {
+      const [renders, publishes, events] = await this.bounded(Promise.all([this.renderJobStore.listForTenant(tenantId), this.publishJobStore.listJobsForTenant(tenantId), this.aiLearningStore.listEventsForTenant(tenantId, 500)]));
+      const summarize = (rows: Array<{ status: string }>) => rows.reduce<Record<string, number>>((counts, row) => { counts[row.status] = (counts[row.status] || 0) + 1; return counts; }, {});
+      const counts = (rows: Array<{ status: string }>) => ({ active: rows.filter((r) => ["processing", "rendering", "publishing"].includes(r.status)).length, waiting: rows.filter((r) => ["queued", "retryable"].includes(r.status)).length, completed: rows.filter((r) => ["rendered", "published"].includes(r.status)).length, failed: rows.filter((r) => r.status === "failed").length, delayed: rows.filter((r) => r.status === "scheduled").length, paused: 0 });
+      const render = counts(renders), publish = counts(publishes);
+      const reconciling = [...renders, ...publishes].filter((r) => r.status === "reconciling").length;
+      res.json({ scope: "workspace", status: reconciling ? "degraded" : "ok", generatedAt: new Date().toISOString(), uptime: null, version: null,
+        queue: { redisEnabled: this.config.redisEnabled, source: "persisted_workspace_jobs", totals: { active: render.active + publish.active, waiting: render.waiting + publish.waiting, failed: render.failed + publish.failed, delayed: render.delayed + publish.delayed }, queues: [{ id: "render", label: "Render", counts: render }, { id: "publish", label: "Publish", counts: publish }] },
+        queueStates: { renderStates: summarize(renders), publishStates: summarize(publishes) }, workers: null, database: null, redis: null, system: null,
+        errors: this.buildErrorSummary(events), slowRequests: this.buildSlowRequests(events), alerts: reconciling ? [{ id: "reconciliation", severity: "warning", title: "Publication or render needs review", description: `${reconciling} workspace jobs require reconciliation.` }] : [],
+      });
+    } catch { res.status(503).json({ error: "Workspace health is unavailable" }); }
   }
 
   private async getMetrics(_req: Request, res: Response): Promise<void> {
@@ -219,12 +228,7 @@ export class HealthRouter {
       };
     }
 
-    const renderQueue = createRenderQueue(this.config);
-    const publishQueue = createPublishQueue(this.config);
-    const [renderCounts, publishCounts] = await Promise.all([
-      renderQueue.getJobCounts("active", "waiting", "completed", "failed", "delayed", "paused"),
-      publishQueue.getJobCounts("active", "waiting", "completed", "failed", "delayed", "paused"),
-    ]);
+    const [renderCounts, publishCounts] = await this.queueCounts();
 
     return {
       redisEnabled: true,
@@ -273,8 +277,8 @@ export class HealthRouter {
       status: latencyMs > 200 ? "degraded" : "ok",
       engine: "file-store",
       connections: {
-        active: 1,
-        max: 1,
+        active: null,
+        max: null,
       },
       latencyMs,
       sizeBytes,
@@ -404,32 +408,7 @@ export class HealthRouter {
       }));
   }
 
-  private buildWorkerStatus(queueStats: Awaited<ReturnType<HealthRouter["buildQueueStats"]>>) {
-    const definitions = [
-      { id: "ingest", label: "Ingest Worker", queue: "ingest_queue", capacity: 5, currentJobs: 0 },
-      { id: "planning", label: "Planning Worker", queue: "planning_queue", capacity: 3, currentJobs: 0 },
-      { id: "render", label: "Render Worker", queue: "render_queue", capacity: this.config.renderWorkerConcurrency, currentJobs: queueStats.queues.find((queue) => queue.id === "render")?.counts.active ?? 0 },
-      { id: "publish", label: "Publish Worker", queue: "publish_queue", capacity: this.config.publishWorkerConcurrency, currentJobs: queueStats.queues.find((queue) => queue.id === "publish")?.counts.active ?? 0 },
-      { id: "deadletter", label: "Dead-letter Worker", queue: "deadletter_queue", capacity: 1, currentJobs: 0 },
-    ];
-
-    const workers = definitions.map((worker) => {
-      const online = this.config.redisEnabled ? queueStats.redisEnabled : true;
-      return {
-        ...worker,
-        online,
-        status: online ? (worker.currentJobs >= worker.capacity && worker.capacity > 0 ? "busy" : "online") : "offline",
-      };
-    });
-
-    return {
-      online: workers.filter((worker) => worker.online).length,
-      total: workers.length,
-      capacity: workers.reduce((sum, worker) => sum + worker.capacity, 0),
-      currentJobs: workers.reduce((sum, worker) => sum + worker.currentJobs, 0),
-      items: workers,
-    };
-  }
+  private buildWorkerStatus(redisOk: boolean) { return workerHealth.snapshot(redisOk); }
 
   private buildAlerts(params: {
     redisStatus: string;
@@ -486,7 +465,7 @@ export class HealthRouter {
       });
     }
 
-    if (params.workers.online === 0) {
+    if (this.config.redisEnabled && params.workers.online === 0) {
       alerts.push({
         id: "workers-offline",
         severity: "critical",

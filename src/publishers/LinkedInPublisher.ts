@@ -1,6 +1,7 @@
 import axios from "axios";
 import fs from "fs-extra";
 import { logger } from "../logger";
+import { canonicalPublication, providerFailure, verifyProviderCredentials, unsupportedNativeSchedule } from "./providerContracts";
 import { getPlatformLimits } from "./PlatformLimits";
 import type { PlatformPublisher, PublishParams, PublishResult, PlatformLimits } from "./PlatformPublisher";
 
@@ -33,21 +34,23 @@ export class LinkedInPublisher implements PlatformPublisher {
           supportedUploadMechanism: ["MULTIPART_UPLOAD"],
         },
       },
-      { headers: this.headers },
+      { headers: this.headers, timeout: 30000 },
     );
 
     const uploadUrl = regRes.data.value?.uploadMechanism?.["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]?.uploadUrl;
     const asset = regRes.data.value?.asset;
-    if (!uploadUrl || !asset) throw new Error("LinkedIn: Failed to register upload");
+    if (typeof uploadUrl !== "string" || typeof asset !== "string" || !asset.trim()) throw new Error("LinkedIn: Failed to register upload");
 
     const fileBuffer = await fs.readFile(params.videoFilePath);
-    await axios.put(uploadUrl, fileBuffer, { headers: { "Content-Type": "video/mp4" }, maxBodyLength: Infinity });
+    await axios.put(uploadUrl, fileBuffer, { headers: { "Content-Type": "video/mp4" }, maxBodyLength: Infinity, timeout: 90000 });
     return asset;
   }
 
   async uploadVideo(params: PublishParams): Promise<PublishResult> {
+    let publicationStarted = false;
     try {
       const asset = await this.registerAndUpload(params);
+      publicationStarted = true;
       const postRes = await axios.post(
         "https://api.linkedin.com/v2/ugcPosts",
         {
@@ -67,20 +70,22 @@ export class LinkedInPublisher implements PlatformPublisher {
           },
           visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
         },
-        { headers: this.headers },
+        { headers: this.headers, timeout: 30000 },
       );
-      const postId = postRes.data.id;
-      logger.info({ postId }, "LinkedIn video published");
-      return { success: true, platformVideoId: postId, publishedUrl: `https://linkedin.com/feed/update/${postId}` };
+      const postId = postRes.data?.id;
+      const result = canonicalPublication(postId, (id) => `https://linkedin.com/feed/update/${encodeURIComponent(id)}`);
+      if (result.success) logger.info({ postId }, "LinkedIn video published");
+      return result;
     } catch (err: unknown) {
-      logger.error({ err }, "LinkedIn publish failed");
-      return { success: false, error: (err as Error).message };
+      const failure = providerFailure(err, [this.accessToken], publicationStarted ? "unknown" : "not_accepted");
+      logger.error({ error: failure.error, code: failure.errorCode }, "LinkedIn publish failed");
+      return failure;
     }
   }
 
   async scheduleVideo(params: PublishParams, publishAt: Date): Promise<PublishResult> {
-    logger.info({ platform: "linkedin", publishAt }, "LinkedIn scheduling not supported natively — publishing now");
-    return this.uploadVideo(params);
+    void params; void publishAt;
+    return unsupportedNativeSchedule("LinkedIn");
   }
 
   async refreshToken(): Promise<void> {
@@ -89,10 +94,7 @@ export class LinkedInPublisher implements PlatformPublisher {
 
   async validateCredentials(): Promise<boolean> {
     if (!this.accessToken) return false;
-    try {
-      await axios.get("https://api.linkedin.com/v2/me", { headers: this.headers, timeout: 5000 });
-      return true;
-    } catch { return false; }
+    return verifyProviderCredentials(() => axios.get("https://api.linkedin.com/v2/me", { headers: this.headers, timeout: 5000 }), [this.accessToken]);
   }
 
   getVideoLimits(): PlatformLimits {

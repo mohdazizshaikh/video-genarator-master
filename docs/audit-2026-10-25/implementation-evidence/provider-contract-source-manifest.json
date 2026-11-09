@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-28",
+  "files": {
+    "src/publishers/providerContracts.ts": "324af49e671d22a87e0aa880466208486c48b97a8e8662900d95cdfad1098d4e",
+    "src/publishers/RequiredVideoPublish.test.ts": "7329a895844185d658852530e12946414061773927c31c217af5280a2ceff111",
+    "src/publishers/XTwitterPublisher.ts": "6dc0871e0f9333581b21e1f96aff154ec93efa2d2bfe324ef553601daeddb5c6",
+    "src/publishers/LinkedInPublisher.ts": "4c1ff1347061f4c0bb22d53c52f5efc6abc5cbffa5bc4c54831e0562d56de56e",
+    "src/publishers/YouTubePublisher.ts": "82cb9ee5c4ae37cd39b20b2fb41809f7b37c5fa7eb6f56211716bb450da5ff01",
+    "src/publishers/YouTubePublisher.test.ts": "acb017f6e0459d45bdb6bf6577dab6d7d1789427d065f2c60d8eb6d10519ff85"
+  }
+}

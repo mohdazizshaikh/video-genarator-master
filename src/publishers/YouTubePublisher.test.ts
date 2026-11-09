@@ -76,3 +76,20 @@ describe("YouTubePublisher failure classification", () => {
     expect(result.error).toContain("[redacted]");
   });
 });
+
+it("holds an upload response without a canonical video ID", async () => {
+  mocks.insert.mockResolvedValueOnce({ data: {} });
+  expect(await publisher().uploadVideo(baseParams as never)).toMatchObject({ success: false, deliveryOutcome: "unknown" });
+});
+it("separates transient token verification failure from invalid access", async () => {
+  const adapter = publisher();
+  vi.spyOn(adapter, "refreshToken").mockRejectedValueOnce({ response: { status: 401 } }).mockRejectedValueOnce(new Error("network timeout"));
+  expect(await adapter.validateCredentials()).toBe(false);
+  await expect(adapter.validateCredentials()).rejects.toMatchObject({ code: "provider_unavailable" });
+});
+it("reports no publication dispatch when token refresh fails before insert", async () => {
+  const adapter = publisher(); mocks.insert.mockClear();
+  vi.spyOn(adapter, "refreshToken").mockRejectedValueOnce(new Error("token endpoint unavailable"));
+  expect(await adapter.uploadVideo(baseParams as never)).toMatchObject({ success: false, deliveryOutcome: "not_accepted" });
+  expect(mocks.insert).not.toHaveBeenCalled();
+});

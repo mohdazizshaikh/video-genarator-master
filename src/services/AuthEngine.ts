@@ -18,6 +18,7 @@ export interface Tenant {
   rotatedAt?: string;
   permissions: string[];
   metadata: Record<string, unknown>;
+  tokenVersion?: number;
 }
 
 export interface AuthToken {
@@ -27,6 +28,7 @@ export interface AuthToken {
   permissions: string[];
   issuedAt: number;
   expiresAt: number;
+  tokenVersion?: number;
 }
 
 export interface AuthResult {
@@ -60,8 +62,11 @@ function getJwtSecret(): string {
   return jwtSecretCandidate;
 }
 
-export function verifyJwtToken(token: string): AuthToken | null {
-  return verifyJwt(token, getJwtSecret());
+export function verifyJwtToken(token: string,
+  dataDirPath: string = process.env.DATA_DIR_PATH ||
+    path.join(process.cwd(), "data"),
+): AuthToken | null {
+  return new AuthEngine(dataDirPath).verifyToken(token);
 }
 
 function generateApiKey(): string {
@@ -73,25 +78,60 @@ function hashApiKey(key: string): string {
 }
 
 function base64url(data: string): string {
-  return Buffer.from(data).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  return Buffer.from(data).toString("base64").replace(/\+/g, "-").replace(/\//g, "_")
+    .replace(/=/g, "");
 }
 
 function signJwt(payload: AuthToken, secret: string): string {
   const header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const body = base64url(JSON.stringify(payload));
-  const sig = crypto.createHmac("sha256", secret).update(`${header}.${body}`).digest("base64url");
+  const sig = crypto.createHmac("sha256", secret).update(`${header}.${body}`)
+    .digest("base64url");
   return `${header}.${body}.${sig}`;
 }
 
 function verifyJwt(token: string, secret: string): AuthToken | null {
   try {
-    const [header, body, sig] = token.split(".");
-    const expected = crypto.createHmac("sha256", secret).update(`${header}.${body}`).digest("base64url");
-    if (sig !== expected) return null;
-    const payload = JSON.parse(Buffer.from(body, "base64").toString()) as AuthToken;
-    if (payload.expiresAt < Date.now() / 1000) return null;
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const [header, body, sig] = parts;
+    if (!header || !body || !sig) return null;
+    const algorithm = JSON.parse(
+      Buffer.from(header, "base64url").toString("utf8"),
+    );
+    if (algorithm.alg !== "HS256" || algorithm.typ !== "JWT") return null;
+    const expected = crypto
+      .createHmac("sha256", secret)
+      .update(`${header}.${body}`)
+      .digest("base64url");
+    if (
+      sig.length !== expected.length ||
+      !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
+    )
+      return null;
+    const payload = JSON.parse(
+      Buffer.from(body, "base64url").toString("utf8"),
+    ) as AuthToken;
+    const now = Date.now() / 1000;
+    if (
+      typeof payload.tenantId !== "string" ||
+      !payload.tenantId.trim() ||
+      !Number.isFinite(payload.expiresAt) ||
+      payload.expiresAt <= now ||
+      !Number.isFinite(payload.issuedAt) ||
+      payload.issuedAt > now ||
+      !Array.isArray(payload.permissions) ||
+      payload.permissions.some(
+        (permission) => typeof permission !== "string",
+      ) ||
+      !Number.isInteger(payload.tokenVersion ?? 0) ||
+      (payload.tokenVersion ?? 0) < 0
+    )
+      return null;
     return payload;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export class AuthEngine {
@@ -104,57 +144,95 @@ export class AuthEngine {
   }
 
   private load() {
-    try {
-      if (fs.existsSync(this.dataPath)) this.tenants = fs.readJsonSync(this.dataPath);
-    } catch { this.tenants = []; }
+    const records = fs.existsSync(this.dataPath)
+      ? fs.readJsonSync(this.dataPath)
+      : [];
+    if (!Array.isArray(records))
+      throw new Error("Authentication store is invalid");
+    this.tenants = records;
   }
 
   private save() {
-    try { fs.writeJsonSync(this.dataPath, this.tenants, { spaces: 2 }); } catch { /* ignore */ }
+    fs.ensureDirSync(path.dirname(this.dataPath));
+    const temporary = `${this.dataPath}.${crypto.randomUUID()}.tmp`;
+    fs.writeJsonSync(temporary, this.tenants, { spaces: 2, mode: 0o600 });
+    fs.renameSync(temporary, this.dataPath);
   }
 
-  registerTenant(name: string, email: string, plan: Tenant["plan"] = "free"): { tenant: Omit<Tenant, "apiKeyHash">; plainApiKey: string } {
-    const existing = this.tenants.find((t) => t.email === email);
+  registerTenant(
+    name: string,
+    email: string,
+  ): { tenant: Omit<Tenant, "apiKey" | "apiKeyHash">; plainApiKey: string } {
+    this.load();
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      typeof email !== "string" ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    )
+      throw new Error("Valid name and email are required");
+    name = name.trim();
+    email = email.trim().toLowerCase();
+    const plan = "free";
+    const existing = this.tenants.find((t) => t.email.toLowerCase() === email);
     if (existing) throw new Error(`Tenant with email ${email} already exists`);
 
     const apiKey = generateApiKey();
     const tenant: Tenant = {
       id: `tenant_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-      name, email,
+      name,
+      email,
       apiKey: apiKey.substring(0, 12) + "...",
       apiKeyHash: hashApiKey(apiKey),
-      plan, status: "active",
+      plan,
+      status: "active",
       createdAt: new Date().toISOString(),
       permissions: this.getDefaultPermissions(plan),
       metadata: {},
+      tokenVersion: 0,
     };
 
     this.tenants.push(tenant);
     this.save();
     logger.info({ tenantId: tenant.id, name }, "AuthEngine: tenant registered");
-    return { tenant: { ...tenant, apiKey: apiKey.substring(0, 12) + "..." }, plainApiKey: apiKey };
+    const safeTenant = { ...tenant } as Partial<Tenant>;
+    delete safeTenant.apiKey;
+    delete safeTenant.apiKeyHash;
+    return {
+      tenant: safeTenant as Omit<Tenant, "apiKey" | "apiKeyHash">,
+      plainApiKey: apiKey,
+    };
   }
 
   authenticate(apiKey: string): AuthResult {
     try {
+      this.load();
       const hash = hashApiKey(apiKey);
       const tenant = this.tenants.find((t) => t.apiKeyHash === hash);
 
       if (!tenant) return { success: false, error: "Invalid API key" };
-      if (tenant.status !== "active") return { success: false, error: `Account ${tenant.status}` };
+      if (tenant.status !== "active")
+        return { success: false, error: `Account ${tenant.status}` };
 
       tenant.lastLoginAt = new Date().toISOString();
       this.save();
 
       const payload: AuthToken = {
-        tenantId: tenant.id, name: tenant.name, plan: tenant.plan,
+        tenantId: tenant.id,
+        name: tenant.name,
+        plan: tenant.plan,
         permissions: tenant.permissions,
         issuedAt: Math.floor(Date.now() / 1000),
         expiresAt: Math.floor(Date.now() / 1000) + TOKEN_TTL_SEC,
+        tokenVersion: tenant.tokenVersion ?? 0,
       };
 
       const token = signJwt(payload, getJwtSecret());
-      const safeTenant = { ...tenant } as Omit<Tenant, "apiKey" | "apiKeyHash"> & Record<string, unknown>;
+      const safeTenant = { ...tenant } as Omit<
+        Tenant,
+        "apiKey" | "apiKeyHash"
+      > &
+        Record<string, unknown>;
       delete safeTenant.apiKey;
       delete safeTenant.apiKeyHash;
       logger.debug({ tenantId: tenant.id }, "AuthEngine: authenticated");
@@ -166,10 +244,32 @@ export class AuthEngine {
   }
 
   verifyToken(token: string): AuthToken | null {
-    return verifyJwt(token, getJwtSecret());
+    const payload = verifyJwt(token, getJwtSecret());
+    if (!payload) return null;
+    try {
+      this.load();
+      const tenant = this.tenants.find(
+        (candidate) => candidate.id === payload.tenantId,
+      );
+      if (
+        !tenant ||
+        tenant.status !== "active" ||
+        (tenant.tokenVersion ?? 0) !== (payload.tokenVersion ?? 0)
+      )
+        return null;
+      return {
+        ...payload,
+        name: tenant.name,
+        plan: tenant.plan,
+        permissions: tenant.permissions,
+      };
+    } catch {
+      return null;
+    }
   }
 
   rotateCredentials(tenantId: string): { plainApiKey: string } {
+    this.load();
     const tenant = this.tenants.find((t) => t.id === tenantId);
     if (!tenant) throw new Error(`Tenant ${tenantId} not found`);
 
@@ -177,31 +277,62 @@ export class AuthEngine {
     tenant.apiKey = apiKey.substring(0, 12) + "...";
     tenant.apiKeyHash = hashApiKey(apiKey);
     tenant.rotatedAt = new Date().toISOString();
+    tenant.tokenVersion = (tenant.tokenVersion ?? 0) + 1;
     this.save();
     logger.info({ tenantId }, "AuthEngine: credentials rotated");
     return { plainApiKey: apiKey };
   }
 
   suspendTenant(tenantId: string): void {
+    this.load();
     const t = this.tenants.find((t) => t.id === tenantId);
-    if (t) { t.status = "suspended"; this.save(); }
+    if (t) {
+      t.status = "suspended";
+      t.tokenVersion = (t.tokenVersion ?? 0) + 1;
+      this.save();
+    }
   }
 
   activateTenant(tenantId: string): void {
+    this.load();
     const t = this.tenants.find((t) => t.id === tenantId);
-    if (t) { t.status = "active"; this.save(); }
+    if (t) {
+      t.status = "active";
+      t.tokenVersion = (t.tokenVersion ?? 0) + 1;
+      this.save();
+    }
   }
 
   private getDefaultPermissions(plan: Tenant["plan"]): string[] {
-    const base = ["content:read", "content:write", "publish:basic", "release:approve"];
-    if (plan === "pro") return [...base, "analytics:read", "export:basic", "ab-testing"];
-    if (plan === "enterprise") return [...base, "analytics:read", "analytics:write", "export:full", "ab-testing", "api:advanced", "tenants:manage"];
+    const base = [
+      "content:read",
+      "content:write",
+      "publish:basic",
+      "release:approve",
+    ];
+    if (plan === "pro")
+      return [...base, "analytics:read", "export:basic", "ab-testing"];
+    if (plan === "enterprise")
+      return [
+        ...base,
+        "analytics:read",
+        "analytics:write",
+        "export:full",
+        "ab-testing",
+        "api:advanced",
+        "tenants:manage",
+      ];
     return base;
   }
 
   getTenants(): Omit<Tenant, "apiKey" | "apiKeyHash">[] {
+    this.load();
     return this.tenants.map((tenant) => {
-      const safeTenant = { ...tenant } as Omit<Tenant, "apiKey" | "apiKeyHash"> & Record<string, unknown>;
+      const safeTenant = { ...tenant } as Omit<
+        Tenant,
+        "apiKey" | "apiKeyHash"
+      > &
+        Record<string, unknown>;
       delete safeTenant.apiKey;
       delete safeTenant.apiKeyHash;
       return safeTenant;
@@ -209,9 +340,11 @@ export class AuthEngine {
   }
 
   getTenant(id: string): Omit<Tenant, "apiKey" | "apiKeyHash"> | undefined {
+    this.load();
     const t = this.tenants.find((t) => t.id === id);
     if (!t) return undefined;
-    const safe = { ...t } as Omit<Tenant, "apiKey" | "apiKeyHash"> & Record<string, unknown>;
+    const safe = { ...t } as Omit<Tenant, "apiKey" | "apiKeyHash"> &
+      Record<string, unknown>;
     delete safe.apiKey;
     delete safe.apiKeyHash;
     return safe;

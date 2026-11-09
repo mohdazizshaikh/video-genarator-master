@@ -1,0 +1,281 @@
+{
+  "errors": 0,
+  "warnings": 3,
+  "files": [
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/db/ArtifactManifestStore.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/db/ContentVersionStore.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/db/JobEventOutboxStore.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/db/JobEventStore.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/db/LifecycleConcurrency.test.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/db/ReleaseStore.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/db/VideoMetadataStore.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/auth.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/account.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/branding.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/contentbuckets.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/contentversions.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/costs.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/engineIsolation.test.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/engines.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/hooks.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/humanized.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/mcp.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/publish.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/recycle.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/releases.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/rest.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/schedule.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/security.test.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/shadowban.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/strategy.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/systemengines.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/tenants.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/translate.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/routers/videoOwnership.test.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/server.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/testing/dispatch.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/server/videoStream.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/services/AuthEngine.ts",
+      "errors": 0,
+      "warnings": 1
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/services/BrandingEngine.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/services/ReleaseAuthorization.test.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/services/ReleaseAuthorization.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/services/TenantEngineScope.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/services/TranslationEngine.test.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/services/TranslationEngine.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/services/VideoAccessToken.test.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/services/VideoAccessToken.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/short-creator/ShortCreator.test.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/short-creator/ShortCreator.ts",
+      "errors": 0,
+      "warnings": 1
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/ui/pages/PublishDashboard.tsx",
+      "errors": 0,
+      "warnings": 1
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/ui/pages/ReleasesPage.tsx",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/ui/pages/TenantConsole.tsx",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/ui/pages/VideoDetails.tsx",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/ui/services/apiClient.test.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/ui/services/apiClient.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/ui/services/apiOrigin.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/ui/services/authenticatedFetch.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/ui/store/uiStore.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/workers/PublishWorker.test.ts",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "path": "/Users/admin/Documents/short-video-creator-master/src/workers/PublishWorker.ts",
+      "errors": 0,
+      "warnings": 0
+    }
+  ]
+}

@@ -21,8 +21,13 @@ export interface QueueStats {
 }
 
 export interface RenderJob {
+  videoId?: string;
+  artifactId?: string;
+  contentVersionId?: string;
+  executionId?: string;
+  error?: string;
   id: string;
-  status: "pending" | "processing" | "completed" | "failed";
+  status: "scheduled" | "queued" | "pending" | "processing" | "ready" | "rendered" | "completed" | "failed" | "skipped" | "reconciling";
   category: string;
   orientation: string;
   videoType: string;
@@ -59,14 +64,19 @@ function normalizeQueueStats(raw: unknown): QueueStats {
   }
   const render = (d.render as QueueCounts) || EMPTY_COUNTS;
   const publish = (d.publish as QueueCounts) || EMPTY_COUNTS;
-  return { render, publish, redisEnabled: true };
+  return { render, publish, redisEnabled: d.redisEnabled !== false };
 }
 
-function normalizeRenderJobs(raw: unknown): RenderJob[] {
+export function normalizeRenderJobs(raw: unknown): RenderJob[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((item: Record<string, unknown>) => ({
     id: String(item.id || ""),
     status: (item.status as RenderJob["status"]) || "pending",
+    videoId: typeof item.videoId === "string" ? item.videoId : undefined,
+    artifactId: typeof item.artifactId === "string" ? item.artifactId : undefined,
+    contentVersionId: typeof item.contentVersionId === "string" ? item.contentVersionId : undefined,
+    executionId: typeof item.executionId === "string" ? item.executionId : undefined,
+    error: typeof item.error === "string" ? item.error : undefined,
     category: String(item.category || ""),
     orientation: String(item.orientation || ""),
     videoType: String(item.videoType || "short"),
@@ -92,6 +102,15 @@ function normalizePublishJobs(raw: unknown): PublishJob[] {
   }));
 }
 
+/** Read real persisted render executions; do not substitute video-library rows
+ * or turn a failed store/API request into a misleading empty scheduler. */
+export async function loadScheduledJobs(): Promise<ScheduledJobsData> {
+  const [queue, renders, publishes] = await Promise.all([
+    api.queue.getStatus(), api.queue.listRenderJobs(), api.publish.list(),
+  ]);
+  return { queueStats: normalizeQueueStats(queue), renderJobs: normalizeRenderJobs(renders), publishJobs: normalizePublishJobs(publishes) };
+}
+
 export interface UseScheduledJobsReturn {
   data: ScheduledJobsData | null;
   loading: boolean;
@@ -109,23 +128,7 @@ export function useScheduledJobs(options: { autoLoad?: boolean } = {}): UseSched
     setLoading(true);
     setError(null);
     try {
-      const [queueRaw, renderRaw, publishRaw] = await Promise.allSettled([
-        api.queue.getStatus(),
-        api.videos.list(),
-        api.publish.list(),
-      ]);
-
-      const queueStats = normalizeQueueStats(
-        queueRaw.status === "fulfilled" ? queueRaw.value : {}
-      );
-      const renderJobs = normalizeRenderJobs(
-        renderRaw.status === "fulfilled" ? renderRaw.value : []
-      );
-      const publishJobs = normalizePublishJobs(
-        publishRaw.status === "fulfilled" ? publishRaw.value : []
-      );
-
-      setData({ queueStats, renderJobs, publishJobs });
+      setData(await loadScheduledJobs());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load scheduler data");
     } finally {

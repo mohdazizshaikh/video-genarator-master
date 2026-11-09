@@ -1,0 +1,1156 @@
+{
+  "created": "2026-10-25",
+  "source": "FINDINGS.json + FEATURE_MATRIX.md + FILE_REVIEW_LEDGER.md",
+  "status": "implementation in progress; twenty-ninth increment verifies bound scheduled video completion before advancing counters; failed/unbound recovery, cross-process authority and browser/deployed acceptance remain open; no phase declared complete",
+  "phases": [
+    {
+      "id": "P0",
+      "title": "Establish contracts and trustworthy verification",
+      "depends_on": [],
+      "status": "in_progress"
+    },
+    {
+      "id": "P1",
+      "title": "Close authentication, ownership and entitlement gaps",
+      "depends_on": [
+        "P0"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "id": "P2",
+      "title": "Secure outbound requests, webhook secrets and translation",
+      "depends_on": [
+        "P1"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "id": "P3",
+      "title": "Bind approval and publication to immutable owned artifacts",
+      "depends_on": [
+        "P1"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "id": "P4",
+      "title": "Complete scheduling and provider contracts",
+      "depends_on": [
+        "P3"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "id": "P5",
+      "title": "Make execution, retries and shutdown recoverable",
+      "depends_on": [
+        "P3",
+        "P4"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "id": "P6",
+      "title": "Complete PostgreSQL, object storage and recovery",
+      "depends_on": [
+        "P2",
+        "P5"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "id": "P7",
+      "title": "Complete authenticated browser workflows",
+      "depends_on": [
+        "P2",
+        "P3",
+        "P4",
+        "P5"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "id": "P8",
+      "title": "Complete engines, teams, subscriptions and measurement",
+      "depends_on": [
+        "P6",
+        "P7"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "P9",
+      "title": "Close every acceptance gate and prepare controlled rollout",
+      "depends_on": [
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "status": "planned"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "A01",
+      "priority": "P0",
+      "title": "System assets and compliance bypass authentication",
+      "start_phase": "P1",
+      "closure_phase": "P1",
+      "depends_on_phases": [
+        "P0"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/server/routers/systemengines.ts",
+      "implementation": "Move public bootstrap into an explicit public router; guard all other handlers before registration. Derive compliance ownership from claims; protect global operations with the admin guard. Test unauthenticated reads and mutations.",
+      "acceptance": "Anonymous asset/compliance read and mutation requests fail; tenant A cannot read, forge, modify or delete B records; only approved bootstrap endpoints remain public; admin operations require server-verified admin access.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "System router now guards all non-bootstrap routes before handlers; assets/compliance/knowledge are workspace-scoped. Anonymous and tenant regression tests pass; broader admin/real HTTP acceptance remains."
+    },
+    {
+      "id": "A02",
+      "priority": "P0",
+      "title": "Core video API does not enforce resource ownership",
+      "start_phase": "P1",
+      "closure_phase": "P1",
+      "depends_on_phases": [
+        "P0"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/server/routers/rest.ts",
+      "implementation": "Require a nonempty authenticated owner throughout create, status, list, media, path, and delete; authorize each ID against an owner record. Remove raw path authority and apply the same policy to MCP.",
+      "acceptance": "REST, MCP, bulk and scheduler creates persist the verified owner. Tenant B sees 404 for A status, metadata, stream, path and deletion; list returns only B resources. Invalid IDs and traversal/symlink escapes fail. Legacy unowned media stays quarantined.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Owned core video routing, claim propagation, MCP session binding, temp-token checks, path/ownership checks and signed range streaming implemented. Full MCP transport/browser acceptance remains."
+    },
+    {
+      "id": "A03",
+      "priority": "P0",
+      "title": "Publishing accepts caller-selected local media and bypasses approved content identity",
+      "start_phase": "P3",
+      "closure_phase": "P3",
+      "depends_on_phases": [
+        "P1"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/server/routers/releases.ts",
+      "implementation": "Accept an opaque owned artifact ID, verify manifest, file type/realpath, content-version binding, destination, and approval in both enqueue and worker. Gate or remove the global legacy publish path.",
+      "acceptance": "A request cannot supply an authoritative filesystem path. API and worker resolve the same owned artifact and approved digest. Cross-owner artifacts, stale approvals, mismatched thumbnails and legacy global credential bypasses are rejected before provider dispatch.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "GRAPH_PROVIDER_PROGRESS.md",
+          "scope": "mocked Graph boundaries/factory tests; owned public artifact delivery, refreshed-token persistence and live platform compatibility remain open"
+        }
+      ],
+      "progress": "Caller paths blocked; release and worker resolve/recheck owned approved content/checksum; unapproved legacy publish disabled. Full live queue/provider acceptance remains. Facebook/Instagram constructors no longer bypass account-factory isolation by reading environment credentials."
+    },
+    {
+      "id": "A04",
+      "priority": "P1",
+      "title": "In-flight render deduplication crosses tenants",
+      "start_phase": "P1",
+      "closure_phase": "P1",
+      "depends_on_phases": [
+        "P0"
+      ],
+      "status": "verified",
+      "primary_file": "src/short-creator/ShortCreator.ts",
+      "implementation": "Include tenantId in both signature namespace and queue match; reject missing ownership. Test identical content submitted by two tenants.",
+      "acceptance": "Identical content submitted by A and B creates independent owned jobs; retries within A reuse the intended job. Missing owner fails before metadata or media creation.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Missing owner rejected; in-flight dedupe includes workspace; same-owner reuse and two-owner independence verified in videoOwnership.test.ts."
+    },
+    {
+      "id": "A05",
+      "priority": "P1",
+      "title": "Branding allows cross-tenant reads and writes",
+      "start_phase": "P1",
+      "closure_phase": "P1",
+      "depends_on_phases": [
+        "P0"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/server/routers/branding.ts",
+      "implementation": "Derive tenant from claims or enforce an explicit admin exception for path tenant; scope list, CSS, reset, and update.",
+      "acceptance": "Branding read, CSS, update, reset and list are owner-scoped; forged path tenants cannot affect other workspaces. A permitted admin action is explicitly tested and audited.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Branding path guard/list scope fixed with cross-owner read/CSS/update/reset tests; explicit admin acceptance remains."
+    },
+    {
+      "id": "A06",
+      "priority": "P1",
+      "title": "Residual mutable engine stores remain global",
+      "start_phase": "P1",
+      "closure_phase": "P1",
+      "depends_on_phases": [
+        "P0"
+      ],
+      "status": "in_progress",
+      "primary_file": "src/server/routers/recycle.ts",
+      "implementation": "Classify reference data separately; add owner to mutable tenant data, quarantine legacy records, and exercise cross-tenant read/write denial per family.",
+      "acceptance": "Every mutable store in the residual-store checklist has claim-derived ownership, migration/quarantine rules and cross-tenant read/write tests. Built-in reference data is immutable to ordinary tenants; custom hooks/rules are scoped.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        },
+        {
+          "record": "RENDER_RECOVERY_AND_SHUTDOWN_PROGRESS.md",
+          "scope": "fourth increment; 104 files/363 local tests, types/build/routes and changed-source lint; real service/process/browser acceptance remains open"
+        }
+      ],
+      "progress": "Source scheduler enqueue slots include workspace identity and shutdown drains the active source rule. Existing per-workspace engine isolation remains. Remaining engine/pipeline/migration semantic coverage is open."
+    },
+    {
+      "id": "A07",
+      "priority": "P1",
+      "title": "Webhook requests have no effective SSRF policy",
+      "start_phase": "P2",
+      "closure_phase": "P2",
+      "depends_on_phases": [
+        "P1"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/services/WebhookNotificationEngine.ts",
+      "implementation": "Integrate and test URL validation and a pinned transport for create, update, and each send; disable redirects and sanitize transport errors. Preserve the existing untracked work while integrating.",
+      "acceptance": "Create/update/send reject private, loopback, link-local, metadata, reserved and disallowed provider hosts, including IPv6 and DNS/redirect changes. HTTPS transport uses the validated address and original TLS identity; time/response limits apply. No test contacts a real internal address.",
+      "evidence": [
+        {
+          "record": "OUTBOUND_SECURITY_PROGRESS.md",
+          "scope": "local regression tests and production checks; no live dispatch or browser acceptance"
+        },
+        {
+          "record": "SCHEDULER_AND_WEBHOOK_PROGRESS.md",
+          "scope": "third increment: isolated migration, deadline/size failure tests and webhook HTTP/UI response contracts"
+        }
+      ],
+      "progress": "Pinned outbound implementation extended with typed HTTP validation, UI failure handling, legacy encryption/malformed-store rehearsal and response deadline/size regression tests. Browser/provider acceptance, cancellation integration and operational key migration tooling remain open."
+    },
+    {
+      "id": "A08",
+      "priority": "P1",
+      "title": "Webhook updates can reassign ownership; test dispatch targets other hooks",
+      "start_phase": "P2",
+      "closure_phase": "P2",
+      "depends_on_phases": [
+        "P1"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/services/WebhookNotificationEngine.ts",
+      "implementation": "Allowlist mutable fields and preserve immutable tenant/id. Send tests directly to one selected hook with try/finally restoration. Encrypt secrets and redact errors.",
+      "acceptance": "Webhook owner/id cannot be overwritten. Test dispatch calls exactly one selected hook once, irrespective of subscribed events, and restores temporary state on error. Secrets are encrypted, API payloads are masked and persisted/logged failures are redacted. Migration preserves usable secrets with rollback.",
+      "evidence": [
+        {
+          "record": "OUTBOUND_SECURITY_PROGRESS.md",
+          "scope": "local regression tests and production checks; no live dispatch or browser acceptance"
+        },
+        {
+          "record": "SCHEDULER_AND_WEBHOOK_PROGRESS.md",
+          "scope": "third increment: isolated migration, deadline/size failure tests and webhook HTTP/UI response contracts"
+        }
+      ],
+      "progress": "Pinned outbound implementation extended with typed HTTP validation, UI failure handling, legacy encryption/malformed-store rehearsal and response deadline/size regression tests. Browser/provider acceptance, cancellation integration and operational key migration tooling remain open."
+    },
+    {
+      "id": "A09",
+      "priority": "P1",
+      "title": "Independent cached JSON stores lose events and serve stale timelines",
+      "start_phase": "P5",
+      "closure_phase": "P6",
+      "depends_on_phases": [
+        "P3",
+        "P4"
+      ],
+      "status": "in_progress",
+      "primary_file": "src/db/JobEventStore.ts",
+      "implementation": "Use one coordinated writer as an interim measure and transactional durable storage for authority. Add multiple-instance read/write tests; event+outbox writes must be one transaction.",
+      "acceptance": "Two independent writers/readers retain every event and see fresh ordered timelines; retries reuse event identity without losing distinct attempts. Event and outbox insertion commit atomically in durable mode; outbox claims, retries and delivery recovery are tested.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        },
+        {
+          "record": "RENDER_RECOVERY_AND_SHUTDOWN_PROGRESS.md",
+          "scope": "fourth increment; 104 files/363 local tests, types/build/routes and changed-source lint; real service/process/browser acceptance remains open"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "PUBLICATION_RECOVERY_PROGRESS.md",
+          "scope": "local temporary stores, mocked adapters/queues; remaining acceptance gaps recorded"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "SOURCE_STORE_SAFETY_PROGRESS.md",
+          "scope": "source/rule file preservation and synchronous instance writes; durable authority remains open"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "TENANT_STORE_SAFETY_PROGRESS.md",
+          "scope": "temporary multi-instance profile writes, corruption preservation, bootstrap and credential-response regressions; durable cross-process transactions remain open"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "SCHEDULE_OUTPUT_PROGRESS.md",
+          "scope": "local SVG persistence, artifact preservation and guarded downloads; video/durable/browser acceptance remains open"
+        },
+        {
+          "date": "2026-10-31",
+          "record": "VIDEO_METADATA_SAFETY_PROGRESS.md",
+          "scope": "temporary corruption/concurrency/identity/approval-edit persistence regressions; final combined 755 tests plus types/build/routes and changed-file lint; file-mode interim only, durable/browser/deployed acceptance remains open"
+        },
+        {
+          "date": "2026-10-31",
+          "record": "CONTENT_VERSION_SAFETY_PROGRESS.md",
+          "scope": "temporary corruption/concurrency/identity/approval-edit persistence regressions; final combined 755 tests plus types/build/routes and changed-file lint; file-mode interim only, durable/browser/deployed acceptance remains open"
+        }
+      ],
+      "progress": "Publish jobs/attempts and releases now use fresh same-process coordinated writes and atomic rename; corrupt files are preserved. Cross-process transactions, event+outbox atomicity and durable claims remain open. News sources and automation rules now reject corrupt files and use atomic replacement; source duplicate checks are workspace-scoped. Tenant profile stores now preserve corruption and use fresh synchronous read/modify/replace sequences; bootstrap conflicts and rejected route operations are handled. Video metadata and content versions now preserve corrupt files, use private atomic replacement and restrict ownership/identity mutation; invalid release records block content edits. This remains interim file-mode work, not durable repository completion."
+    },
+    {
+      "id": "A10",
+      "priority": "P1",
+      "title": "Future publish times can publish immediately",
+      "start_phase": "P4",
+      "closure_phase": "P4",
+      "depends_on_phases": [
+        "P3"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/workers/PublishWorker.ts",
+      "implementation": "Persist due time and delay/claim execution at that time for providers without native scheduling. Reject unsupported schedules instead of publishing now.",
+      "acceptance": "A frozen-clock test proves no provider side effect before due time. Native and queue scheduling share one due-time contract; cancellation/reschedule survives restart and invalid/past dates have explicit validation.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "PUBLICATION_RECOVERY_PROGRESS.md",
+          "scope": "local temporary stores, mocked adapters/queues; remaining acceptance gaps recorded"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "PROVIDER_CONTRACT_PROGRESS.md",
+          "scope": "mocked X/LinkedIn/YouTube boundaries; live endpoint/auth/processing validation and remaining adapters stay open"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "GRAPH_PROVIDER_PROGRESS.md",
+          "scope": "mocked Graph boundaries/factory tests; owned public artifact delivery, refreshed-token persistence and live platform compatibility remain open"
+        }
+      ],
+      "progress": "Worker enforces persisted due time even when payload omits it; Telegram native scheduling rejects without sending. Frozen-clock local tests pass. Restart/cancel/reschedule and provider acceptance remain open. X/LinkedIn native schedule methods now reject without side effects; managed due-time execution remains required. Instagram native scheduling rejects container-only success; Facebook scheduling requires a provider URL and valid due time."
+    },
+    {
+      "id": "A11",
+      "priority": "P1",
+      "title": "Publish idempotency does not cover provider success before local persistence",
+      "start_phase": "P5",
+      "closure_phase": "P6",
+      "depends_on_phases": [
+        "P3",
+        "P4"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/workers/PublishWorker.ts",
+      "implementation": "Persist execution intent/request identity and reconcile ambiguous outcomes before retry. Add deterministic crash tests around provider response and every local commit boundary.",
+      "acceptance": "Crash injection before request, after provider acceptance, and before/after each local commit causes reconciliation or a safe unresolved state rather than a blind reupload. Render restart resumes/checks a stable execution identity; timeouts, cancellation, DLQ and operator recovery are bounded.",
+      "evidence": [
+        {
+          "date": "2026-10-28",
+          "record": "PUBLICATION_RECOVERY_PROGRESS.md",
+          "scope": "local temporary stores, mocked adapters/queues; remaining acceptance gaps recorded"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "OPERATOR_RECONCILIATION_PROGRESS.md",
+          "scope": "mocked boundary and temporary-store tests; operator observations are not independent provider verification"
+        }
+      ],
+      "progress": "Persisted request intent, acceptance receipts and reconciliation holds prevent blind reupload after lost acknowledgements; replay repairs target/job/attempt projections. Stale worker/DLQ failures preserve evidence. Same-process crash-boundary/mock-provider tests pass. Cross-process claims, provider lookup and operator reconciliation remain open. Permission-guarded confirmation of observed existing publications now records the current request, canonical ID, evidence reference and observer before projections; duplicate confirmations repair safely. Provider lookup, negative/legacy resolution, per-member audit identity and cross-process claims remain open."
+    },
+    {
+      "id": "A12",
+      "priority": "P1",
+      "title": "Approval does not freeze the approved payload or roll up release state",
+      "start_phase": "P3",
+      "closure_phase": "P3",
+      "depends_on_phases": [
+        "P1"
+      ],
+      "status": "in_progress",
+      "primary_file": "src/db/ContentVersionStore.ts",
+      "implementation": "Make approved versions immutable or create new versions on change; bind approval to content/artifact digest. Enforce transitions and derive parent release status from targets.",
+      "acceptance": "Editing approved content creates a new version and invalidates any approval for changed payload. Release/target transitions are enforced; all-published, mixed, failed and cancelled targets update the parent correctly. Workspace-scoped idempotency works without cross-tenant collisions.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "PUBLICATION_RECOVERY_PROGRESS.md",
+          "scope": "local temporary stores, mocked adapters/queues; remaining acceptance gaps recorded"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "DESTINATION_APPROVAL_PROGRESS.md",
+          "scope": "local route/worker/provider-boundary regressions; browser and live-provider acceptance remain open"
+        }
+      ],
+      "progress": "Content/checksum and explicit destination-set snapshots now bind approval. Target/queue/worker gates reject unapproved or changed provider identities; UI stages approval destinations. Parent rollups and transition guards retained. Browser/live acceptance, cross-process correctness and complete lifecycle policy remain open."
+    },
+    {
+      "id": "A13",
+      "priority": "P1",
+      "title": "Migration entry points cannot load their required packages",
+      "start_phase": "P6",
+      "closure_phase": "P6",
+      "depends_on_phases": [
+        "P2",
+        "P5"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "scripts/migrations/apply.mjs",
+      "implementation": "Declare and lock required dependencies; verify non-executing guard behavior and isolated database/object-store integration. Implement adapters and reconciliation before cutover; do not enable primary reads during this audit.",
+      "acceptance": "Frozen-lock install declares pg/S3 clients. Apply/artifact tools load and fail cleanly at missing-approval gates without I/O. Isolated PostgreSQL/MinIO integration and file/durable adapters pass reconciliation; deployed authority is stated accurately.",
+      "evidence": [
+        {
+          "date": "2026-10-28",
+          "record": "MIGRATION_GUARDS_PROGRESS.md",
+          "scope": "isolated child processes, fake pg query traces, SDK imports and frozen-lock install; no real migration or durable-runtime activation"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "OWNERSHIP_INSPECTION_PROGRESS.md",
+          "scope": "temporary real-store fixtures, isolated metadata inspection and read-only current workspace report; no mutation or migration/cutover"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "LEGACY_STORE_POLICY_PROGRESS.md",
+          "scope": "read-only legacy policies and conservative namespace mapping gate; current data remains blocked"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "MIGRATION_REVIEW_HELPERS_PROGRESS.md",
+          "scope": "read-only planner/decision and evidence validation; production recovery and durable authority remain open"
+        }
+      ],
+      "progress": "pg/S3 SDKs explicitly pinned/locked and load-tested; blocked paths do not load execution SDKs. Strict approvals, authority/checkpoint/source gates and uncovered namespace blockers added. Runner lock precedes checkpoint reads; artifact symlink/duplicate/prefix validation and honest metadata-only verification output added. Actual repositories/schema integration, full namespace reconciliation and PostgreSQL/MinIO/rollback/concurrent-process acceptance remain open. Shared readiness/reconciliation inspector now covers wrapped stores, derived attempts, checkpoint bindings, secret-envelope shape and explicit tenant-state markers; unknown stores are blocked and runtime source exclusion is explicit. Actual data inspection finds ownerless jobs, registry mismatches and unreviewed stores; no ownership is reassigned. SQL/object-store mappings, secret migration/decryption and remaining helper alignment stay open."
+    },
+    {
+      "id": "A14",
+      "priority": "P1",
+      "title": "Shutdown can exit before worker close completes",
+      "start_phase": "P5",
+      "closure_phase": "P5",
+      "depends_on_phases": [
+        "P3",
+        "P4"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/index.ts",
+      "implementation": "Use a single awaited shutdown sequence with server close, scheduler/interval stop, worker drain, Redis close, subprocess shutdown, and a bounded deadline.",
+      "acceptance": "SIGTERM/SIGINT stop admission, stop schedulers/timers, drain or checkpoint workers, close HTTP/Redis and child processes, then exit. A second signal and deadline are handled deterministically. Restart preserves pending/reconciling work.",
+      "evidence": [
+        {
+          "record": "RENDER_RECOVERY_AND_SHUTDOWN_PROGRESS.md",
+          "scope": "fourth increment; 104 files/363 local tests, types/build/routes and changed-source lint; real service/process/browser acceptance remains open"
+        }
+      ],
+      "progress": "Single signal coordinator stops ingress/producers, pauses and drains workers plus async listener writes, drains the video engine, and closes infrastructure under a shared deadline. Local signal/HTTP/MCP/drain tests pass. Real process/Redis/media-engine shutdown and forced-deadline cleanup/restart rehearsal remain."
+    },
+    {
+      "id": "A15",
+      "priority": "P1",
+      "title": "Registration accepts an enterprise plan selected by an anonymous caller",
+      "start_phase": "P1",
+      "closure_phase": "P1",
+      "depends_on_phases": [
+        "P0"
+      ],
+      "status": "in_progress",
+      "primary_file": "src/services/AuthEngine.ts",
+      "implementation": "Assign server-side signup entitlement, separate billing/admin changes, remove hash fields explicitly, and define token revocation/rotation semantics.",
+      "acceptance": "Anonymous callers cannot choose paid/admin entitlements; registration/verification responses omit key hashes and secrets. Server-side roles control plan/bootstrap changes; suspended users and revoked sessions lose access under the defined token-version policy.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Server-selected free signup/bootstrap, safe key responses, token-version revocation/suspension and admin-only quota increases implemented. Full membership/roles and billing authority remain."
+    },
+    {
+      "id": "A16",
+      "priority": "P1",
+      "title": "Browser caches are shared across authentication sessions",
+      "start_phase": "P7",
+      "closure_phase": "P7",
+      "depends_on_phases": [
+        "P2",
+        "P3",
+        "P4",
+        "P5"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/ui/services/apiClient.ts",
+      "implementation": "Namespace cache/in-flight work by session and parameters; clear/abort on auth change. Resolve URLs and compare parsed origins before adding credentials in both helpers.",
+      "acceptance": "Switch A\u2192B without reload never returns A cached or in-flight responses. Cache identity includes session and normalized query parameters; logout aborts or discards old requests. Both HTTP helpers attach tokens only to the explicitly configured API origin.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Session-scoped/query-sensitive cache, late-response rejection and parsed-origin credential checks implemented; cross-user Axios regressions pass. Browser and authenticatedFetch integration acceptance remains."
+    },
+    {
+      "id": "A17",
+      "priority": "P1",
+      "title": "Video playback/download omit the bearer credential",
+      "start_phase": "P7",
+      "closure_phase": "P7",
+      "depends_on_phases": [
+        "P2",
+        "P3",
+        "P4",
+        "P5"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/ui/pages/VideoDetails.tsx",
+      "implementation": "Use an authenticated blob/object URL or a short-lived tenant-scoped video URL; support range streaming and revoke object URLs on cleanup.",
+      "acceptance": "A real browser plays, seeks and downloads owned short/long videos, including large files and token expiry. Cross-owner/expired links fail; streaming supports ranges and controlled signed access. Any object URLs are cleaned up.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Short-lived video links, request-range streaming, fresh download authorization and playback renewal implemented. Actual browser media/large-file acceptance remains."
+    },
+    {
+      "id": "A18",
+      "priority": "P1",
+      "title": "Browser tenant actions call a Node-only crypto module",
+      "start_phase": "P7",
+      "closure_phase": "P7",
+      "depends_on_phases": [
+        "P2",
+        "P3",
+        "P4",
+        "P5"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/ui/pages/TenantConsole.tsx",
+      "implementation": "Use globalThis.crypto.randomUUID and exercise tenant mutation interactions in a browser test.",
+      "acceptance": "Production browser tenant interactions run without Node crypto imports or console errors; UUID generation uses a browser-supported API and server-side audit writes remain authoritative.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Node crypto removed from TenantConsole and the additionally discovered uiStore call site. Production build no longer externalizes Node crypto. Browser interaction acceptance remains."
+    },
+    {
+      "id": "A19",
+      "priority": "P1",
+      "title": "Passing gates do not validate the full workflow",
+      "start_phase": "P0",
+      "closure_phase": "P9",
+      "depends_on_phases": [],
+      "status": "in_progress",
+      "primary_file": "src/integration/pipeline.e2e.test.ts",
+      "implementation": "Add meaningful two-tenant workflow tests with mocked providers plus controlled integration drills. Use AST route discovery and actual request tests; classify doc-parser errors correctly.",
+      "acceptance": "The placeholder pipeline test is replaced with real API/store/queue flow assertions. AST route inventory resolves multiline registrations and actual mounts; request tests verify guard/status/body contracts. Browser tests execute effects and mutation flows for all 46 routed pages.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "WORKFLOW_VERIFICATION_PROGRESS.md",
+          "scope": "composed isolated API/store/worker scenarios and static AST/build consistency; no browser/live-service certification"
+        }
+      ],
+      "progress": "Placeholder pipeline test replaced with three two-workspace composed render-registration/connector/approval/queue/worker/receipt/reconciliation workflows using real routes/stores and mocked external boundaries. AST route/build gate resolves 349 registrations across 46 router files, actual mounts, deferred/default-import/multiple-class cases, and rejects parser false positives. All-browser journeys, runtime route-order acceptance and controlled live-service integration remain open."
+    },
+    {
+      "id": "A20",
+      "priority": "P1",
+      "title": "Lint and dependency auditing are nonblocking in main CI",
+      "start_phase": "P0",
+      "closure_phase": "P9",
+      "depends_on_phases": [],
+      "status": "in_progress",
+      "primary_file": ".github/workflows/ci.yml",
+      "implementation": "Repair baseline and enforce appropriate gates; build immutable artifacts with build dependencies and deploy the tested revision. Keep separate advisory scans visibly advisory.",
+      "acceptance": "Repository lint is clean under correctly scoped UI/Remotion rules; no blanket failure swallowing remains. CI runs backend/UI/script checks, tests, build and relevant security/contract gates. Deploy consumes the tested immutable revision with correct dependencies and branch/tag handling.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Remotion-only lint rules scoped away from server/SPA; changed source has no lint errors. Repository lint still fails at 71 errors; CI enforcement/deployment repair remains."
+    },
+    {
+      "id": "A21",
+      "priority": "P1",
+      "title": "Queue connectivity is reported as worker liveness",
+      "start_phase": "P5",
+      "closure_phase": "P5",
+      "depends_on_phases": [
+        "P3",
+        "P4"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/server/routers/health.ts",
+      "implementation": "Measure registered worker heartbeats and dependency deadlines; separate liveness/readiness; scope tenant metrics and protect global operational details.",
+      "acceptance": "Health shows only registered heartbeat-reporting workers; stopped/nonexistent workers are not online. Liveness and readiness differ during initialization/dependency failure. Tenant dashboards exclude other tenants; admin metrics and dependency timeouts are tested.",
+      "evidence": [
+        {
+          "date": "2026-10-28",
+          "record": "WORKER_HEALTH_PROGRESS.md",
+          "scope": "process-local registry, mocked dependencies and temporary-store/Express/UI regressions; no cluster/live-service certification"
+        }
+      ],
+      "progress": "Actual render/publish/dead-letter registrations and expiring ready/running Redis observations replace invented five-worker online status. Separate public live/ready endpoints, shared bounded Redis probes, bounded queue/dashboard reads, admin-only global metrics/counts, tenant-scoped dashboard/state records and compatible UI/scheduler paths are locally tested. Controlled Redis/process/browser acceptance, distributed leases and underlying-operation cancellation remain open."
+    },
+    {
+      "id": "A22",
+      "priority": "P1",
+      "title": "Persistent scheduler reports success without durable generated output",
+      "start_phase": "P4",
+      "closure_phase": "P4",
+      "depends_on_phases": [
+        "P3"
+      ],
+      "status": "in_progress",
+      "primary_file": "src/server/routers/schedule.ts",
+      "implementation": "Use a claimed durable execution record, persist outputs and owner, record success only after actual completion, and resolve each requested destination/language explicitly.",
+      "acceptance": "Every schedule occurrence has a claimed persisted execution, records output artifact/content IDs and marks success only on completed work. Not-ready engines defer without false freshness/success. Every requested platform/category/language is handled or rejected explicitly; one jittered due time is persisted.",
+      "evidence": [
+        {
+          "date": "2026-10-28",
+          "record": "SCHEDULE_OUTPUT_PROGRESS.md",
+          "scope": "local SVG persistence, artifact preservation and guarded downloads; video/durable/browser acceptance remains open"
+        },
+        {
+          "date": "2026-10-29",
+          "record": "SCHEDULE_CLAIM_PROGRESS.md",
+          "scope": "temporary same-process/restart schedule claims and migration mapping gate; distributed/durable acceptance remains open"
+        },
+        {
+          "date": "2026-10-29",
+          "record": "SCHEDULE_ASSET_RECONCILIATION_PROGRESS.md",
+          "scope": "temporary checkpoint confirmation, authorization, tamper and idempotence regressions; 715 tests plus types/build/routes; deployed/browser/durable acceptance remains open"
+        },
+        {
+          "date": "2026-10-29",
+          "record": "SCHEDULE_ASSET_REVIEW_UI_PROGRESS.md",
+          "scope": "static React visibility and mocked authenticated confirmation regressions; 723 tests plus backend/UI types, build, routes and changed-file lint; browser/deployed acceptance remains open"
+        },
+        {
+          "date": "2026-10-29",
+          "record": "SCHEDULE_MUTATION_SAFETY_PROGRESS.md",
+          "scope": "temporary independent-store and API mutation guards, stale configuration and no-enqueue race regressions; 727 tests, backend/UI types, build, routes and changed-file lint; deployed/browser/durable acceptance remains open"
+        },
+        {
+          "date": "2026-11-10",
+          "record": "SCHEDULE_VIDEO_COMPLETION_PROGRESS.md",
+          "scope": "temporary enqueue/verified render split, restarted runner, ownership/integrity, concurrent commit and producer identity regressions; file mode only; 764 tests, backend/UI types, build, route checks and changed-file lint passed"
+        }
+      ],
+      "progress": "New file-mode occurrences claim and snapshot configuration; unresolved edits/deletion are blocked. SVG outputs persist with owned manifests and can be confirmed with operator evidence. Video enqueue checkpoints the ID without advancing; the minute runner verifies owned MP4, content version and required SVGs before advancing once per bound execution in one process. Multi-scope runs fail explicitly. Legacy enqueue receipts, failed/unbound outcomes, freshness timing, cross-process transactions and browser/deployed acceptance remain open."
+    },
+    {
+      "id": "A23",
+      "priority": "P2",
+      "title": "Several AI and enhancement features are advisory or disconnected",
+      "start_phase": "P8",
+      "closure_phase": "P8",
+      "depends_on_phases": [
+        "P6",
+        "P7"
+      ],
+      "status": "planned",
+      "primary_file": "src/services/PipelineOrchestrator.ts",
+      "implementation": "Label heuristics and directives accurately; trace each selected control to a real producer/result. Integrate intended enhancements with input/output tests and measured evaluations.",
+      "acceptance": "Every advertised engine has a declared input/output contract, active runtime caller and meaningful output test or an explicitly advisory product definition. Required enhancement services are wired and feature flags affect real execution. Render-affecting controls are verified in exported media; scores identify heuristic/experimental status and evaluation evidence.",
+      "evidence": []
+    },
+    {
+      "id": "A24",
+      "priority": "P2",
+      "title": "Provider result and failure contracts are inconsistent",
+      "start_phase": "P4",
+      "closure_phase": "P9",
+      "depends_on_phases": [
+        "P3"
+      ],
+      "status": "in_progress",
+      "primary_file": "src/publishers/PlatformPublisher.ts",
+      "implementation": "Normalize adapter results and failure taxonomy, require media for a video publish, persist refreshed credentials, and test transient validation errors separately from invalid auth.",
+      "acceptance": "All adapters return one canonical external ID, media outcome, scheduling and error contract. Video upload failure cannot become text-only success. Refresh/revocation is persisted safely; transient credential-check failures retry appropriately. Platform-specific integration tests pass and live verification stays a separate recorded gate.",
+      "evidence": [
+        {
+          "date": "2026-10-28",
+          "record": "PUBLICATION_RECOVERY_PROGRESS.md",
+          "scope": "local temporary stores, mocked adapters/queues; remaining acceptance gaps recorded"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "PROVIDER_CONTRACT_PROGRESS.md",
+          "scope": "mocked X/LinkedIn/YouTube boundaries; live endpoint/auth/processing validation and remaining adapters stay open"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "GRAPH_PROVIDER_PROGRESS.md",
+          "scope": "mocked Graph boundaries/factory tests; owned public artifact delivery, refreshed-token persistence and live platform compatibility remain open"
+        }
+      ],
+      "progress": "Telegram requires canonical message IDs, distinguishes proven rejection from unknown outcome, propagates transient credential validation errors and rejects unsupported native scheduling. Other adapters remain conservative on ambiguous failure; complete adapter normalization, credential refresh persistence and live verification remain open. X now requires video media rather than falling back to text-only success. X/LinkedIn/YouTube require canonical IDs, preserve unknown post outcomes and separate transient credential verification. X/LinkedIn redact error logs and reject unsupported native scheduling. Remaining adapters, persisted refreshed credentials and live platform acceptance remain open. Facebook transfer/finish progress and real IDs are checked; Instagram rejects local media URLs, bounds polling, avoids fake permalinks and rejects native scheduling. Both separate transient auth checks and remove constructor global credentials; encoded-secret redaction strengthened. Instagram owned public delivery, token persistence and live processing/permission checks remain open."
+    },
+    {
+      "id": "A25",
+      "priority": "P2",
+      "title": "Durable-storage readiness gates and SQL ownership constraints need completion",
+      "start_phase": "P6",
+      "closure_phase": "P6",
+      "depends_on_phases": [
+        "P2",
+        "P5"
+      ],
+      "status": "in_progress",
+      "primary_file": "scripts/migrations/readiness.mjs",
+      "implementation": "Make every gate explicit and consistent; test false-string approvals and enabled-primary flags. Add composite ownership constraints and complete schema/model translation before migration.",
+      "acceptance": "Readiness blocks primary-read flags and string false approvals. SQL enforces workspace/connector/destination ownership with composite constraints and covers events/outbox/artifacts/executions/usage/approvals. File-record mappings and transaction boundaries are tested against the actual schema.",
+      "evidence": [
+        {
+          "date": "2026-10-29",
+          "record": "SCHEDULE_CLAIM_PROGRESS.md",
+          "scope": "temporary same-process/restart schedule claims and migration mapping gate; distributed/durable acceptance remains open"
+        }
+      ],
+      "progress": "Shared inspection and conservative mapping gates now include schedule claims/receipts. SQL ownership constraints, complete mappings and durable primary authority remain unimplemented."
+    },
+    {
+      "id": "A26",
+      "priority": "P2",
+      "title": "Local backup scope does not provide host-loss or queue recovery",
+      "start_phase": "P6",
+      "closure_phase": "P6",
+      "depends_on_phases": [
+        "P2",
+        "P5"
+      ],
+      "status": "in_progress",
+      "primary_file": "scripts/backup.mjs",
+      "implementation": "Define and rehearse recovery for application state, queues, media, and held secrets; replicate off-host and verify consistency. Restrict Redis exposure. Validate archive/manifest paths before extraction/copy when accepting untrusted archives.",
+      "acceptance": "Encrypted off-host backup and clean-room restore recover metadata, artifacts and queued/executing/reconciling jobs using separately held keys. Traversal/symlink/manifest tampering is rejected before writes; corrupt/incomplete archives fail. Measured recovery meets the agreed RPO/RTO and Redis is private/authenticated.",
+      "evidence": [
+        {
+          "date": "2026-10-28",
+          "record": "MIGRATION_REVIEW_HELPERS_PROGRESS.md",
+          "scope": "read-only planner/decision and evidence validation; production recovery and durable authority remain open"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "METADATA_BACKUP_PROGRESS.md",
+          "scope": "temporary metadata backup integrity and failure tests; encryption/off-host/real restore acceptance remain open"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "FULL_BACKUP_RECOVERY_PROGRESS.md",
+          "scope": "isolated full JSON/media encrypted/plaintext recovery and failure tests; production recovery remains open"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "PAX_COMPATIBILITY_PROGRESS.md",
+          "scope": "temporary PAX/USTAR compatibility, adversarial metadata and long-name round trips; other legacy formats and deployed recovery remain open"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "BACKUP_AUTHENTICATION_PROGRESS.md",
+          "scope": "temporary signed/unsigned/encrypted full-archive and key-policy tests; historical backup evidence linkage corrected from A14; production acceptance remains open"
+        }
+      ],
+      "progress": "Metadata/full archive paths and inventories are guarded; temporary encrypted/plaintext recovery, bounded PAX and keyed archive authentication are tested. Off-host replication, deployed queue/database recovery, historical key availability, consistent snapshots and measured RPO/RTO remain open."
+    },
+    {
+      "id": "A27",
+      "priority": "P2",
+      "title": "Documentation gives contradictory current-state claims",
+      "start_phase": "P0",
+      "closure_phase": "P9",
+      "depends_on_phases": [],
+      "status": "in_progress",
+      "primary_file": "docs/REALITY_GAP_REGISTER.md",
+      "implementation": "Keep historical snapshots dated and immutable, designate one current capability register, and derive inventories from code. Distinguish implemented, connected, locally tested, live tested, and durable.",
+      "acceptance": "One current capability/status register agrees with generated source inventories, configuration and executed evidence. Historical audits remain dated. All 56 original documents are reviewed, links resolve, setup/runbook commands are rehearsed in isolation, and current completion claims require evidence.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Current progress/evidence recorded separately from immutable historical audit. Generated current indexes and all original documents still need reconciliation."
+    },
+    {
+      "id": "A28",
+      "priority": "P2",
+      "title": "Team, subscription and integration controls are log actions rather than complete services",
+      "start_phase": "P8",
+      "closure_phase": "P8",
+      "depends_on_phases": [
+        "P6",
+        "P7"
+      ],
+      "status": "planned",
+      "primary_file": "src/ui/hooks/useTenantMutation.ts",
+      "implementation": "Either implement the service workflows and role checks or label these actions as operational notes; use Connectors for real provider lifecycle and a durable server audit ledger.",
+      "acceptance": "Real invitations/member revocation and role enforcement persist across sessions; billing/entitlements are server-authoritative and payment-provider changes are verified events; connector UI reflects actual connect/refresh/revoke state. Actions are recorded server-side with actor/owner and no UI-only success claims.",
+      "evidence": []
+    },
+    {
+      "id": "A29",
+      "priority": "P1",
+      "title": "Translation cache collides on the first 50 characters",
+      "start_phase": "P2",
+      "closure_phase": "P2",
+      "depends_on_phases": [
+        "P1"
+      ],
+      "status": "verified",
+      "primary_file": "src/services/TranslationEngine.ts",
+      "implementation": "Key by full-content digest and tenant/provider/model identity; distinguish unavailable or partial translation from a successfully translated result. Test different suffixes with the same prefix.",
+      "acceptance": "Scripts sharing a 50-character prefix never share cached suffixes; cache isolation covers tenant, full input, source/target language and provider configuration. Translation fallback is explicitly degraded/unavailable rather than fake translated text; unsupported languages and oversized batches are validated.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Full-input+tenant+provider cache identity, bounded validation and truthful upstream failure implemented; equal-prefix and cross-tenant tests pass."
+    },
+    {
+      "id": "A30",
+      "priority": "P1",
+      "title": "Custom RSS validation makes unrestricted server-side requests",
+      "start_phase": "P2",
+      "closure_phase": "P2",
+      "depends_on_phases": [
+        "P1"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/news-fetcher/RssFetcher.ts",
+      "implementation": "Apply a shared server-side URL policy to initial feed validation, subsequent reads and redirects; bound time and response size and test internal-address rejection without network dispatch.",
+      "acceptance": "Feed validation and subsequent fetches enforce the shared SSRF/DNS/redirect policy, per-fetch timeout/size limits and tenant-owned source access. Local/private URLs are rejected before any outbound request; cancellation and malformed/oversized feed handling are tested.",
+      "evidence": [
+        {
+          "record": "OUTBOUND_SECURITY_PROGRESS.md",
+          "scope": "local regression tests and production checks; no live dispatch or browser acceptance"
+        },
+        {
+          "record": "SCHEDULER_AND_WEBHOOK_PROGRESS.md",
+          "scope": "third increment: isolated migration, deadline/size failure tests and webhook HTTP/UI response contracts"
+        }
+      ],
+      "progress": "Pinned outbound implementation extended with typed HTTP validation, UI failure handling, legacy encryption/malformed-store rehearsal and response deadline/size regression tests. Browser/provider acceptance, cancellation integration and operational key migration tooling remain open."
+    },
+    {
+      "id": "A31",
+      "priority": "P1",
+      "title": "Schedule recurrence ignores the configured cron expression",
+      "start_phase": "P4",
+      "closure_phase": "P4",
+      "depends_on_phases": [
+        "P3"
+      ],
+      "status": "implemented_unverified",
+      "primary_file": "src/db/ScheduleStore.ts",
+      "implementation": "Calculate next due time using the configured cron and timezone, define one-shot semantics, and test daily/weekly/DST/failure-retry recurrence separately.",
+      "acceptance": "Daily, weekly and timezone-specific schedules calculate correct next occurrences rather than adding one hour. One-shot, retry, missed occurrence and DST behavior are explicit and tested with a frozen clock.",
+      "evidence": [
+        {
+          "record": "SCHEDULER_AND_WEBHOOK_PROGRESS.md",
+          "scope": "frozen-clock recurrence/store/runner tests, backend and UI typechecks, 325-test production verification, changed-source lint"
+        }
+      ],
+      "progress": "Cron/timezone calculations and nextRun-based runner integrated; one-shot, missed/failed execution and persisted timing variation defined and tested. Browser acceptance, durable execution identity, multi-process claims and output/release integration remain open."
+    },
+    {
+      "id": "C01",
+      "priority": "completion",
+      "title": "Finish the semantic review backlog",
+      "start_phase": "P0",
+      "closure_phase": "P0",
+      "depends_on_phases": [],
+      "status": "in_progress",
+      "implementation": "Account for every original file/function and classify code as active, disconnected, obsolete or third-party. Read the complete bodies of inventory-only/partial application source, validate remaining document instructions and turn newly discovered defects into tracked work. Maintain the original snapshot and add reviewed revision/evidence instead of claiming inventory equals review.",
+      "acceptance": "All first-party source and original documents have a recorded substantive review; new findings are triaged and mapped to a phase. Binary/example/third-party exclusions are explicit.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        }
+      ],
+      "progress": "Reviewed security/auth/core media/release/browser-cache and residual-engine paths for this increment; original complete semantic-review backlog is still open."
+    },
+    {
+      "id": "C02",
+      "priority": "completion",
+      "title": "Unify creation, render, library and release contracts",
+      "start_phase": "P3",
+      "closure_phase": "P3",
+      "depends_on_phases": [
+        "P1"
+      ],
+      "status": "in_progress",
+      "implementation": "Route REST/MCP/bulk/source automation/persistent schedules through shared application services. Create stable content-version, render-execution and artifact relations. Make the two video-library views resolve the same owned records rather than separately authoritative lists.",
+      "acceptance": "One created video is consistently visible, reviewable, playable, versioned and selectable for release; no path or stale-library workaround is necessary.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        },
+        {
+          "record": "RENDER_RECOVERY_AND_SHUTDOWN_PROGRESS.md",
+          "scope": "fourth increment; 104 files/363 local tests, types/build/routes and changed-source lint; real service/process/browser acceptance remains open"
+        }
+      ],
+      "progress": "Queued renders persist execution/video/artifact/content-version links; re-delivery reuses bound media and projection failures can repair from completion. Scheduler reads owned persisted render jobs and links confirmed videos. Persistent schedule/source/bulk creation unification and browser acceptance remain."
+    },
+    {
+      "id": "C03",
+      "priority": "completion",
+      "title": "Complete durable repositories and transactional outbox delivery",
+      "start_phase": "P6",
+      "closure_phase": "P6",
+      "depends_on_phases": [
+        "P2",
+        "P5"
+      ],
+      "status": "planned",
+      "implementation": "Implement repository ports and PostgreSQL adapters for all authoritative domains; write event+outbox in business transactions, run a real outbox dispatcher, and claim work with leases. Keep file mode explicitly single-instance while supported.",
+      "acceptance": "Multi-process writers/readers and outbox restart/retry tests pass with no lost events; owner constraints hold at database and API boundaries.",
+      "evidence": [
+        {
+          "date": "2026-10-29",
+          "record": "SCHEDULE_CLAIM_PROGRESS.md",
+          "scope": "temporary same-process/restart schedule claims and migration mapping gate; distributed/durable acceptance remains open"
+        },
+        {
+          "date": "2026-10-31",
+          "record": "VIDEO_METADATA_SAFETY_PROGRESS.md",
+          "scope": "temporary corruption/concurrency/identity/approval-edit persistence regressions; final combined 755 tests plus types/build/routes and changed-file lint; file-mode interim only, durable/browser/deployed acceptance remains open"
+        },
+        {
+          "date": "2026-10-31",
+          "record": "CONTENT_VERSION_SAFETY_PROGRESS.md",
+          "scope": "temporary corruption/concurrency/identity/approval-edit persistence regressions; final combined 755 tests plus types/build/routes and changed-file lint; file-mode interim only, durable/browser/deployed acceptance remains open"
+        }
+      ],
+      "progress": " Video metadata and content versions now preserve corrupt files, use private atomic replacement and restrict ownership/identity mutation; invalid release records block content edits. This remains interim file-mode work, not durable repository completion."
+    },
+    {
+      "id": "C04",
+      "priority": "completion",
+      "title": "Complete the artifact lifecycle",
+      "start_phase": "P6",
+      "closure_phase": "P6",
+      "depends_on_phases": [
+        "P2",
+        "P5"
+      ],
+      "status": "in_progress",
+      "implementation": "Register every render/image/filter/thumbnail/repurpose/export producer, upload objects, verify checksum/type/size, return owner-scoped signed URLs, and implement reference-aware retention/quarantine/deletion.",
+      "acceptance": "An isolated worker can produce media and another worker/browser can retrieve it without depending on the first worker filesystem; deletion cannot remove referenced/foreign artifacts.",
+      "evidence": [
+        {
+          "date": "2026-10-25",
+          "record": "IMPLEMENTATION_PROGRESS.md",
+          "scope": "local source and isolated regression evidence; see acceptance gaps"
+        },
+        {
+          "record": "RENDER_RECOVERY_AND_SHUTDOWN_PROGRESS.md",
+          "scope": "fourth increment; 104 files/363 local tests, types/build/routes and changed-source lint; real service/process/browser acceptance remains open"
+        },
+        {
+          "date": "2026-10-28",
+          "record": "SCHEDULE_OUTPUT_PROGRESS.md",
+          "scope": "local SVG persistence, artifact preservation and guarded downloads; video/durable/browser acceptance remains open"
+        },
+        {
+          "date": "2026-10-29",
+          "record": "SCHEDULE_ASSET_RECONCILIATION_PROGRESS.md",
+          "scope": "temporary checkpoint confirmation, authorization, tamper and idempotence regressions; 715 tests plus types/build/routes; deployed/browser/durable acceptance remains open"
+        },
+        {
+          "date": "2026-10-29",
+          "record": "SCHEDULE_ASSET_REVIEW_UI_PROGRESS.md",
+          "scope": "static React visibility and mocked authenticated confirmation regressions; 723 tests plus backend/UI types, build, routes and changed-file lint; browser/deployed acceptance remains open"
+        },
+        {
+          "date": "2026-10-31",
+          "record": "VIDEO_METADATA_SAFETY_PROGRESS.md",
+          "scope": "temporary corruption/concurrency/identity/approval-edit persistence regressions; final combined 755 tests plus types/build/routes and changed-file lint; file-mode interim only, durable/browser/deployed acceptance remains open"
+        },
+        {
+          "date": "2026-10-31",
+          "record": "CONTENT_VERSION_SAFETY_PROGRESS.md",
+          "scope": "temporary corruption/concurrency/identity/approval-edit persistence regressions; final combined 755 tests plus types/build/routes and changed-file lint; file-mode interim only, durable/browser/deployed acceptance remains open"
+        },
+        {
+          "date": "2026-11-10",
+          "record": "SCHEDULE_VIDEO_COMPLETION_PROGRESS.md",
+          "scope": "temporary enqueue/verified render split, restarted runner, ownership/integrity, concurrent commit and producer identity regressions; file mode only; 764 tests, backend/UI types, build, route checks and changed-file lint passed"
+        }
+      ],
+      "progress": "Render completion verifies owned active artifacts, ready producer content versions, storage containment and checksums before exposing linked outputs. Full storage/deletion/retention/migration lifecycle remains open. Complete checkpointed SVG schedule assets can now be positively reconciled with operator evidence and verified ownership/bytes; partial, legacy, unbound and video outcomes remain held. Scheduler cards now offer pending downloads and explicit inspection/evidence confirmation for complete held SVG asset runs; browser interaction acceptance remains open. Video metadata and content versions now preserve corrupt files, use private atomic replacement and restrict ownership/identity mutation; invalid release records block content edits. This remains interim file-mode work, not durable repository completion. Scheduled video completion now requires an active owned MP4, a ready renderer-created version, matching bytes and verified supplementary SVGs. Workspace content-version routes reserve renderer provenance."
+    },
+    {
+      "id": "C05",
+      "priority": "completion",
+      "title": "Execute all 46 browser journeys",
+      "start_phase": "P7",
+      "closure_phase": "P7",
+      "depends_on_phases": [
+        "P2",
+        "P3",
+        "P4",
+        "P5"
+      ],
+      "status": "planned",
+      "implementation": "Use the route acceptance matrix, test actual interactions, auth expiry, session switch, validation, progress, retry and permission states. Verify output downloads and media preview rather than only static markup.",
+      "acceptance": "Every routed page has dated evidence for its meaningful interactions; failures and unsupported provider states are accurately represented.",
+      "evidence": []
+    },
+    {
+      "id": "C06",
+      "priority": "completion",
+      "title": "Wire all seven enhancement services",
+      "start_phase": "P8",
+      "closure_phase": "P8",
+      "depends_on_phases": [
+        "P6",
+        "P7"
+      ],
+      "status": "planned",
+      "implementation": "Integrate memory, feedback, predictive scoring, asset fallback, metadata generation, beat sync and agent loop with bounded retries, owner scope, durable provenance, feature flags and cost budgets. Define one metadata service authority instead of divergent generator behavior.",
+      "acceptance": "Each toggle changes a measured execution path with an observable output/provenance record; disabled mode preserves the documented baseline; failed engines produce a truthful degraded result.",
+      "evidence": []
+    },
+    {
+      "id": "C07",
+      "priority": "completion",
+      "title": "Complete engine/media quality and measurement",
+      "start_phase": "P8",
+      "closure_phase": "P8",
+      "depends_on_phases": [
+        "P6",
+        "P7"
+      ],
+      "status": "planned",
+      "implementation": "Connect intended editing/audio/visual/watermark/thumbnail effects to rendering; preserve pure advisory engines as accurately labelled tools. Verify captions, multi-language TTS, stock fallback, short/long portrait/landscape and category overlays. Add real analytics collection, A/B exposure/assignment, quota reservations and a usage/cost ledger.",
+      "acceptance": "Representative rendered outputs meet documented media criteria; metrics trace to real events; quota limits apply under concurrent jobs and costs reconcile per tenant/provider/job.",
+      "evidence": []
+    },
+    {
+      "id": "C08",
+      "priority": "completion",
+      "title": "Finish team, billing and connector product workflows",
+      "start_phase": "P8",
+      "closure_phase": "P8",
+      "depends_on_phases": [
+        "P6",
+        "P7"
+      ],
+      "status": "planned",
+      "implementation": "Implement member identities/invitations/roles, server-side audit, subscription lifecycle and provider-neutral billing adapter; finish per-provider account/destination verification, token refresh/revoke and encrypted credential handling. Select the live payment provider before payment activation.",
+      "acceptance": "All local/mock contracts pass; each live-enabled integration has separate credential-backed acceptance. Unsupported/live-unconfigured integrations stay visibly pending and do not count as complete.",
+      "evidence": []
+    },
+    {
+      "id": "C09",
+      "priority": "completion",
+      "title": "Rehearse production operations and load",
+      "start_phase": "P9",
+      "closure_phase": "P9",
+      "depends_on_phases": [
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "status": "planned",
+      "implementation": "Measure queue lag, error/latency rates, resource use and spend; wire alerts, run overload/backpressure/retry tests, restore to clean infrastructure and rehearse release rollback with compatible schema. Define measurable SLO/RPO/RTO targets before claiming success.",
+      "acceptance": "Evidence meets the agreed budgets; old/new versions and rollback mode are compatible, secrets are supplied through managed configuration, and no audit gate is bypassed.",
+      "evidence": []
+    },
+    {
+      "id": "C10",
+      "priority": "completion",
+      "title": "Publish closure evidence and current documentation",
+      "start_phase": "P9",
+      "closure_phase": "P9",
+      "depends_on_phases": [
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "status": "planned",
+      "implementation": "Produce a finding-by-finding closure record, source revision, test/drill artifacts, provider acceptance status and page/function/document coverage. Run a fresh independent validation pass of changed boundaries and reconcile any new findings.",
+      "acceptance": "All A01\u2013A31 and C01\u2013C10 have verified evidence or remain explicitly open; production/full-completion labels are used only when their entire gate passes.",
+      "evidence": []
+    }
+  ]
+}

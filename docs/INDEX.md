@@ -192,6 +192,7 @@
 | `src/services/RepurposeEngine.ts` | engine | Auth-derived owner for generated artifacts. | RepurposeClip, RepurposeEngine, RepurposeOptions |
 | `src/services/ResourceEngine.ts` | engine | - | CpuSnapshot, DiskSnapshot, MemorySnapshot, ResourceEngine, ResourceOptimization, ResourcePrediction, ResourceSnapshot |
 | `src/services/RuleBasedGenerator.ts` | module | - | RuleBasedGenerator |
+| `src/services/ScheduleVideoCompletion.ts` | service | Verifies bound scheduled render evidence and commits completion without enqueueing. | completeScheduledVideo |
 | `src/services/SchedulerService.ts` | service | SchedulerService – Phase 6.1 node-cron job that periodically: 1. Fetches new RSS reports 2. Creates ScriptPlan entries 3 | SchedulerService |
 | `src/services/SeoOptimizerService.ts` | service | - | SeoOptimizerService |
 | `src/services/SeriesBuilderEngine.ts` | engine | - | Episode, Series, SeriesBuilderEngine |
@@ -547,6 +548,8 @@
 | `POST` | `/api/schedule` | scheduleRouter |
 | `DELETE` | `/api/schedule/:id` | scheduleRouter |
 | `GET` | `/api/schedule/:id` | scheduleRouter |
+| `GET` | `/api/schedule/:id/outputs/:artifactId` | scheduleRouter |
+| `POST` | `/api/schedule/:id/confirm-assets` | scheduleRouter |
 | `PATCH` | `/api/schedule/:id` | scheduleRouter |
 | `POST` | `/api/schedule/:id/run` | scheduleRouter |
 | `PATCH` | `/api/schedule/:id/status` | scheduleRouter |

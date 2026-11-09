@@ -1,25 +1,35 @@
+import {
+  TenantEngineScope,
+  tenantEngineAt,
+} from "../../services/TenantEngineScope";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import express from "express";
-import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
+import type { Request as ExpressRequest, Response as ExpressResponse,
+} from "express";
 import { PlatformPsychologyEngine } from "../../services/PlatformPsychologyEngine";
 import { ContentBucketEngine } from "../../services/ContentBucketEngine";
 import { SeriesBuilderEngine } from "../../services/SeriesBuilderEngine";
 import { CommentCtaEngine } from "../../services/CommentCtaEngine";
 import { Config } from "../../config";
-import { getAuthenticatedTenantId, requireAuth } from "../auth";
+import { getAuthenticatedTenantId, requireAuth,
+  requireWorkspace,
+} from "../auth";
 
 export class StrategyRouter {
   public router: express.Router;
   private psychology: PlatformPsychologyEngine;
-  private buckets: ContentBucketEngine;
   private series: SeriesBuilderEngine;
   private cta: CommentCtaEngine;
 
+  private scoped: TenantEngineScope<{ buckets: ContentBucketEngine }>;
+
   constructor(config: Config) {
     this.router = express.Router();
+    this.scoped = new TenantEngineScope(config.dataDirPath, (directory) => ({
+      buckets: tenantEngineAt(directory, ContentBucketEngine),
+    }));
     this.psychology = new PlatformPsychologyEngine();
-    this.buckets = new ContentBucketEngine(config.dataDirPath);
     this.series = new SeriesBuilderEngine(config.dataDirPath);
     this.cta = new CommentCtaEngine();
     this.router.use(express.json());
@@ -27,46 +37,60 @@ export class StrategyRouter {
   }
 
   private setupRoutes() {
-    this.router.use(requireAuth);
+    this.router.use(requireAuth, requireWorkspace);
 
     // Platform psychology
     this.router.get("/platform/:platform", (req: ExpressRequest, res: ExpressResponse) => {
       try {
-        const profile = this.psychology.getProfile(req.params.platform as any);
+        const profile = this.psychology.getProfile(req.params.platform as any,
+          );
         res.json({ status: "ok", data: profile });
       } catch { res.status(404).json({ error: "Platform not found" }); }
-    });
+    },
+    );
 
-    this.router.get("/platforms", (_req: ExpressRequest, res: ExpressResponse) => {
+    this.router.get("/platforms", (req: ExpressRequest, res: ExpressResponse) => {
       res.json({ status: "ok", data: this.psychology.getAllProfiles() });
-    });
+    },
+    );
 
     this.router.post("/platform/optimal", (req: ExpressRequest, res: ExpressResponse) => {
       const result = this.psychology.getOptimalPlatformsForContent(req.body);
       res.json({ status: "ok", data: result });
-    });
+    },
+    );
 
     // Content buckets
-    this.router.get("/buckets", (_req: ExpressRequest, res: ExpressResponse) => {
-      res.json({ status: "ok", data: this.buckets.getStats() });
+    this.router.get("/buckets", (req: ExpressRequest, res: ExpressResponse) => {
+      res.json({ status: "ok", data: this.scoped.forRequest(req).buckets.getStats(),
+      });
     });
 
-    this.router.get("/buckets/next", (_req: ExpressRequest, res: ExpressResponse) => {
-      res.json({ status: "ok", data: { recommended: this.buckets.getNextRecommendedBucket() } });
-    });
+    this.router.get("/buckets/next", (req: ExpressRequest, res: ExpressResponse) => {
+      res.json({ status: "ok", data: { recommended: this.scoped
+              .forRequest(req)
+              .buckets.getNextRecommendedBucket(),
+          },
+        });
+    },
+    );
 
     this.router.post("/buckets/add", (req: ExpressRequest, res: ExpressResponse) => {
       const { videoId, title, category, bucketOverride } = req.body;
       if (!videoId || !title || !category) return res.status(400).json({ error: "videoId, title, category required" });
-      const record = this.buckets.addContent(videoId, title, category, bucketOverride);
+      const record = this.scoped
+          .forRequest(req)
+          .buckets.addContent(videoId, title, category, bucketOverride);
       res.json({ status: "ok", data: record });
-    });
+    },
+    );
 
     // Series builder
     this.router.get("/series", (req: ExpressRequest, res: ExpressResponse) => {
       const tenantId = getAuthenticatedTenantId(req);
       if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
-      res.json({ status: "ok", data: this.series.getAllSeriesForTenant(tenantId) });
+      res.json({ status: "ok", data: this.series.getAllSeriesForTenant(tenantId),
+      });
     });
 
     this.router.post("/series", (req: ExpressRequest, res: ExpressResponse) => {
@@ -86,29 +110,35 @@ export class StrategyRouter {
       const s = this.series.getSeriesForTenant(tenantId, req.params.id);
       if (!s) return res.status(404).json({ error: "Series not found" });
       res.json({ status: "ok", data: s });
-    });
+    },
+    );
 
     this.router.get("/series/:id/next-episode", (req: ExpressRequest, res: ExpressResponse) => {
       const tenantId = getAuthenticatedTenantId(req);
       if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
       const ep = this.series.getNextEpisodeForTenant(tenantId, req.params.id);
       res.json({ status: "ok", data: ep });
-    });
+    },
+    );
 
     this.router.get("/series/:id/cliffhanger/:episode", (req: ExpressRequest, res: ExpressResponse) => {
       const tenantId = getAuthenticatedTenantId(req);
       if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
-      const text = this.series.generateCliffhangerForTenant(tenantId, req.params.id, parseInt(req.params.episode));
+      const text = this.series.generateCliffhangerForTenant(tenantId, req.params.id, parseInt(req.params.episode),
+        );
       res.json({ status: "ok", data: { cliffhanger: text } });
-    });
+    },
+    );
 
     this.router.patch("/series/:id/episode/:ep", (req: ExpressRequest, res: ExpressResponse) => {
       const tenantId = getAuthenticatedTenantId(req);
       if (!tenantId) return res.status(401).json({ error: "Authentication required", code: "AUTH_REQUIRED" });
-      const ok = this.series.updateEpisodeForTenant(tenantId, req.params.id, parseInt(req.params.ep), req.body);
+      const ok = this.series.updateEpisodeForTenant(tenantId, req.params.id, parseInt(req.params.ep), req.body,
+        );
       if (!ok) return res.status(404).json({ error: "Series or episode not found" });
       res.json({ status: "ok" });
-    });
+    },
+    );
 
     this.router.delete("/series/:id", (req: ExpressRequest, res: ExpressResponse) => {
       const tenantId = getAuthenticatedTenantId(req);
@@ -116,7 +146,8 @@ export class StrategyRouter {
       const ok = this.series.deleteSeriesForTenant(tenantId, req.params.id);
       if (!ok) return res.status(404).json({ error: "Series not found" });
       res.json({ status: "ok" });
-    });
+    },
+    );
 
     // Comment CTA
     this.router.get("/cta", (req: ExpressRequest, res: ExpressResponse) => {
@@ -136,6 +167,7 @@ export class StrategyRouter {
       if (!platform || !category) return res.status(400).json({ error: "platform and category required" });
       const ctas = this.cta.generate(platform, category, language || "en");
       res.json({ status: "ok", data: ctas });
-    });
+    },
+    );
   }
 }

@@ -1,11 +1,14 @@
+import { observeWorker } from "./WorkerHealth";
+import { WorkerTaskDrain } from "./WorkerTaskDrain";
 /**
  * RenderWorker – Phase 4.1 / 4.6 / 4.7
  *
  * BullMQ worker that processes render_queue jobs.
  * Concurrency = 1 (one render at a time, memory-safe).
- * Retries up to 2 times on failure, then marks job as skipped.
+ * Re-deliveries reuse a persisted video binding. Uncertain outcomes are held
+ * for reconciliation; transient preflight failures follow the queue budget.
  */
-import { Worker, Job } from "bullmq";
+import { Worker, Job, UnrecoverableError } from "bullmq";
 import { Config } from "../config";
 import { ShortCreator } from "../short-creator/ShortCreator";
 import { RenderJobStore } from "../db/RenderJobStore";
@@ -14,6 +17,8 @@ import { JobEventOutboxStore } from "../db/JobEventOutboxStore";
 import { JobLifecycleEventService } from "../services/JobLifecycleEventService";
 import { logger } from "../logger";
 import { getRedisConnection, QUEUE_NAMES } from "./QueueManager";
+import { RenderExecutionService, RenderReconciliationError } from "../services/RenderExecutionService";
+import { RenderExecutionStore } from "../db/RenderExecutionStore";
 import { isTerminalAttempt } from "./attemptBudget";
 import type { OrientationEnum, SceneInput, RenderConfig } from "../types/shorts";
 
@@ -32,6 +37,8 @@ export interface RenderJobPayload {
 
 export class RenderWorker {
   private worker: Worker;
+  private health: ReturnType<typeof observeWorker>;
+  private eventTasks = new WorkerTaskDrain("render");
   private renderJobStore: RenderJobStore;
   private lifecycleEvents: JobLifecycleEventService;
 
@@ -54,14 +61,25 @@ export class RenderWorker {
       },
     );
 
-    this.worker.on("completed", (job) => {
+    this.health = observeWorker(this.worker, "render", "Render Worker", QUEUE_NAMES.RENDER, Math.max(1, config.renderWorkerConcurrency || 1), () => getRedisConnection(config).status === "ready");
+    this.worker.on("completed", (job) => this.eventTasks.track(async () => {
       this.lifecycleEvents.emit({ tenantId: job.data.tenantId, jobId: job.data.renderJobId, type: "completed", payload: { queueJobId: job.id } });
       logger.info({ jobId: job.id, renderJobId: job.data.renderJobId }, "Render job completed");
-    });
+    }));
 
-    this.worker.on("failed", async (job, err) => {
+    this.worker.on("failed", (job, err) => this.eventTasks.track(async () => {
       if (!job) return;
       const { renderJobId, tenantId } = job.data;
+      if (!tenantId || !(await this.renderJobStore.getForTenant(tenantId, renderJobId))) { logger.warn({ renderJobId }, "Ignoring unowned render failure"); return; }
+      if ((await this.renderJobStore.getForTenant(tenantId, renderJobId))?.status === "reconciling" || new RenderExecutionStore(this.config.dataDirPath).get(tenantId, renderJobId)?.state === "reconciling") {
+        this.lifecycleEvents.emit({ tenantId, jobId: renderJobId, type: "reconciling", attempt: job.attemptsMade ?? 0, payload: { error: "Render outcome requires reconciliation" } });
+        return;
+      }
+      const confirmed = new RenderExecutionStore(this.config.dataDirPath).get(tenantId, renderJobId);
+      if (confirmed?.state === "completed") {
+        await this.renderJobStore.updateStatusForTenant(tenantId, renderJobId, "rendered", { outputPath: confirmed.outputPath, executionId: confirmed.id, videoId: confirmed.videoId, artifactId: confirmed.artifactId, contentVersionId: confirmed.contentVersionId, error: null });
+        return;
+      }
       const maxAttempts = Math.max(1, job.opts.attempts ?? 1);
       this.lifecycleEvents.emit({ tenantId, jobId: renderJobId, type: "failed", attempt: job.attemptsMade ?? 0, payload: { error: err.message } });
 
@@ -69,7 +87,7 @@ export class RenderWorker {
       const record = await this.renderJobStore.getForTenant(tenantId, renderJobId);
       const attempts = record?.attemptCount ?? 0;
 
-      if (isTerminalAttempt(job.attemptsMade ?? 0, job.opts.attempts)) {
+      if (err instanceof UnrecoverableError || isTerminalAttempt(job.attemptsMade ?? 0, job.opts.attempts)) {
         // Phase 4.5: push hard failures into dead-letter queue for visibility
         const { createQueue } = await import("./QueueManager.js");
         const deadletter = createQueue(QUEUE_NAMES.DEADLETTER, this.config);
@@ -100,76 +118,31 @@ export class RenderWorker {
           "Render job failed, will retry",
         );
       }
-    });
+    }));
 
     logger.info("RenderWorker started (concurrency=1)");
   }
 
   private async processJob(job: Job<RenderJobPayload>): Promise<void> {
-    const {
-      tenantId,
-      renderJobId,
-      sceneInput,
-      config,
-      videoType,
-      subtitleLanguage,
-      category,
-      namingKey,
-    } = job.data;
-
-    logger.info(
-      { jobId: job.id, renderJobId, videoType, namingKey },
-      "RenderWorker processing job",
-    );
-
+    const { tenantId, renderJobId } = job.data;
+    if (!tenantId || !(await this.renderJobStore.getForTenant(tenantId, renderJobId))) throw new UnrecoverableError("Owned render job is required");
     this.lifecycleEvents.emit({ tenantId, jobId: renderJobId, type: "processing", attempt: job.attemptsMade ?? 0 });
-    await this.renderJobStore.updateStatusForTenant(tenantId, renderJobId, "processing");
-
-    // Update job progress
     await job.updateProgress(5);
-
-    const renderConfig: RenderConfig = {
-      ...config,
-      category: category || config?.category || "News",
-    };
-
-    const videoId = this.shortCreator.addToQueue(
-      sceneInput,
-      renderConfig,
-      videoType,
-      subtitleLanguage,
-      tenantId,
-    );
-
-    // Poll until the short creator finishes this video
-    await new Promise<void>((resolve, reject) => {
-      const interval = setInterval(async () => {
-        const status = this.shortCreator.status(videoId);
-        if (status === "ready") {
-          clearInterval(interval);
-          resolve();
-        } else if (status === "failed") {
-          clearInterval(interval);
-          reject(new Error(`ShortCreator reported failed for videoId ${videoId}`));
-        }
-      }, 3000);
-    });
-
-    const outputPath = this.shortCreator.getVideoPath(videoId);
-
-    await this.renderJobStore.updateStatusForTenant(tenantId, renderJobId, "ready", {
-      outputPath,
-    });
-
-    await this.renderJobStore.updateStatusForTenant(tenantId, renderJobId, "rendered", {
-      outputPath,
-    });
-
-    await job.updateProgress(100);
-    logger.info({ renderJobId, outputPath }, "Render job finished");
+    try {
+      const execution = await new RenderExecutionService(this.config.dataDirPath, this.shortCreator, this.config.renderJobTimeoutMs).run(job.data);
+      await job.updateProgress(100).catch(() => logger.warn({ renderJobId }, "Render completed but progress telemetry failed"));
+      logger.info({ renderJobId, executionId: execution.id, videoId: execution.videoId, artifactId: execution.artifactId, contentVersionId: execution.contentVersionId }, "Render execution confirmed");
+    } catch (error) {
+      if (error instanceof RenderReconciliationError) throw new UnrecoverableError(error.message);
+      throw error;
+    }
   }
 
+  async pause(): Promise<void> { this.health.pause(); await this.worker.pause(true); }
+
   async close(): Promise<void> {
+    this.health.stop();
     await this.worker.close();
+    await this.eventTasks.drain();
   }
 }

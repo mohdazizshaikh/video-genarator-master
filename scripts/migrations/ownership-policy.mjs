@@ -1,7 +1,6 @@
-// Store ownership policy for migration gates.
-// Stores absent from this set are platform-shared, auth-registry, or relational
-// stores whose ownership is derived through another record and must not be
-// counted as unowned merely because they lack a direct tenantId field.
+// Legacy flat-store policy used by older migration helpers. Absence here does
+// not prove a store is shared. Structured stores, derived publish attempts and
+// directory ownership must be assessed by inspect-data.mjs.
 export const TENANT_SCOPED_STORES = new Set([
   "abVariants.json",
   "ai-learning-events.json",

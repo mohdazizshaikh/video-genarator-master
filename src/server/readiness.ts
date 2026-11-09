@@ -3,6 +3,7 @@
  * heavy video pipeline (ShortCreator) which initializes asynchronously.
  */
 export const readiness = {
+  shuttingDown: false,
   videoEngineReady: false,
   videoEngineError: false,
 };

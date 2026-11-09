@@ -1,3 +1,5 @@
+import { observeWorker } from "./WorkerHealth";
+import { WorkerTaskDrain } from "./WorkerTaskDrain";
 /**
  * DeadLetterWorker – Phase 4.7
  *
@@ -6,6 +8,7 @@
  */
 import { Worker, Job } from "bullmq";
 import { Config } from "../config";
+import { PublishDeliveryService, PublicationReconciliationError } from "../services/PublishDeliveryService";
 import { PublishJobStore } from "../db/PublishJobStore";
 import { RenderJobStore } from "../db/RenderJobStore";
 import { JobEventStore } from "../db/JobEventStore";
@@ -28,6 +31,8 @@ export interface DeadLetterPayload {
 
 export class DeadLetterWorker {
   private worker: Worker;
+  private health: ReturnType<typeof observeWorker>;
+  private eventTasks = new WorkerTaskDrain("dead-letter");
   private publishJobStore: PublishJobStore;
   private renderJobStore: RenderJobStore;
   private alertingService: AlertingService;
@@ -49,12 +54,13 @@ export class DeadLetterWorker {
       },
     );
 
-    this.worker.on("completed", (job) => {
+    this.health = observeWorker(this.worker, "deadletter", "Dead-letter Worker", QUEUE_NAMES.DEADLETTER, 1, () => getRedisConnection(config).status === "ready");
+    this.worker.on("completed", (job) => this.eventTasks.track(async () => {
       logger.warn(
         { deadLetterJobId: job.id, type: job.data.type, originalJobId: job.data.jobId },
         "Dead-letter job processed (permanently failed)",
       );
-    });
+    }));
 
     logger.info("DeadLetterWorker started");
   }
@@ -66,10 +72,25 @@ export class DeadLetterWorker {
       logger.error({ deadLetterJobId: job.id, jobId }, "Rejecting unowned dead-letter job");
       return;
     }
+    if (type === "publish") {
+      const stored = await this.publishJobStore.getJobForTenant(tenantId, jobId);
+      if (!stored) return;
+      const delivery = new PublishDeliveryService(this.config.dataDirPath);
+      const execution = stored.releaseTargetId ? delivery.executions.get(tenantId, stored.releaseTargetId) : undefined;
+      if (execution && ["accepted", "dispatching", "reconciling"].includes(execution.state)) {
+        try { await delivery.recover(execution, jobId); }
+        catch (error) { if (!(error instanceof PublicationReconciliationError)) throw error; }
+        return;
+      }
+      if (stored.status === "published" || stored.status === "reconciling") return;
+    } else if (type === "render") {
+      const stored = await this.renderJobStore.getForTenant(tenantId, jobId);
+      if (!stored || stored.status === "rendered" || stored.status === "reconciling") return;
+    }
     this.lifecycleEvents.emit({ tenantId, jobId, type: "dead_letter", attempt: attemptsMade, payload: { originalQueue: job.data.originalQueue, reason: failReason, code: failureCode } });
 
     logger.error(
-      { type, jobId, failReason, failureCode, attemptsMade, originalJobData },
+      { type, jobId, failReason, failureCode, attemptsMade },
       "DEAD LETTER: Job permanently failed",
     );
 
@@ -88,11 +109,15 @@ export class DeadLetterWorker {
     await this.alertingService.notify({
       summary: `Dead-letter job detected: ${type} ${jobId}`,
       severity: "critical",
-      details: { type, jobId, failReason, failureCode, attemptsMade, originalJobData },
+      details: { type, jobId, failReason, failureCode, attemptsMade },
     });
   }
 
+  async pause(): Promise<void> { this.health.pause(); await this.worker.pause(true); }
+
   async close(): Promise<void> {
+    this.health.stop();
     await this.worker.close();
+    await this.eventTasks.drain();
   }
 }

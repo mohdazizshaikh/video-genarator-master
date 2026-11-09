@@ -1,4 +1,4 @@
-import { authenticatedFetch } from "../services/authenticatedFetch";
+import { webhookRequest } from "../services/webhookApi";
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Button, Card, CardContent, Grid, Chip, IconButton,
@@ -125,9 +125,9 @@ const WebhookDashboard: React.FC = () => {
     setLoading(true);
     try {
       const [wRes, sRes, lRes] = await Promise.all([
-        authenticatedFetch('/api/webhooks').then(r => r.json()),
-        authenticatedFetch('/api/webhooks/stats').then(r => r.json()),
-        authenticatedFetch('/api/webhooks/logs?limit=50').then(r => r.json()),
+        webhookRequest<{ webhooks: WebhookConfig[] }>('/api/webhooks'),
+        webhookRequest<Stats>('/api/webhooks/stats'),
+        webhookRequest<{ logs: NotificationLog[] }>('/api/webhooks/logs?limit=50'),
       ]);
       setWebhooks(wRes.webhooks || []);
       setStats(sRes);
@@ -164,8 +164,7 @@ const WebhookDashboard: React.FC = () => {
     try {
       const url = editingId ? `/api/webhooks/${editingId}` : '/api/webhooks';
       const method = editingId ? 'PUT' : 'POST';
-      const res = await authenticatedFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-      if (!res.ok) throw new Error(await res.text());
+      await webhookRequest(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
       showToast(editingId ? 'Webhook updated!' : 'Webhook created!');
       closeDialog();
       fetchAll();
@@ -179,7 +178,7 @@ const WebhookDashboard: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      await authenticatedFetch(`/api/webhooks/${id}`, { method: 'DELETE' });
+      await webhookRequest(`/api/webhooks/${id}`, { method: 'DELETE' });
       showToast('Webhook deleted');
       fetchAll();
     } catch { showToast('Failed to delete webhook', 'error'); }
@@ -187,7 +186,7 @@ const WebhookDashboard: React.FC = () => {
 
   const handleToggle = async (id: string) => {
     try {
-      await authenticatedFetch(`/api/webhooks/${id}/toggle`, { method: 'PATCH' });
+      await webhookRequest(`/api/webhooks/${id}/toggle`, { method: 'PATCH' });
       fetchAll();
     } catch { showToast('Failed to toggle webhook', 'error'); }
   };
@@ -195,8 +194,7 @@ const WebhookDashboard: React.FC = () => {
   const handleTest = async (id: string) => {
     setTesting(id);
     try {
-      const res = await authenticatedFetch(`/api/webhooks/${id}/test`, { method: 'POST' });
-      const data = await res.json();
+      const data = await webhookRequest<{ results: { success: boolean; error?: string }[] }>(`/api/webhooks/${id}/test`, { method: 'POST' });
       const result = data.results?.[0];
       if (result?.success) showToast('Test notification sent successfully!');
       else showToast(result?.error || 'Test failed', 'error');

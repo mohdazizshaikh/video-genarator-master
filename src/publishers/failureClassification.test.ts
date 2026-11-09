@@ -129,3 +129,10 @@ describe("collectSecretValues", () => {
     expect(collectSecretValues(undefined)).toEqual([]);
   });
 });
+
+it("redacts encoded credential variants and OAuth client-secret query values", () => {
+  const secret = "secret/with+symbols and spaces";
+  const form = new URLSearchParams({ value: secret }).toString().slice(6);
+  expect(sanitizeProviderMessage(`request ${encodeURIComponent(secret)} ${form}`, [secret])).toBe("request [redacted] [redacted]");
+  expect(sanitizeProviderMessage("https://provider.example/token?client_secret=hidden%2Fvalue&client_id=public")).toBe("https://provider.example/token?client_secret=[redacted]&client_id=public");
+});

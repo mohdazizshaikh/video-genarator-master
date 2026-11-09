@@ -104,7 +104,8 @@ const HealthDashboard: React.FC = () => {
             label="Auto-refresh"
             sx={{ mr: 0 }}
           />
-          {data && (
+          {data?.scope === "workspace" && <Alert severity="info" sx={{ mb: 2 }}>Counts and events are limited to this workspace. Worker, database and host details require operations access.</Alert>}
+      {data && (
             <Chip
               label={data.status === "ok" ? "Operational" : "Degraded"}
               color={data.status === "ok" ? "success" : "warning"}
@@ -141,17 +142,18 @@ const HealthDashboard: React.FC = () => {
         />
       )}
 
+      {data?.scope === "workspace" && <Alert severity="info" sx={{ mb: 2 }}>Counts and events are limited to this workspace. Worker, database and host details require operations access.</Alert>}
       {data && (
         <>
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={12} sm={6} md={3}>
-              <MetricBlock label="Uptime" value={formatDuration(data.uptime)} caption={`Version ${data.version}`} />
+              <MetricBlock label="Uptime" value={data.uptime == null ? "N/A" : formatDuration(data.uptime)} caption={data.scope === "workspace" ? "Workspace job telemetry" : `Version ${data.version}`} />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricBlock label="Queue Active" value={data.queue.totals.active} caption={`${data.queue.totals.waiting} waiting`} />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
-              <MetricBlock label="Worker Capacity" value={`${data.workers.currentJobs}/${data.workers.capacity}`} caption={`${data.workers.online}/${data.workers.total} worker groups online`} />
+              <MetricBlock label="Worker Capacity" value={data.workers ? `${data.workers.capacity}` : "Admin only"} caption={data.workers ? `${data.workers.online}/${data.workers.total} observed groups online` : "Global operations are restricted"} />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricBlock label="Errors Last 24h" value={data.errors.last24h} caption={`Updated ${new Date(data.generatedAt).toLocaleString()}`} />
@@ -172,7 +174,7 @@ const HealthDashboard: React.FC = () => {
                         <Paper variant="outlined" sx={{ p: 2, height: "100%" }}>
                           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
                             <Typography variant="subtitle1" fontWeight={700}>{queue.label}</Typography>
-                            <Chip size="small" label={data.queue.redisEnabled ? "Redis" : "Direct"} variant="outlined" />
+                            <Chip size="small" label={data.scope === "workspace" ? "Persisted jobs" : data.queue.redisEnabled ? "Redis" : "Direct"} variant="outlined" />
                           </Stack>
                           <Grid container spacing={1}>
                             {[
@@ -195,7 +197,7 @@ const HealthDashboard: React.FC = () => {
               </Paper>
             </Grid>
 
-            <Grid item xs={12} lg={6}>
+            {data.workers && (<Grid item xs={12} lg={6}>
               <Paper variant="outlined" sx={{ p: 3, height: "100%" }}>
                 <Stack spacing={2}>
                   <Stack direction="row" spacing={1} alignItems="center">
@@ -203,7 +205,7 @@ const HealthDashboard: React.FC = () => {
                     <Typography variant="h6" fontWeight={700}>Worker status</Typography>
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
-                    {data.workers.online} online worker groups, {data.workers.capacity} total capacity, {data.workers.currentJobs} jobs currently in flight.
+                    {data.workers.online} online worker groups, {data.workers.capacity} total capacity, {data.workers.currentJobs ?? "Unknown"} jobs currently in flight.
                   </Typography>
                   <Table size="small">
                     <TableHead>
@@ -230,18 +232,18 @@ const HealthDashboard: React.FC = () => {
                             />
                           </TableCell>
                           <TableCell align="right">{worker.capacity}</TableCell>
-                          <TableCell align="right">{worker.currentJobs}</TableCell>
+                          <TableCell align="right">{worker.currentJobs ?? "Unknown"}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </Stack>
               </Paper>
-            </Grid>
+            </Grid>)}
           </Grid>
 
           <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid item xs={12} lg={4}>
+            {data.database && (<Grid item xs={12} lg={4}>
               <Paper variant="outlined" sx={{ p: 3, height: "100%" }}>
                 <Stack spacing={1.5}>
                   <Stack direction="row" spacing={1} alignItems="center">
@@ -256,14 +258,14 @@ const HealthDashboard: React.FC = () => {
                     sx={{ alignSelf: "flex-start" }}
                   />
                   <Typography variant="body2">Engine: {data.database.engine}</Typography>
-                  <Typography variant="body2">Connections: {data.database.connections.active}/{data.database.connections.max}</Typography>
+                  <Typography variant="body2">Connections: {data.database.connections.active ?? "N/A"}/{data.database.connections.max ?? "N/A"}</Typography>
                   <Typography variant="body2">Latency: {data.database.latencyMs} ms</Typography>
                   <Typography variant="body2">Data size: {formatBytes(data.database.sizeBytes)}</Typography>
                 </Stack>
               </Paper>
-            </Grid>
+            </Grid>)}
 
-            <Grid item xs={12} lg={4}>
+            {data.redis && (<Grid item xs={12} lg={4}>
               <Paper variant="outlined" sx={{ p: 3, height: "100%" }}>
                 <Stack spacing={1.5}>
                   <Stack direction="row" spacing={1} alignItems="center">
@@ -284,9 +286,9 @@ const HealthDashboard: React.FC = () => {
                   <Typography variant="body2">Keys: {data.redis.keyCount}</Typography>
                 </Stack>
               </Paper>
-            </Grid>
+            </Grid>)}
 
-            <Grid item xs={12} lg={4}>
+            {data.system && (<Grid item xs={12} lg={4}>
               <Paper variant="outlined" sx={{ p: 3, height: "100%" }}>
                 <Stack spacing={2}>
                   <Stack direction="row" spacing={1} alignItems="center">
@@ -316,7 +318,7 @@ const HealthDashboard: React.FC = () => {
                   </Typography>
                 </Stack>
               </Paper>
-            </Grid>
+            </Grid>)}
           </Grid>
 
           <Grid container spacing={3} sx={{ mb: 3 }}>

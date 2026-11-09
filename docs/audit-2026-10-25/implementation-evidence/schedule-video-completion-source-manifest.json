@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-10",
+  "files": [
+    {
+      "path": "src/db/ScheduleStore.ts",
+      "sha256": "e99c390af52ba7192be1faf5e39b0d05e48d20dd6b9c50b3b75acfb4ec8bd182"
+    },
+    {
+      "path": "src/services/ScheduleAssetReconciliation.ts",
+      "sha256": "5d79c6278efc32b406b47f77f883fe723972a7ccc54b011ac06b82c252371424"
+    },
+    {
+      "path": "src/services/ScheduleVideoCompletion.ts",
+      "sha256": "c146212eb75ad3cd69dec7619d30eec1eda76ea38bf493691d15770c31cb2d0c"
+    },
+    {
+      "path": "src/server/routers/schedule.ts",
+      "sha256": "bc097bae3a5412f1996d8122b92f53da79ade6726ed9ae0c6416d8083b5f4a79"
+    },
+    {
+      "path": "src/server/routers/contentversions.ts",
+      "sha256": "630a12e979b6546b81b70a924acdddcb7c1152c12d3f49fe7f42986e8e479b07"
+    },
+    {
+      "path": "src/server/routers/scheduleClaims.test.ts",
+      "sha256": "013b20674b89b1385c8934cd26a719eb67742bef46f9ca4aa70664ac98c7c297"
+    },
+    {
+      "path": "src/server/routers/scheduleRecurrence.test.ts",
+      "sha256": "4da8c40aae2b40ea478a54b5466f8161a3fa6ebf72a6676e91af21e6bcbafc54"
+    },
+    {
+      "path": "src/ui/pages/SchedulePersistPage.tsx",
+      "sha256": "553fbd2e890026699b959e20a8fd5c7357b7154d3d6885e448d0f3d1d12f7663"
+    },
+    {
+      "path": "src/publishers/GraphPublishers.test.ts",
+      "sha256": "b0287a67a3366eed41c6490ff7cf3872ad2ed191b4734b4ff27cdca51cd5316e"
+    }
+  ]
+}

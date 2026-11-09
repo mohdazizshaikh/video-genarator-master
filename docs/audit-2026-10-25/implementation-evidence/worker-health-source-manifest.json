@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-28",
+  "files": {
+    "src/workers/WorkerHealth.ts": "3fd63651a1e67898e352fed587078113d4ff9ce28156b530d799f114f36f9fff",
+    "src/workers/WorkerHealth.test.ts": "3a42db7a1f80824e0d54ff0d07896dc5b299f37daea3e59134ddf784c47d30c7",
+    "src/workers/PublishWorker.ts": "2d12684ef1231d4183e646032e23b59213f56f84ce57a5ba4eacaf031b965fae",
+    "src/workers/RenderWorker.ts": "6e8115c492a16dbc90f33f7e319d323215f82ba6842b3743eca7982555c766b4",
+    "src/workers/DeadLetterWorker.ts": "caf643916b6a30f205c6c4f6470c573ada067758b0c5d02ece513d9838e567df",
+    "src/server/routers/health.ts": "fed084f33d5b052337f5395b1eaf9adcf7a3373c6c4cef7fa8617a5f80ca4d5f",
+    "src/server/routers/health.test.ts": "a318d8592a3f8849d14423822f4d111b8e992d1e7fac0725cc7e1ab22a096bc5",
+    "src/server/swagger.ts": "3ca0ca395befae40311f108a9d49628e64489182546a85167b8c6c77f43c4e72",
+    "src/ui/hooks/useHealthDashboard.ts": "2eada413e201f1c5d98bc825766878552463d476b35c328f050f23fa499d5e4c",
+    "src/ui/pages/HealthDashboard.tsx": "77779ca5b681b54fb1bb506361c0096188da39a54afdd742b226c43a5c842fd0",
+    "src/ui/pages/HealthDashboard.test.tsx": "3fe0dc87fbdc5fa4d0dd7815faccd0ee1a816f3adf05603bd358f3fa2e1f4086",
+    "src/ui/services/apiClient.ts": "ef515ee3cd2acbbc2128ee75b8c2a26823fda5b20f1c51e729598dcb10b7a307",
+    "src/ui/services/apiClient.test.ts": "99289be7ecb78fce9a9cdcfa80a6214442eca36a139e451ecfae4b5c0e12e13d",
+    "src/ui/hooks/useScheduledJobs.ts": "227de624022f76aaf36ca6aa9579ebaa8c4cea055c964bd157c2f08c57ec1f42",
+    "src/ui/hooks/useScheduledJobs.test.ts": "83786a791b3e5ad93226012ce13c0d86469b10af1f76d9d5e86547ab893865f2"
+  }
+}

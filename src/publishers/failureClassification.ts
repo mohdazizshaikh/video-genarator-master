@@ -92,13 +92,15 @@ export function sanitizeProviderMessage(message: unknown, secrets: string[] = []
   let safe = String(message ?? "");
   for (const secret of secrets) {
     if (typeof secret === "string" && secret.trim().length >= 8) {
-      safe = safe.split(secret).join("[redacted]");
+      const variants = new Set([secret, new URLSearchParams({ value: secret }).toString().slice(6)]);
+      try { variants.add(encodeURIComponent(secret)); } catch { /* Malformed Unicode must not disable redaction. */ }
+      for (const value of variants) safe = safe.split(value).join("[redacted]");
     }
   }
   // Telegram Bot API URLs embed the token: https://api.telegram.org/bot<id>:<token>/...
   safe = safe.replace(/\/bot\d+:[A-Za-z0-9_-]+/g, "/bot[redacted]");
   // OAuth/Graph-style query credentials.
-  safe = safe.replace(/([?&](?:access_token|refresh_token|id_token|api_key|apikey|key|token)=)[^&\s"'<>]+/gi, "$1[redacted]");
+  safe = safe.replace(/([?&](?:access_token|refresh_token|id_token|client_secret|client_assertion|appsecret_proof|api_key|apikey|key|token)=)[^&\s"'<>]+/gi, "$1[redacted]");
   // Authorization headers.
   safe = safe.replace(/\b(Bearer)\s+[A-Za-z0-9._~+/=-]{8,}/gi, "$1 [redacted]");
   return safe;

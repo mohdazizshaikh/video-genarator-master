@@ -1,0 +1,5 @@
+{
+  "scripts/migrations/inspect-data.mjs": "589a9e835ca23d19a181d91ebf8cf4c25fabfbdb830b4e64de84eeac44213a04",
+  "scripts/migrations/readiness.mjs": "3ae04fa2631ca872d999fb663fbeaa0bf0d96f1c882150459bbb8717e18cdbea",
+  "src/integration/MigrationOwnership.test.ts": "29081eb1f9d4a34595fba64dd6301156f966a634f3581a5ea199eab28e6b2ed1"
+}

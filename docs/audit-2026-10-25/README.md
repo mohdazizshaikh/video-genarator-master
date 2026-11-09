@@ -1,0 +1,45 @@
+# Audit package — 25 October 2026
+
+Start with [MASTER_AUDIT.md](MASTER_AUDIT.md).
+
+- [Current implementation progress](IMPLEMENTATION_PROGRESS.md)
+- [Latest schedule video completion increment](SCHEDULE_VIDEO_COMPLETION_PROGRESS.md)
+- [Latest content version persistence increment](CONTENT_VERSION_SAFETY_PROGRESS.md)
+- [Latest video metadata persistence increment](VIDEO_METADATA_SAFETY_PROGRESS.md)
+- [Latest schedule mutation safety increment](SCHEDULE_MUTATION_SAFETY_PROGRESS.md)
+- [Latest schedule asset review interface increment](SCHEDULE_ASSET_REVIEW_UI_PROGRESS.md)
+- [Latest schedule asset reconciliation increment](SCHEDULE_ASSET_RECONCILIATION_PROGRESS.md)
+- [Latest schedule occurrence claim increment](SCHEDULE_CLAIM_PROGRESS.md)
+- [Latest persistent schedule output increment](SCHEDULE_OUTPUT_PROGRESS.md)
+- [Latest workspace profile persistence increment](TENANT_STORE_SAFETY_PROGRESS.md)
+- [Latest full backup authentication increment](BACKUP_AUTHENTICATION_PROGRESS.md)
+- [Latest bounded PAX compatibility increment](PAX_COMPATIBILITY_PROGRESS.md)
+- [Latest full backup and recovery increment](FULL_BACKUP_RECOVERY_PROGRESS.md)
+- [Latest metadata backup safeguards](METADATA_BACKUP_PROGRESS.md)
+- [Latest migration review helper increment](MIGRATION_REVIEW_HELPERS_PROGRESS.md)
+- [Latest legacy-store policy increment](LEGACY_STORE_POLICY_PROGRESS.md)
+- [Latest source-store safety increment](SOURCE_STORE_SAFETY_PROGRESS.md)
+- [Latest ownership inspection increment](OWNERSHIP_INSPECTION_PROGRESS.md)
+- [Migration guard increment](MIGRATION_GUARDS_PROGRESS.md)
+- [Graph provider increment](GRAPH_PROVIDER_PROGRESS.md)
+- [Provider contract increment](PROVIDER_CONTRACT_PROGRESS.md)
+- [Worker health increment](WORKER_HEALTH_PROGRESS.md)
+- [Workflow verification increment](WORKFLOW_VERIFICATION_PROGRESS.md)
+- [Operator reconciliation increment](OPERATOR_RECONCILIATION_PROGRESS.md)
+- [Destination approval increment](DESTINATION_APPROVAL_PROGRESS.md)
+- [Publication recovery increment](PUBLICATION_RECOVERY_PROGRESS.md)
+- [Render recovery and shutdown increment](RENDER_RECOVERY_AND_SHUTDOWN_PROGRESS.md)
+- [Scheduler and webhook increment](SCHEDULER_AND_WEBHOOK_PROGRESS.md)
+- [Fix and completion plan](FIX_AND_COMPLETION_PLAN.md)
+- [Implementation tracker](IMPLEMENTATION_TRACKER.json)
+- [All 46 page acceptance journeys](PAGE_ACCEPTANCE_PLAN.md)
+- [Prioritized findings as JSON](FINDINGS.json)
+- [All routed features](FEATURE_MATRIX.md)
+- [Every file and named function](FILE_REVIEW_LEDGER.md)
+- [Machine inventory: imports, functions, routes, effects, tests, hashes](FILE_FUNCTION_INVENTORY.json)
+- [Document register and contradictions](DOCUMENT_REGISTER.md)
+- [Isolated reproduction results](ISOLATED_PROBES.json)
+
+Reproduce probes from the repository root with `node docs/audit-2026-10-25/isolated-probes.cjs`; they write only to a temporary directory and the audit result file. They stub render execution and use a fake video adapter; no provider/network dispatch occurs. Inventory generator captures repository files and excludes the audit output directory from untracked input. Original baseline inventory was taken before this package was created.
+
+The audit is structural coverage plus focused semantic review, not certification that every line and feature has been manually validated. See the coverage ledger and main report for limits.

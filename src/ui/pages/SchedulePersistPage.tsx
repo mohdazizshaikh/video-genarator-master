@@ -1,3 +1,4 @@
+import { ScheduleAssetReview, type ReviewExecution } from "../components/scheduler/ScheduleAssetReview";
 import { authenticatedFetch } from "../services/authenticatedFetch";
 /**
  * SchedulePersistPage – Full schedule management with persistence
@@ -45,8 +46,12 @@ interface ScheduleRecord {
   };
   quality: { targetLUFS: number; sharpnessLevel: number; visualQualityTier: string };
   cronExpression: string;
+  timezone?: string;
+  recurrence?: "cron" | "once";
   publishAt: string;
   status: "active" | "paused" | "completed" | "failed";
+  execution?: ReviewExecution;
+  lastOutput?: { state: "assets-persisted" | "video-queued" | "video-completed"; videoId?: string; artifacts: Array<{ id: string }> };
   lastRun?: string;
   nextRun?: string;
   runCount: number;
@@ -104,7 +109,9 @@ const defaultForm = {
   languages: ["en"] as string[],
   contentType: "video",
   cronExpression: "0 9 * * *",
-  publishAt: new Date(Date.now() + 3600000).toISOString().slice(0, 16),
+  timezone: "UTC",
+  recurrence: "cron" as "cron" | "once",
+  publishAt: new Date(Date.now() + 3600000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
   smartSchedule: false,
   engines: {
     enableTranslation: false,
@@ -164,9 +171,9 @@ export const SchedulePersistPage: React.FC = () => {
       const data = await res.json();
       if (data.status === "ok" && data.bestTimes?.hour !== undefined) {
         const base = new Date(form.publishAt || new Date().toISOString());
-        base.setHours(data.bestTimes.hour, 0, 0, 0);
-        setForm((f) => ({ ...f, publishAt: base.toISOString().slice(0, 16), smartSchedule: true }));
-        setSmartScheduleResult(`Best time for ${form.platforms[0]}: ${data.bestTimes.hour}:00 (confidence ${Math.round((data.bestTimes.confidence ?? 0) * 100)}%)`);
+        base.setUTCHours(data.bestTimes.hour, 0, 0, 0);
+        setForm((f) => ({ ...f, publishAt: new Date(base.getTime() - base.getTimezoneOffset() * 60000).toISOString().slice(0, 16), smartSchedule: true }));
+        setSmartScheduleResult(`Best time for ${form.platforms[0]}: ${data.bestTimes.hour}:00 UTC (confidence ${Math.round((data.bestTimes.confidence ?? 0) * 100)}%)`);
       } else {
         setSmartScheduleResult("No recommendation available — using default time.");
       }
@@ -203,15 +210,28 @@ export const SchedulePersistPage: React.FC = () => {
 
   const updateStatus = async (id: string, status: string) => {
     try {
-      await authenticatedFetch(`/api/schedule/${id}/status`, {
+      const response = await authenticatedFetch(`/api/schedule/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
+      if (!response.ok) throw new Error("Status change failed");
       fetchAll();
     } catch {
-      // Intentionally ignored - fetchAll will handle error state
+      setError("Schedule status could not be changed. Refresh and review its execution state.");
     }
+  };
+
+  const downloadOutput = async (scheduleId: string, artifactId: string) => {
+    try {
+      const response = await authenticatedFetch(`/api/schedule/${encodeURIComponent(scheduleId)}/outputs/${encodeURIComponent(artifactId)}`);
+      if (!response.ok) throw new Error("Generated output is unavailable");
+      const url = URL.createObjectURL(await response.blob());
+      try {
+        const link = document.createElement("a"); link.href = url; link.download = "scheduled-output.svg";
+        document.body.appendChild(link); link.click(); link.remove();
+      } finally { URL.revokeObjectURL(url); }
+    } catch { setError("Generated output is unavailable"); }
   };
 
   const triggerRun = async (id: string) => {
@@ -219,7 +239,10 @@ export const SchedulePersistPage: React.FC = () => {
     try {
       const res = await authenticatedFetch(`/api/schedule/${id}/run`, { method: "POST" });
       const data = await res.json();
-      if (data.status === "ok") fetchAll();
+      if (data.status === "ok") {
+        await fetchAll();
+        if (!data.success) setError("Schedule did not produce an output. Check its configuration and producer availability.");
+      }
     } catch {
       // Intentionally ignored - error handled by triggering state
     }
@@ -228,10 +251,11 @@ export const SchedulePersistPage: React.FC = () => {
 
   const deleteSchedule = async (id: string) => {
     try {
-      await authenticatedFetch(`/api/schedule/${id}`, { method: "DELETE" });
+      const response = await authenticatedFetch(`/api/schedule/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Delete failed");
       fetchAll();
     } catch {
-      // Intentionally ignored - fetchAll will handle error state
+      setError("Schedule could not be deleted. Unresolved executions must be reconciled first.");
     }
   };
 
@@ -330,7 +354,7 @@ export const SchedulePersistPage: React.FC = () => {
                     <Grid item xs={6}>
                       <Stack direction="row" alignItems="center" gap={0.5}>
                         <TimerIcon sx={{ fontSize: 14, color: "text.secondary" }} />
-                        <Typography variant="caption" color="text.secondary">Cron: {sched.cronExpression}</Typography>
+                        <Typography variant="caption" color="text.secondary">{sched.recurrence === "once" ? "One time" : `Cron: ${sched.cronExpression} (${sched.timezone || "UTC"})`}</Typography>
                       </Stack>
                     </Grid>
                     <Grid item xs={6}>
@@ -346,6 +370,12 @@ export const SchedulePersistPage: React.FC = () => {
                       <Typography variant="caption" color="text.secondary">Next: {fmtDate(sched.nextRun)}</Typography>
                     </Grid>
                   </Grid>
+                  {sched.execution && sched.execution.state !== "completed" && <Alert severity="warning" sx={{ mb: 1 }}>{sched.execution.state === "claimed" ? (sched.execution.pendingOutput?.state === "video-queued" ? "Video queued. This run stays pending until the render and its outputs are verified." : "Generation is in progress or awaiting recovery. Duplicate starts are blocked.") : "Execution held for reconciliation. Another run is blocked. Pausing affects future runs and does not cancel this execution."}</Alert>}
+                  {sched.execution && <ScheduleAssetReview key={sched.execution.id} scheduleId={sched.id} execution={sched.execution} onDownload={(artifactId) => void downloadOutput(sched.id, artifactId)} onConfirmed={fetchAll} />}
+                  {sched.lastOutput && <Box sx={{ mb: 1 }}>
+                    <Typography variant="caption">{sched.lastOutput.state === "video-queued" ? "Video queued; render completion pending" : sched.lastOutput.state === "video-completed" ? "Video render verified" : "Generated assets saved"}</Typography>
+                    {sched.lastOutput.artifacts.map((artifact, index) => <Button key={artifact.id} size="small" onClick={() => downloadOutput(sched.id, artifact.id)}>Download image {index + 1}</Button>)}
+                  </Box>}
                   <Stack direction="row" gap={0.5} flexWrap="wrap">
                     {sched.engines.enableHashtagOptimization && <Chip label="Hashtags" size="small" sx={{ fontSize: "0.6rem", backgroundColor: "rgba(34,197,94,0.1)", color: "#22c55e" }} />}
                     {sched.engines.enableCommentCTA && <Chip label="CTA" size="small" sx={{ fontSize: "0.6rem", backgroundColor: "rgba(99,102,241,0.1)", color: "#6366f1" }} />}
@@ -361,7 +391,7 @@ export const SchedulePersistPage: React.FC = () => {
                   </Tooltip>
                   <Tooltip title="Run Now">
                     <span>
-                      <IconButton size="small" color="primary" onClick={() => triggerRun(sched.id)} disabled={triggering === sched.id}>
+                      <IconButton size="small" color="primary" onClick={() => triggerRun(sched.id)} disabled={triggering === sched.id || Boolean(sched.execution && sched.execution.state !== "completed")}>
                         {triggering === sched.id ? <CircularProgress size={16} /> : <FlashOnIcon fontSize="small" />}
                       </IconButton>
                     </span>
@@ -376,7 +406,7 @@ export const SchedulePersistPage: React.FC = () => {
                     </Tooltip>
                   ) : null}
                   <Tooltip title="Delete">
-                    <IconButton size="small" color="error" onClick={() => deleteSchedule(sched.id)}><DeleteIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" color="error" onClick={() => deleteSchedule(sched.id)} disabled={Boolean(sched.execution && sched.execution.state !== "completed")}><DeleteIcon fontSize="small" /></IconButton>
                   </Tooltip>
                 </CardActions>
               </Card>
@@ -429,7 +459,7 @@ export const SchedulePersistPage: React.FC = () => {
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
                 <TextField
-                  label="Publish At"
+                  label="First run (your local time)"
                   type="datetime-local"
                   value={form.publishAt}
                   onChange={(e) => setForm({ ...form, publishAt: e.target.value })}
@@ -443,6 +473,7 @@ export const SchedulePersistPage: React.FC = () => {
                   <Select
                     value={form.cronExpression}
                     label="Cron Preset"
+                    disabled={form.recurrence === "once"}
                     onChange={(e) => setForm({ ...form, cronExpression: e.target.value })}
                   >
                     {CRON_PRESETS.map((p) => (
@@ -450,6 +481,15 @@ export const SchedulePersistPage: React.FC = () => {
                     ))}
                   </Select>
                 </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField select label="Repeat" value={form.recurrence} fullWidth onChange={(e) => setForm({ ...form, recurrence: e.target.value as "cron" | "once" })}>
+                  <MenuItem value="cron">Repeat on cron schedule</MenuItem>
+                  <MenuItem value="once">One time</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField label="Recurrence timezone" value={form.timezone} disabled={form.recurrence === "once"} fullWidth helperText="IANA timezone, e.g. UTC or Asia/Kolkata" onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
               </Grid>
             </Grid>
 

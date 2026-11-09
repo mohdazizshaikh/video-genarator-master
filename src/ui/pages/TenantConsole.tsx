@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import crypto from "crypto";
 import { Alert, Grid, Stack, Typography } from "@mui/material";
 import WorkspaceSwitcher from "../components/tenant/WorkspaceSwitcher";
 import AuthBootstrap from "../components/AuthBootstrap";
@@ -71,7 +70,7 @@ const TenantConsole: React.FC = () => {
   const appendAudit = (action: string, target?: string) => {
     setAuditEntries((prev) => [
       {
-        id: `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+        id: `${Date.now()}-${globalThis.crypto.randomUUID().slice(0, 8)}`,
         actor: "current-user",
         action,
         target,
