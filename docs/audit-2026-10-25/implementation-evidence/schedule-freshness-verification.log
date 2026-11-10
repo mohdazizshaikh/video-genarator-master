@@ -1,0 +1,22 @@
+Code commit: 59f75d5
+Backend typecheck passed before the initial suite.
+full initial run (assertions passed; worker reporting error)
+Error: [vitest-worker]: Timeout calling "onTaskUpdate"
+Test Files  127 passed (127)
+Tests  764 passed (764)
+
+full retry with 3 workers (exit 0)
+Test Files  127 passed (127)
+Tests  764 passed (764)
+
+focused tests (exit 0)
+Test Files  4 passed (4)
+Tests  47 passed (47)
+
+production build (exit 0)
+✓ built in 9.47s
+
+route check (exit 0)
+Route AST/build consistency passed: 353 registrations in 46 routers; parser fixtures passed. Request/browser acceptance remains separate.
+
+changed-file ESLint (exit 0)
