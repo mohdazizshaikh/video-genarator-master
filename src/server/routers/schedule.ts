@@ -96,7 +96,13 @@ export class ScheduleRouter {
       try {
         for (const schedule of await this.store.pendingVideos()) {
           if (!this.runnerInterval) break;
-          try { await completeScheduledVideo(this.dataDirectory, this.videosDirectory, schedule.tenantId!, schedule.id); }
+          try {
+            const tenant = schedule.tenantId!;
+            if (await completeScheduledVideo(this.dataDirectory, this.videosDirectory, tenant, schedule.id)) {
+              const configuration = schedule.execution?.configuration ?? schedule;
+              this.recordCompletedFreshness(tenant, configuration.name, configuration.categories?.[0] || "General", schedule.id);
+            }
+          }
           catch { logger.warn({ scheduleId: schedule.id }, "Scheduled video completion could not be verified"); }
         }
         const due = (await this.store.getDueSchedules()).filter((schedule) => Boolean(schedule.tenantId));
@@ -133,6 +139,11 @@ export class ScheduleRouter {
     return { id: artifact.id, mimeType: artifact.mimeType, checksumSha256: artifact.checksumSha256, sizeBytes: artifact.sizeBytes };
   }
 
+  private recordCompletedFreshness(tenant: string, name: string, category: string, scheduleId: string): void {
+    try { this.freshnessEngine.forTenant(tenant).record(name, category); }
+    catch { logger.warn({ scheduleId }, "Completed schedule freshness could not be recorded"); }
+  }
+
   private async executeSchedule(scheduleId: string, tenantId?: string, manual = false): Promise<boolean> {
     if (!tenantId) return false;
     const executionKey = `${tenantId}:${scheduleId}`;
@@ -156,7 +167,7 @@ export class ScheduleRouter {
       const meta = sched.metadata as { contentType?: string; alsoGenerate?: Record<string, boolean> };
       const contentType: string = meta?.contentType || "video";
       if (!["video", "image", "carousel", "banner"].includes(contentType)) throw new Error("Unsupported scheduled content type");
-      if (contentType === "video" && !this.shortCreator) throw new Error("Video renderer is not ready");
+      if (contentType === "video" && !this.shortCreator) return false; // Leave the due occurrence available for the next tick.
       const saveAsset = async (result: ImageRenderResult) => {
         if (!result.success || !result.svgMarkup?.trim()) throw new Error("Scheduled producer returned no bytes");
         producerMayHaveEffects = true;
@@ -280,12 +291,10 @@ export class ScheduleRouter {
         logger.debug({ scheduleId }, "alsoGenerate: thumbnail/poster done");
       }
 
-      // ── Record freshness so this topic isn't repeated too soon ───
-      freshness.record(sched.name, category);
-
       if (output.state === "video-queued") return true; // Accepted, still awaiting verified render output.
       const recorded = await this.store.recordRunForTenant(tenantId, scheduleId, true, output, executionId);
       if (!recorded) throw new Error("Schedule disappeared before output binding");
+      this.recordCompletedFreshness(tenantId, sched.name, category, scheduleId);
       return true;
     } catch (err) {
       logger.error(err, "Schedule execution failed");

@@ -1,3 +1,4 @@
+import { ContentFreshnessEngine } from "../../services/ContentFreshnessEngine";
 import { completeScheduledVideo } from "../../services/ScheduleVideoCompletion";
 import { ArtifactManifestStore } from "../../db/ArtifactManifestStore";
 import { ContentVersionStore } from "../../db/ContentVersionStore";
@@ -182,11 +183,13 @@ it("reserves producer evidence from workspace content-version mutations", async 
   expect((await dispatch(api, "PATCH", `/${version.id}/render`, { auth: { tenantId: "B" }, body: { status: "ready", artifactId: artifact.id } })).status).toBe(404);
 });
 
-it("reconciles a paused one-time video on the restarted runner's tick", async () => {
+it("records freshness only after the restarted runner verifies a paused one-time video", async () => {
+  const freshness = vi.spyOn(ContentFreshnessEngine.prototype, "record");
   const enqueue = vi.fn(() => "bound-video"), first = router(enqueue), id = await create(first);
   await dispatch(first.router, "PATCH", `/${id}`, { auth, body: { recurrence: "once" } });
   await dispatch(first.router, "POST", `/${id}/run`, { auth });
   await dispatch(first.router, "PATCH", `/${id}/status`, { auth, body: { status: "paused" } });
+  expect(freshness).not.toHaveBeenCalled();
   first.stop();
   await renderEvidence();
   const store = new ScheduleStore(directory);
@@ -198,6 +201,7 @@ it("reconciles a paused one-time video on the restarted runner's tick", async ()
   } finally { vi.useRealTimers(); }
   await vi.waitFor(async () => {
     expect(await store.get(id)).toMatchObject({ status: "completed", runCount: 1, lastOutput: { state: "video-completed" } });
+    expect(freshness).toHaveBeenCalledExactlyOnceWith("Claimed run", "General");
   });
   expect(enqueue).toHaveBeenCalledTimes(1);
 });

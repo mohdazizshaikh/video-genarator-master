@@ -81,12 +81,17 @@ describe("schedule runner recurrence integration", () => {
     await vi.advanceTimersByTimeAsync(40 * 60000);
     expect(enqueue).not.toHaveBeenCalled();
   });
-  it("counts renderer unavailability as failure instead of a successful execution", async () => {
+  it("keeps a due occurrence available until the renderer becomes ready", async () => {
     service.stop();
     service = new ScheduleRouter({ dataDirPath: directory } as Config);
     const id = await create();
     await vi.advanceTimersByTimeAsync(60000);
-    expect(await store.get(id)).toMatchObject({ runCount: 1, failureCount: 1, nextRun: "2026-10-26T09:00:00.000Z" });
+    expect(await store.get(id)).toMatchObject({ runCount: 0, failureCount: 0, nextRun: "2026-10-25T09:00:00.000Z" });
+    expect((await store.get(id))?.execution).toBeUndefined();
+    service.setShortCreator({ addToQueue: enqueue } as unknown as ShortCreator);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect((await store.get(id))?.execution?.pendingOutput?.state).toBe("video-queued");
   });
   it("keeps freshness decisions separate for two owners using the same topic", async () => {
     await create();
