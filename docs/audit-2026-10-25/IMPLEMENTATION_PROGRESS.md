@@ -195,3 +195,8 @@ See [CONTENT_VERSION_SAFETY_PROGRESS.md](CONTENT_VERSION_SAFETY_PROGRESS.md). In
 ## Twenty-ninth increment: schedule video completion
 
 See [SCHEDULE_VIDEO_COMPLETION_PROGRESS.md](SCHEDULE_VIDEO_COMPLETION_PROGRESS.md). Video enqueue now leaves the occurrence pending. The minute runner can verify an already-bound render after restart and record its owned output IDs exactly once within a single process. Workspace API callers cannot mint renderer provenance or edit producer versions. Updated the API guide and operations runbook. Historical enqueue-only receipts, failed/unbound render recovery, durable transactions and browser/deployed acceptance remain open.
+
+
+## Thirtieth increment: scheduler freshness and renderer readiness
+
+See [SCHEDULE_FRESHNESS_PROGRESS.md](SCHEDULE_FRESHNESS_PROGRESS.md). Video runs now record freshness only after verified completion; an unavailable renderer leaves the occurrence due without writing counters or freshness. The operations and API docs describe both cases. Cross-process authority and deployed verification remain open.

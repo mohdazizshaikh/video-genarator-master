@@ -38,3 +38,5 @@
 4. Verify that the execution completed and that `lastOutput.state` is `video-completed` for the bound video. Publication still requires its own approval and dispatch workflow.
 
 Previously completed enqueue-only records are not backfilled. File-mode coordination protects commits inside one server process. Cross-process scheduling, unknown or failed render resolution, and deployed recovery exercises remain open.
+
+When the renderer has not been attached yet, a due video stays due and the runner rechecks on its next tick. It does not consume the occurrence. Topic freshness is recorded after verified completion as a separate advisory write. If a warning reports a freshness write failure, the verified render and completed occurrence remain valid.

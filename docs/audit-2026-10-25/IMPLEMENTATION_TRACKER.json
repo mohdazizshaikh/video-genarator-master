@@ -1,7 +1,7 @@
 {
   "created": "2026-10-25",
   "source": "FINDINGS.json + FEATURE_MATRIX.md + FILE_REVIEW_LEDGER.md",
-  "status": "implementation in progress; twenty-ninth increment verifies bound scheduled video completion before advancing counters; failed/unbound recovery, cross-process authority and browser/deployed acceptance remain open; no phase declared complete",
+  "status": "implementation in progress; thirtieth increment defers unavailable video dispatch and records freshness only after verified completion; failed/unbound recovery, cross-process authority and browser/deployed acceptance remain open",
   "phases": [
     {
       "id": "P0",
@@ -704,9 +704,14 @@
           "date": "2026-11-10",
           "record": "SCHEDULE_VIDEO_COMPLETION_PROGRESS.md",
           "scope": "temporary enqueue/verified render split, restarted runner, ownership/integrity, concurrent commit and producer identity regressions; file mode only; 764 tests, backend/UI types, build, route checks and changed-file lint passed"
+        },
+        {
+          "date": "2026-11-10",
+          "record": "SCHEDULE_FRESHNESS_PROGRESS.md",
+          "scope": "47 focused scheduler tests; renderer-readiness deferral and restart verification before freshness update; 764 tests passed on reduced-worker retry, backend types, build, routes and changed-file lint passed"
         }
       ],
-      "progress": "New file-mode occurrences claim and snapshot configuration; unresolved edits/deletion are blocked. SVG outputs persist with owned manifests and can be confirmed with operator evidence. Video enqueue checkpoints the ID without advancing; the minute runner verifies owned MP4, content version and required SVGs before advancing once per bound execution in one process. Multi-scope runs fail explicitly. Legacy enqueue receipts, failed/unbound outcomes, freshness timing, cross-process transactions and browser/deployed acceptance remain open."
+      "progress": "New file-mode occurrences claim and snapshot configuration; unresolved edits/deletion are blocked. SVG outputs persist with owned manifests and can be confirmed with operator evidence. Video enqueue checkpoints the ID without advancing; the minute runner verifies owned MP4, content version and required SVGs before advancing once per bound execution in one process. Multi-scope runs fail explicitly. Legacy enqueue receipts, failed/unbound outcomes, cross-process transactions and browser/deployed acceptance remain open. Renderer unavailability now defers dispatch without consuming the occurrence; video freshness is advisory and written after the verified completion commit."
     },
     {
       "id": "A23",

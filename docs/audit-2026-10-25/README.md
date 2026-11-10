@@ -3,6 +3,7 @@
 Start with [MASTER_AUDIT.md](MASTER_AUDIT.md).
 
 - [Current implementation progress](IMPLEMENTATION_PROGRESS.md)
+- [Latest scheduler freshness increment](SCHEDULE_FRESHNESS_PROGRESS.md)
 - [Latest schedule video completion increment](SCHEDULE_VIDEO_COMPLETION_PROGRESS.md)
 - [Latest content version persistence increment](CONTENT_VERSION_SAFETY_PROGRESS.md)
 - [Latest video metadata persistence increment](VIDEO_METADATA_SAFETY_PROGRESS.md)

@@ -483,7 +483,7 @@ Update schedule status.
 ```
 
 #### `POST /api/schedule/:id/run`
-Trigger a manual schedule run. For a video, `success: true` means the request was accepted and the video ID was checkpointed. Poll `GET /api/schedule/:id`: `execution.pendingOutput.state: "video-queued"` is pending; `lastOutput.state: "video-completed"` records verified render completion with `videoId`, `videoArtifactId`, and `contentVersionId`. Compare the current execution with the latest completed output: an older receipt can remain visible during a new pending run. Render completion does not imply approval or publication.
+Trigger a manual schedule run. For a video, `success: true` means the request was accepted and the video ID was checkpointed. Poll `GET /api/schedule/:id`: `execution.pendingOutput.state: "video-queued"` is pending; `lastOutput.state: "video-completed"` records verified render completion with `videoId`, `videoArtifactId`, and `contentVersionId`. Compare the current execution with the latest completed output: an older receipt can remain visible during a new pending run. Render completion does not imply approval or publication. If the renderer is unavailable, the request returns `success: false` and leaves the occurrence due without incrementing its counters. Accepted enqueue does not record topic freshness; the scheduler records it after verified render completion.
 
 #### `GET /api/schedule/:id/outputs/:artifactId`
 Download an owned SVG listed in the current checkpoint or completed output. This route does not serve the MP4.
