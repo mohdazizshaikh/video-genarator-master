@@ -3,6 +3,7 @@
 Start with [MASTER_AUDIT.md](MASTER_AUDIT.md).
 
 - [Current implementation progress](IMPLEMENTATION_PROGRESS.md)
+- [Latest schedule store integrity increment](SCHEDULE_STORE_INTEGRITY_PROGRESS.md)
 - [Latest scheduler timing guard increment](SCHEDULE_TIMING_GUARD_PROGRESS.md)
 - [Latest freshness store safety increment](FRESHNESS_STORE_SAFETY_PROGRESS.md)
 - [Latest scheduler cooldown increment](SCHEDULE_COOLDOWN_PROGRESS.md)

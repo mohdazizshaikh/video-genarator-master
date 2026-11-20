@@ -1,7 +1,7 @@
 {
   "created": "2026-10-25",
   "source": "FINDINGS.json + FEATURE_MATRIX.md + FILE_REVIEW_LEDGER.md",
-  "status": "implementation in progress; thirty-third increment guards timing-variation writes against changed schedules; durable transactions and browser/deployed acceptance remain open",
+  "status": "implementation in progress; thirty-fourth increment validates schedule persistence identities/counters/execution states and preserves damaged bytes; durable authority and browser/deployed acceptance remain open",
   "phases": [
     {
       "id": "P0",
@@ -340,9 +340,14 @@
           "date": "2026-11-21",
           "record": "FRESHNESS_STORE_SAFETY_PROGRESS.md",
           "scope": "36 focused tests; 774/128 full suite, backend types, build, 353 routes/46 routers, changed-file lint and whitespace passed"
+        },
+        {
+          "date": "2026-11-21",
+          "record": "SCHEDULE_STORE_INTEGRITY_PROGRESS.md",
+          "scope": "38 focused tests; 788/129 full suite, backend types, build, 353 routes/46 routers, changed-file lint and whitespace passed"
         }
       ],
-      "progress": "Publish jobs/attempts and releases now use fresh same-process coordinated writes and atomic rename; corrupt files are preserved. Cross-process transactions, event+outbox atomicity and durable claims remain open. News sources and automation rules now reject corrupt files and use atomic replacement; source duplicate checks are workspace-scoped. Tenant profile stores now preserve corruption and use fresh synchronous read/modify/replace sequences; bootstrap conflicts and rejected route operations are handled. Video metadata and content versions now preserve corrupt files, use private atomic replacement and restrict ownership/identity mutation; invalid release records block content edits. This remains interim file-mode work, not durable repository completion. Freshness histories now reload for each operation, preserve invalid bytes and use private atomic writes; unreadable freshness leaves dispatch unclaimed."
+      "progress": "Publish jobs/attempts and releases now use fresh same-process coordinated writes and atomic rename; corrupt files are preserved. Cross-process transactions, event+outbox atomicity and durable claims remain open. News sources and automation rules now reject corrupt files and use atomic replacement; source duplicate checks are workspace-scoped. Tenant profile stores now preserve corruption and use fresh synchronous read/modify/replace sequences; bootstrap conflicts and rejected route operations are handled. Video metadata and content versions now preserve corrupt files, use private atomic replacement and restrict ownership/identity mutation; invalid release records block content edits. This remains interim file-mode work, not durable repository completion. Freshness histories now reload for each operation, preserve invalid bytes and use private atomic writes; unreadable freshness leaves dispatch unclaimed. Schedule stores now reject invalid identities/counters/execution records and use shared private initialization/atomic replacement without resetting corruption."
     },
     {
       "id": "A10",
@@ -729,9 +734,14 @@
           "date": "2026-11-21",
           "record": "SCHEDULE_TIMING_GUARD_PROGRESS.md",
           "scope": "32 focused tests; 777/128 full suite, backend types, build, 353 routes/46 routers, changed-file lint and whitespace passed"
+        },
+        {
+          "date": "2026-11-21",
+          "record": "SCHEDULE_STORE_INTEGRITY_PROGRESS.md",
+          "scope": "38 focused tests; 788/129 full suite, backend types, build, 353 routes/46 routers, changed-file lint and whitespace passed"
         }
       ],
-      "progress": "New file-mode occurrences claim and snapshot configuration; unresolved edits/deletion are blocked. SVG outputs persist with owned manifests and can be confirmed with operator evidence. Video enqueue checkpoints the ID without advancing; the minute runner verifies owned MP4, content version and required SVGs before advancing once per bound execution in one process. Multi-scope runs fail explicitly. Legacy enqueue receipts, failed/unbound outcomes, cross-process transactions and browser/deployed acceptance remain open. Renderer unavailability now defers dispatch without consuming the occurrence; video freshness is advisory and written after the verified completion commit. Freshness cooldowns now defer the same occurrence through a guarded retry-time update instead of counting a failed run. Freshness histories now reload for each operation, preserve invalid bytes and use private atomic writes; unreadable freshness leaves dispatch unclaimed. Timing variation now atomically rechecks the observed occurrence and persists its marker with retry time; stale pause/edit/date updates are rejected."
+      "progress": "New file-mode occurrences claim and snapshot configuration; unresolved edits/deletion are blocked. SVG outputs persist with owned manifests and can be confirmed with operator evidence. Video enqueue checkpoints the ID without advancing; the minute runner verifies owned MP4, content version and required SVGs before advancing once per bound execution in one process. Multi-scope runs fail explicitly. Legacy enqueue receipts, failed/unbound outcomes, cross-process transactions and browser/deployed acceptance remain open. Renderer unavailability now defers dispatch without consuming the occurrence; video freshness is advisory and written after the verified completion commit. Freshness cooldowns now defer the same occurrence through a guarded retry-time update instead of counting a failed run. Freshness histories now reload for each operation, preserve invalid bytes and use private atomic writes; unreadable freshness leaves dispatch unclaimed. Timing variation now atomically rechecks the observed occurrence and persists its marker with retry time; stale pause/edit/date updates are rejected. Schedule stores now reject invalid identities/counters/execution records and use shared private initialization/atomic replacement without resetting corruption."
     },
     {
       "id": "A23",

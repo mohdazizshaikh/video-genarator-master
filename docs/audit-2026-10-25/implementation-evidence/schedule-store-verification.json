@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-21",
+  "codeCommit": "9fbee5f",
+  "checks": {
+    "backendTypecheck": "passed",
+    "focused": "38 tests / 3 files passed",
+    "fullSuite": "788 tests / 129 files passed, maxWorkers=2, exit 0",
+    "build": "passed",
+    "routes": "353 registrations / 46 routers passed",
+    "changedFileLint": "passed",
+    "whitespace": "passed"
+  },
+  "sourceHashes": {
+    "src/db/ScheduleStore.ts": "bfa8f46a9e7e4c595f2f9094da4f45ccfacb890465298c955a792e2f16deff5e",
+    "src/db/ScheduleStoreSafety.test.ts": "79c17987dbff7a4b9e9e1cdd2ba4d686f20167fbc325d6738dc9aa8f4e946988"
+  }
+}

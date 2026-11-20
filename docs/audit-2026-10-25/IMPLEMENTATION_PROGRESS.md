@@ -215,3 +215,8 @@ See [FRESHNESS_STORE_SAFETY_PROGRESS.md](FRESHNESS_STORE_SAFETY_PROGRESS.md). Fr
 ## Thirty-third increment: scheduler timing guards
 
 See [SCHEDULE_TIMING_GUARD_PROGRESS.md](SCHEDULE_TIMING_GUARD_PROGRESS.md). Timing variation now persists its retry and applied marker only after an atomic recheck of the observed occurrence. Regression coverage includes pause, configuration edit and publish-time races; cross-process authority remains open.
+
+
+## Thirty-fourth increment: schedule store integrity
+
+See [SCHEDULE_STORE_INTEGRITY_PROGRESS.md](SCHEDULE_STORE_INTEGRITY_PROGRESS.md). Shared private persistence now rejects malformed schedule identities, counters and execution states while preserving invalid bytes and valid legacy rows. Recovery guidance and tracker updated; durable authority remains open.

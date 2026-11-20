@@ -46,3 +46,5 @@ Freshness cooldown blocks leave run/failure counters unchanged and persist a fut
 Freshness histories are read before each check and update. Empty, malformed or invalid records are preserved and block freshness decisions. A `Schedule freshness unavailable` warning leaves the occurrence due; investigate the workspace freshness store and restore/reconcile it rather than replacing it with an empty list. No render is started on that failed check.
 
 Human-mimicry delay writes use the occurrence guard as well. A changed owner/status/configuration/due time or an unresolved execution rejects the delay. The applied marker and retry time are stored together; restart does not re-randomize that occurrence.
+
+Schedule store integrity errors require preservation and operator review. Empty/malformed JSON, duplicate IDs, invalid explicit ownership, negative/unsafe counters and malformed execution records block reads and writes. Do not reset `schedules.json` to an empty list or clear execution fields to bypass recovery. Valid ownerless legacy rows remain hidden pending a provenance review.
