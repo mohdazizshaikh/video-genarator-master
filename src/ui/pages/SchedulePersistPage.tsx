@@ -1,3 +1,4 @@
+import { loadScheduleDashboard, runSchedule } from "../services/scheduleApi";
 import { ScheduleAssetReview, type ReviewExecution } from "../components/scheduler/ScheduleAssetReview";
 import { authenticatedFetch } from "../services/authenticatedFetch";
 /**
@@ -147,14 +148,9 @@ export const SchedulePersistPage: React.FC = () => {
   const fetchAll = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [schedsRes, statsRes] = await Promise.all([
-        authenticatedFetch("/api/schedule?limit=100"),
-        authenticatedFetch("/api/schedule/stats"),
-      ]);
-      const sd = await schedsRes.json();
-      const st = await statsRes.json();
-      setSchedules(sd.schedules || []);
-      if (st.status === "ok") setStats(st.stats);
+      const data = await loadScheduleDashboard<ScheduleRecord, ScheduleStats>();
+      setSchedules(data.schedules);
+      setStats(data.stats);
     } catch { setError("Failed to load schedules"); }
     setLoading(false);
   }, []);
@@ -237,14 +233,11 @@ export const SchedulePersistPage: React.FC = () => {
   const triggerRun = async (id: string) => {
     setTriggering(id);
     try {
-      const res = await authenticatedFetch(`/api/schedule/${id}/run`, { method: "POST" });
-      const data = await res.json();
-      if (data.status === "ok") {
-        await fetchAll();
-        if (!data.success) setError("Schedule did not produce an output. Check its configuration and producer availability.");
-      }
+      const accepted = await runSchedule(id);
+      await fetchAll();
+      if (!accepted) setError("Run was not started. Review its execution state, cooldown and producer availability.");
     } catch {
-      // Intentionally ignored - error handled by triggering state
+      setError("Run response could not be confirmed. Refresh the schedule before trying again.");
     }
     setTriggering(null);
   };
