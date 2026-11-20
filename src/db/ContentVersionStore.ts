@@ -24,6 +24,23 @@ export interface ContentVersionRecord {
 
 type ContentVersionFile = { versions: ContentVersionRecord[] };
 
+type DraftContent = Pick<ContentVersionRecord, "title" | "script" | "scenes" | "metadata" | "sourceUrls" | "contentSignature">;
+
+/** Validate new input without rewriting or repairing persisted legacy rows. */
+function validateDraftContent(value: unknown): asserts value is DraftContent {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Content version input must be an object");
+  const input = value as Record<string, unknown>;
+  for (const field of ["title", "script", "contentSignature"] as const) {
+    if (typeof input[field] !== "string" || !input[field].trim()) throw new Error(`${field} is required`);
+  }
+  if (!Array.isArray(input.scenes)) throw new Error("scenes must be an array");
+  if (!input.metadata || typeof input.metadata !== "object" || Array.isArray(input.metadata) ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(input.metadata))) throw new Error("metadata must be an object");
+  if (!Array.isArray(input.sourceUrls) || input.sourceUrls.some((url) => typeof url !== "string" || !url.trim()))
+    throw new Error("sourceUrls must be an array of nonempty strings");
+}
+
+
 export class ContentVersionStore {
   private readonly filePath: string;
 
@@ -88,11 +105,8 @@ export class ContentVersionStore {
       "id" | "createdAt" | "updatedAt" | "status"
     >,
   ): ContentVersionRecord {
-    if (!params.workspaceId.trim()) throw new Error("workspaceId is required");
-    if (!params.title.trim()) throw new Error("title is required");
-    if (!params.script.trim()) throw new Error("script is required");
-    if (!params.contentSignature.trim())
-      throw new Error("contentSignature is required");
+    validateDraftContent(params);
+    if (typeof params.workspaceId !== "string" || !params.workspaceId.trim()) throw new Error("workspaceId is required");
     const file = this.read();
     const duplicate = file.versions.find(
       (version) =>
@@ -149,6 +163,7 @@ export class ContentVersionStore {
     );
     if (!version) return undefined;
     this.assertEditable(workspaceId, id);
+    validateDraftContent(updates);
     const duplicate = file.versions.find(
       (candidate) =>
         candidate.workspaceId === workspaceId &&
