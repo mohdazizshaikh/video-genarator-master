@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-21",
+  "codeCommit": "75ccfa3",
+  "checks": {
+    "backendTypecheck": "passed",
+    "focusedTests": "32 passed / 2 files",
+    "fullSuite": "777 passed / 128 files, maxWorkers=2, exit 0",
+    "build": "passed",
+    "routes": "353 registrations / 46 routers passed",
+    "changedFileLint": "passed",
+    "whitespace": "passed"
+  },
+  "sourceHashes": {
+    "src/db/ScheduleStore.ts": "86ead22e0f76b21bf5dc3dd06781e519f2aedde364411bda1abb236079dad660",
+    "src/server/routers/schedule.ts": "8958f29f3b7c541e18242770fb171eedba1df8b7328f47eef44ea795c948a8ed",
+    "src/server/routers/scheduleRecurrence.test.ts": "49f4c6d4c022b0eaa16af05db988e45c917f27d68622ddc73f064156d6ebb3e5"
+  }
+}

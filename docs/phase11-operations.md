@@ -44,3 +44,5 @@ When the renderer has not been attached yet, a due video stays due and the runne
 Freshness cooldown blocks leave run/failure counters unchanged and persist a future `nextRun`. One-time work remains active. The runner retries after that time; manual runs also honor freshness. Cooldowns use the advisory wait (one-second minimum, seven-day cap, one-minute fallback). A concurrent edit, pause or claim prevents a stale deferral from applying.
 
 Freshness histories are read before each check and update. Empty, malformed or invalid records are preserved and block freshness decisions. A `Schedule freshness unavailable` warning leaves the occurrence due; investigate the workspace freshness store and restore/reconcile it rather than replacing it with an empty list. No render is started on that failed check.
+
+Human-mimicry delay writes use the occurrence guard as well. A changed owner/status/configuration/due time or an unresolved execution rejects the delay. The applied marker and retry time are stored together; restart does not re-randomize that occurrence.

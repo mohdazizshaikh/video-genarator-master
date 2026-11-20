@@ -210,3 +210,8 @@ See [SCHEDULE_COOLDOWN_PROGRESS.md](SCHEDULE_COOLDOWN_PROGRESS.md). Freshness bl
 ## Thirty-second increment: freshness store safety
 
 See [FRESHNESS_STORE_SAFETY_PROGRESS.md](FRESHNESS_STORE_SAFETY_PROGRESS.md). Freshness checks reload current records, damaged files are preserved, and writes use private atomic replacement. Failed reads defer dispatch without consuming occurrences. API/operations docs and tracking updated; durable transactions remain open.
+
+
+## Thirty-third increment: scheduler timing guards
+
+See [SCHEDULE_TIMING_GUARD_PROGRESS.md](SCHEDULE_TIMING_GUARD_PROGRESS.md). Timing variation now persists its retry and applied marker only after an atomic recheck of the observed occurrence. Regression coverage includes pause, configuration edit and publish-time races; cross-process authority remains open.
