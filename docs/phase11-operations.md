@@ -40,3 +40,5 @@
 Previously completed enqueue-only records are not backfilled. File-mode coordination protects commits inside one server process. Cross-process scheduling, unknown or failed render resolution, and deployed recovery exercises remain open.
 
 When the renderer has not been attached yet, a due video stays due and the runner rechecks on its next tick. It does not consume the occurrence. Topic freshness is recorded after verified completion as a separate advisory write. If a warning reports a freshness write failure, the verified render and completed occurrence remain valid.
+
+Freshness cooldown blocks leave run/failure counters unchanged and persist a future `nextRun`. One-time work remains active. The runner retries after that time; manual runs also honor freshness. Cooldowns use the advisory wait (one-second minimum, seven-day cap, one-minute fallback). A concurrent edit, pause or claim prevents a stale deferral from applying.

@@ -200,3 +200,8 @@ See [SCHEDULE_VIDEO_COMPLETION_PROGRESS.md](SCHEDULE_VIDEO_COMPLETION_PROGRESS.m
 ## Thirtieth increment: scheduler freshness and renderer readiness
 
 See [SCHEDULE_FRESHNESS_PROGRESS.md](SCHEDULE_FRESHNESS_PROGRESS.md). Video runs now record freshness only after verified completion; an unavailable renderer leaves the occurrence due without writing counters or freshness. The operations and API docs describe both cases. Cross-process authority and deployed verification remain open.
+
+
+## Thirty-first increment: scheduler cooldown deferral
+
+See [SCHEDULE_COOLDOWN_PROGRESS.md](SCHEDULE_COOLDOWN_PROGRESS.md). Freshness blocks now defer the same occurrence without advancing counters or one-time status. Guarded writes reject stale configuration, status or execution observations. API and operations documentation describe retry timing. No phase is complete.

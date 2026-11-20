@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-20",
+  "codeCommit": "86d8203",
+  "checks": {
+    "backendTypecheck": "passed",
+    "focused": "37 tests / 3 files passed",
+    "fullSuiteInitial": "765 passed, 1 failed: existing ShortCreator basic-current-behavior readiness poll exhausted",
+    "fullSuiteRetry": "766 tests / 127 files passed with maxWorkers=2",
+    "build": "passed",
+    "routes": "353 registrations / 46 routers passed",
+    "changedFileLint": "passed",
+    "whitespace": "passed"
+  },
+  "sourceHashes": {
+    "src/db/ScheduleStore.ts": "5e90979bcc2d9dc815d2ed80df0224a34dff6ba47a3d2460a59704675f96f6fd",
+    "src/server/routers/schedule.ts": "1b6e063292cd55560abf33c3b54526c393bd2f826e20cc4529890198de4662f4",
+    "src/server/routers/scheduleRecurrence.test.ts": "34a629aabcbf12b3b7494d72a3738aa791ecb390e42eb93c5e55856250574ec4"
+  }
+}
