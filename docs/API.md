@@ -457,7 +457,7 @@ Schedule routes require workspace authentication. Responses and mutations are sc
 List owned schedules, including the current execution and most recent completed output when available.
 
 #### `POST /api/schedule`
-Create a persistent schedule. Supply an ISO date for `publishAt`. The current runner supports at most one platform, category and language per run.
+Create a persistent schedule. Supply an ISO date for `publishAt`. New configuration writes validate basic scope/engine/quality/metadata types. Execution receipts, counters and retry markers are server-managed; generic configuration writes cannot install them. The current runner supports at most one platform, category and language per run.
 
 ```json
 {
@@ -491,7 +491,7 @@ Download an owned SVG listed in the current checkpoint or completed output. This
 #### `POST /api/schedule/:id/confirm-assets`
 Confirm already-generated SVG outputs using `executionId`, `evidenceReference`, and `verifiedOutcome: true`. Requires `schedule:reconcile`, `workspace:admin`, or `admin`. This endpoint cannot confirm a video or rerun generation.
 
-The content-version API reserves `render:` signatures and `createdBy: "render"` for the renderer. Producer versions are readable by their workspace; public draft and render PATCH routes reject edits to them with HTTP 409.
+Content-version create/draft writes also validate nonempty title/script/signature, scene arrays, metadata objects and source string arrays before persistence. Invalid store inputs leave the previous file unchanged. The content-version API reserves `render:` signatures and `createdBy: "render"` for the renderer. Producer versions are readable by their workspace; public draft and render PATCH routes reject edits to them with HTTP 409.
 
 #### `GET /api/schedule/:id`
 Get schedule details.

@@ -48,3 +48,5 @@ Freshness histories are read before each check and update. Empty, malformed or i
 Human-mimicry delay writes use the occurrence guard as well. A changed owner/status/configuration/due time or an unresolved execution rejects the delay. The applied marker and retry time are stored together; restart does not re-randomize that occurrence.
 
 Schedule store integrity errors require preservation and operator review. Empty/malformed JSON, duplicate IDs, invalid explicit ownership, negative/unsafe counters and malformed execution records block reads and writes. Do not reset `schedules.json` to an empty list or clear execution fields to bypass recovery. Valid ownerless legacy rows remain hidden pending a provenance review.
+
+New schedule/content-version writes reject invalid basic configuration before file replacement. Investigate validation errors rather than editing store files directly. A failed scheduler dashboard load retains the last good view and shows an error; refresh to get current state. A lost manual-run response requires inspecting the execution before another attempt; the UI does not auto-retry generation.

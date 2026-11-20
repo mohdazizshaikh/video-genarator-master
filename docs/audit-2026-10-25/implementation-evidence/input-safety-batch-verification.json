@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-21",
+  "codeCommits": {
+    "schedule": "d38ccda",
+    "contentVersion": "cff37aa",
+    "ui": "903ab8f"
+  },
+  "checks": {
+    "backendTypecheck": "passed",
+    "uiTypecheck": "passed",
+    "fullSuite": "832 tests / 132 files passed, maxWorkers=2, exit 0",
+    "scheduleFocused": "60 tests / 5 files passed",
+    "contentVersionFocused": "57 tests / 5 files passed",
+    "uiFocused": "7 tests / 1 file passed",
+    "build": "passed",
+    "routes": "353 registrations / 46 routers passed",
+    "changedFileLint": "passed",
+    "whitespace": "passed"
+  },
+  "sourceHashes": {
+    "src/db/ScheduleStore.ts": "b4f5814f1df3330e1a646cd4fa31e6c88defff1ebf92dc0c96a3276ea98be377",
+    "src/db/ScheduleInputSafety.test.ts": "a2b7bf07c98489e2b4bd8dc0e9bcf84229c129b69f9027e6a2ae274a89517f8a",
+    "src/db/ContentVersionStore.ts": "da87a7a6c0f7306107ffb6ea2eb7d2f1f1998dfaedec0deb4ff135e844eec2a2",
+    "src/db/ContentVersionInputSafety.test.ts": "bd992418348379346d4bcd066bc564b2a843680c68de364acba7f05205aeb5b1",
+    "src/ui/pages/SchedulePersistPage.tsx": "53f3fd272fa498f883e65b757aec46cd269255ba874049b3bbefe7b4558d896d",
+    "src/ui/services/scheduleApi.ts": "74b202c94b4054f683c4c92dcfae1b5fac45fb3bcccf53871d55ec7f48347f7a",
+    "src/ui/services/scheduleApi.test.ts": "4bcd8a93719b289f8ce7d583634c3495ba159ba2a66f3566d967ae2fbd845803"
+  }
+}

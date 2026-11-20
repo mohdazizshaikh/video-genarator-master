@@ -220,3 +220,8 @@ See [SCHEDULE_TIMING_GUARD_PROGRESS.md](SCHEDULE_TIMING_GUARD_PROGRESS.md). Timi
 ## Thirty-fourth increment: schedule store integrity
 
 See [SCHEDULE_STORE_INTEGRITY_PROGRESS.md](SCHEDULE_STORE_INTEGRITY_PROGRESS.md). Shared private persistence now rejects malformed schedule identities, counters and execution states while preserving invalid bytes and valid legacy rows. Recovery guidance and tracker updated; durable authority remains open.
+
+
+## Thirty-fifth increment: parallel input safety batch
+
+See [INPUT_SAFETY_BATCH_PROGRESS.md](INPUT_SAFETY_BATCH_PROGRESS.md). Three tasks cover schedule mutation contracts, content-version draft/create contracts and scheduler UI HTTP/application response handling. Docs/tracker updated with validation evidence and remaining limits. No phase is complete.
