@@ -182,7 +182,12 @@ export class ScheduleRouter {
       const language = (sched.languages?.[0] || "en") as LanguageEnum;
 
       // ── Freshness check ──────────────────────────────────────────
-      const freshnessResult = freshness.check(sched.name, category);
+      let freshnessResult: ReturnType<ContentFreshnessEngine["check"]>;
+      try { freshnessResult = freshness.check(sched.name, category); }
+      catch {
+        logger.warn({ scheduleId }, "Schedule freshness unavailable; occurrence remains due");
+        return false;
+      }
       if (!freshnessResult.allowed) {
         logger.warn(
           { scheduleId, reason: freshnessResult.reason, waitMs: freshnessResult.waitMs },

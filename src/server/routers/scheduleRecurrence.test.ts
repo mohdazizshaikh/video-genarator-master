@@ -133,3 +133,12 @@ it("does not apply a stale cooldown after a config edit, pause or claim", async 
   expect(await defer()).toBe(false);
   expect((await store.get(id))?.nextRun).toBe(original.nextRun);
 });
+
+it("keeps a due occurrence unchanged when freshness storage cannot be read", async () => {
+  const id = await create();
+  vi.spyOn(ContentFreshnessEngine.prototype, "check").mockImplementation(() => { throw new Error("damaged advisory store"); });
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(await store.get(id)).toMatchObject({ status: "active", runCount: 0, failureCount: 0, nextRun: "2026-10-25T09:00:00.000Z" });
+  expect((await store.get(id))?.execution).toBeUndefined();
+  expect(enqueue).not.toHaveBeenCalled();
+});

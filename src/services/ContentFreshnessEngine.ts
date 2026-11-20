@@ -1,4 +1,4 @@
-import fs from "fs-extra";
+import { initializeJsonArray, readJsonArray, writeJsonArray } from "../db/jsonArrayFile";
 import path from "path";
 export interface FreshnessRecord {
   keyword: string;
@@ -17,7 +17,6 @@ export interface FreshnessCheckResult {
 const FRESHNESS_RULES = {
   sameKeywordGapHours: 24,
   sameCategoryGapHours: 4,
-  similarTopicSimilarity: 0.7,
 };
 
 export class ContentFreshnessEngine {
@@ -26,24 +25,26 @@ export class ContentFreshnessEngine {
 
   constructor(dataDirPath: string) {
     this.recordsPath = path.join(dataDirPath, "freshness-records.json");
-    this.load();
+    initializeJsonArray(this.recordsPath);
   }
 
   private load() {
-    try {
-      if (fs.existsSync(this.recordsPath)) this.records = fs.readJsonSync(this.recordsPath);
-    } catch { this.records = []; }
+    const records = readJsonArray<FreshnessRecord>(this.recordsPath), seen = new Set<string>();
+    for (const record of records) {
+      const identity = JSON.stringify([record.keyword, record.category]);
+      if (typeof record.keyword !== "string" || !record.keyword.trim() || record.keyword !== record.keyword.toLowerCase() ||
+          typeof record.category !== "string" || !record.category.trim() || typeof record.lastUsedAt !== "string" ||
+          !Number.isFinite(Date.parse(record.lastUsedAt)) || !Number.isSafeInteger(record.useCount) || record.useCount < 1 || seen.has(identity))
+        throw new Error("Invalid freshness records; reconciliation is required");
+      seen.add(identity);
+    }
+    this.records = records;
   }
 
-  private save() {
-    try { fs.writeJsonSync(this.recordsPath, this.records, { spaces: 2 }); } catch { /* ignore */ }
-  }
-
-  private extractKeywords(text: string): string[] {
-    return text.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/).filter((w) => w.length > 3).slice(0, 8);
-  }
+  private save() { writeJsonArray(this.recordsPath, this.records); }
 
   check(keyword: string, category: string): FreshnessCheckResult {
+    this.load();
     const now = Date.now();
     const kwLower = keyword.toLowerCase();
 
@@ -82,10 +83,13 @@ export class ContentFreshnessEngine {
   }
 
   record(keyword: string, category: string) {
+    if (!keyword?.trim() || !category?.trim()) throw new Error("Freshness keyword and category are required");
+    this.load();
     const kwLower = keyword.toLowerCase();
     const existing = this.records.find((r) => r.keyword === kwLower && r.category === category);
     if (existing) {
       existing.lastUsedAt = new Date().toISOString();
+      if (!Number.isSafeInteger(existing.useCount + 1)) throw new Error("Freshness count overflow");
       existing.useCount++;
     } else {
       this.records.push({ keyword: kwLower, category, lastUsedAt: new Date().toISOString(), useCount: 1 });
@@ -95,6 +99,7 @@ export class ContentFreshnessEngine {
   }
 
   getRecentByCategory(category: string, hours = 24): FreshnessRecord[] {
+    this.load();
     const since = Date.now() - hours * 3600 * 1000;
     return this.records.filter((r) => r.category === category && new Date(r.lastUsedAt).getTime() > since);
   }
