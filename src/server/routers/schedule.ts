@@ -203,8 +203,7 @@ export class ScheduleRouter {
         const variationMs = Math.floor((this.deterministicRandom(Date.now()) * 2 - 1) * 45 * 60 * 1000);
         if (variationMs > 3 * 60 * 1000) {
           logger.info({ scheduleId, variationMinutes: Math.round(variationMs / 60000) }, "Human mimicry: delaying schedule execution");
-          await this.store.updateForTenant(tenantId, scheduleId, { nextRun: new Date(Date.now() + variationMs).toISOString(), timingVariationApplied: true });
-          return true;
+          return this.store.deferForTenant(tenantId, scheduleId, sched.runCount, dueAt ?? sched.publishAt, scheduleConfigurationDigest(sched), new Date(Date.now() + variationMs).toISOString(), true);
         }
       }
 

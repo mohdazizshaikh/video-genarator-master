@@ -142,3 +142,23 @@ it("keeps a due occurrence unchanged when freshness storage cannot be read", asy
   expect((await store.get(id))?.execution).toBeUndefined();
   expect(enqueue).not.toHaveBeenCalled();
 });
+
+
+it.each(["pause", "edit", "new-time"] as const)("does not persist a stale timing variation after %s", async (change) => {
+  const id = await create({ engines: { enableHumanMimicry: true } });
+  vi.spyOn(service as unknown as { deterministicRandom(seed: number): number }, "deterministicRandom").mockReturnValue(0.9);
+  const originalDefer = ScheduleStore.prototype.deferForTenant;
+  vi.spyOn(ScheduleStore.prototype, "deferForTenant").mockImplementationOnce(async function (...args) {
+    if (change === "pause") await store.updateStatusForTenant("owner", id, "paused");
+    if (change === "edit") await store.updateForTenant("owner", id, { name: "New config" });
+    if (change === "new-time") await store.updateForTenant("owner", id, { publishAt: "2026-10-27T09:00:00Z" });
+    return originalDefer.apply(store, args);
+  });
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(enqueue).not.toHaveBeenCalled();
+  const record = (await store.get(id))!;
+  expect(record.timingVariationApplied).toBeUndefined();
+  expect(record.nextRun).toBe(change === "new-time" ? "2026-10-27T09:00:00.000Z" : "2026-10-25T09:00:00.000Z");
+  expect(record.runCount).toBe(0);
+  expect(record.failureCount).toBe(0);
+});

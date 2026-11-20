@@ -236,14 +236,16 @@ export class ScheduleStore {
   }
 
   /** Defers the observed occurrence only; does not consume it or write an execution. */
-  async deferForTenant(tenantId: string, id: string, expectedRunCount: number, expectedDueAt: string, configurationDigest: string, retryAt: string): Promise<boolean> {
+  async deferForTenant(tenantId: string, id: string, expectedRunCount: number, expectedDueAt: string, configurationDigest: string, retryAt: string, timingVariation = false): Promise<boolean> {
     if (!tenantId || !Number.isSafeInteger(expectedRunCount) || !Number.isFinite(Date.parse(retryAt)) || Date.parse(retryAt) <= Date.now()) throw new Error("Invalid schedule deferral");
     return this.mutate((records) => {
       const record = records.find((row) => row.tenantId === tenantId && row.id === id);
       if (!record || record.status !== "active" || record.runCount !== expectedRunCount ||
           (record.nextRun ?? record.publishAt) !== expectedDueAt || scheduleConfigurationDigest(record) !== configurationDigest ||
           record.execution && record.execution.state !== "completed") return false;
+      if (timingVariation && record.timingVariationApplied) return false;
       record.nextRun = new Date(retryAt).toISOString();
+      if (timingVariation) record.timingVariationApplied = true;
       record.updatedAt = new Date().toISOString();
       return true;
     });
