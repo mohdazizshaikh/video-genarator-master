@@ -133,6 +133,31 @@ export class ScheduleStore {
     return result;
   }
 
+  private validateInput(record: ScheduleRecord): void {
+    const plainObject = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" &&
+      (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null));
+    const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim());
+    if (typeof record.name !== "string" || !record.name.trim() || typeof record.videoId !== "string")
+      throw new ScheduleValidationError("Schedule name and videoId must be strings; name cannot be blank");
+    if (record.tenantId !== undefined && (typeof record.tenantId !== "string" || !record.tenantId.trim()))
+      throw new ScheduleValidationError("Schedule workspace identity is invalid");
+    if (![record.platforms, record.categories, record.languages].every(strings))
+      throw new ScheduleValidationError("Schedule scopes must be arrays of nonempty strings");
+    if (!plainObject(record.engines) || Object.values(record.engines).some((value) => typeof value !== "boolean"))
+      throw new ScheduleValidationError("Schedule engine settings must contain boolean values");
+    if (!plainObject(record.quality) ||
+        [record.quality.targetLUFS, record.quality.sharpnessLevel].some((value) => value !== undefined && (typeof value !== "number" || !Number.isFinite(value))) ||
+        record.quality.visualQualityTier !== undefined && !["draft", "standard", "premium"].includes(record.quality.visualQualityTier))
+      throw new ScheduleValidationError("Schedule quality settings are invalid");
+    if (!plainObject(record.metadata) ||
+        record.metadata.tags !== undefined && !strings(record.metadata.tags) ||
+        [record.metadata.createdBy, record.metadata.notes, record.metadata.contentType].some((value) => value !== undefined && typeof value !== "string") ||
+        record.metadata.alsoGenerate !== undefined && (!plainObject(record.metadata.alsoGenerate) || Object.values(record.metadata.alsoGenerate).some((value) => typeof value !== "boolean")))
+      throw new ScheduleValidationError("Schedule metadata is invalid");
+    if (typeof record.publishAt !== "string" || record.nextRun !== undefined && typeof record.nextRun !== "string")
+      throw new ScheduleValidationError("Schedule dates must be strings");
+  }
+
   private validate(record: ScheduleRecord) {
     validateRecurrence(record);
     if (!Number.isFinite(new Date(record.publishAt).getTime())) throw new ScheduleValidationError("Invalid publishAt date");
@@ -141,7 +166,7 @@ export class ScheduleStore {
   }
 
   async createForTenant(tenantId: string, data: Omit<ScheduleRecord, "id" | "createdAt" | "updatedAt" | "runCount" | "failureCount" | "tenantId">): Promise<ScheduleRecord> {
-    if (!tenantId) throw new Error("tenantId is required");
+    if (typeof tenantId !== "string" || !tenantId.trim()) throw new ScheduleValidationError("tenantId is required");
     return this.create({ ...data, tenantId });
   }
 
@@ -150,9 +175,11 @@ export class ScheduleStore {
       const now = new Date().toISOString();
       const record: ScheduleRecord = {
         ...data, id: `sched_${cuid()}`, timezone: data.timezone ?? "UTC", recurrence: data.recurrence ?? "cron",
+        execution: undefined, lastOutput: undefined, lastRun: undefined, timingVariationApplied: undefined,
         publishAt: data.publishAt, nextRun: data.publishAt,
         runCount: 0, failureCount: 0, createdAt: now, updatedAt: now,
       };
+      this.validateInput(record);
       this.validate(record);
       record.publishAt = new Date(record.publishAt).toISOString();
       record.nextRun = record.publishAt;
@@ -206,12 +233,13 @@ export class ScheduleStore {
     const original = records[index];
     // Execution state, receipts and counters are written only by execution methods.
     const editable = { ...data };
-    delete editable.execution; delete editable.lastOutput; delete editable.runCount; delete editable.failureCount; delete editable.lastRun;
+    delete editable.execution; delete editable.lastOutput; delete editable.runCount; delete editable.failureCount; delete editable.lastRun; delete editable.nextRun; delete editable.timingVariationApplied;
     if (original.execution && original.execution.state !== "completed") {
       if (Object.keys(editable).some((key) => key !== "status") || editable.status !== undefined && !["active", "paused"].includes(editable.status)) throw new ScheduleConflictError();
     }
     data = editable;
     const record = { ...original, ...data, id: original.id, tenantId: original.tenantId, createdAt: original.createdAt, updatedAt: new Date().toISOString() };
+    this.validateInput(record);
     if (data.publishAt !== undefined) {
       if (!Number.isFinite(new Date(data.publishAt).getTime())) throw new ScheduleValidationError("Invalid publishAt date");
       record.publishAt = new Date(data.publishAt).toISOString();
