@@ -1,4 +1,4 @@
-import fs from "fs-extra";
+import { initializeJsonArray, readJsonArray, writeJsonArray } from "./jsonArrayFile";
 import path from "path";
 import cuid from "cuid";
 import crypto from "node:crypto";
@@ -101,14 +101,25 @@ export class ScheduleStore {
 
   constructor(basePath: string) {
     this.storePath = path.join(basePath, "schedules.json");
-    fs.ensureDirSync(basePath);
-    if (!fs.existsSync(this.storePath)) fs.writeFileSync(this.storePath, "[]", { flag: "wx", mode: 0o600 });
+    initializeJsonArray(this.storePath);
   }
 
   private readSync(): ScheduleRecord[] {
-    const records: unknown = JSON.parse(fs.readFileSync(this.storePath, "utf8"));
-    if (!Array.isArray(records)) throw new Error("Invalid schedule store");
-    return records as ScheduleRecord[];
+    const records = readJsonArray<ScheduleRecord>(this.storePath), identities = new Set<string>();
+    for (const record of records) {
+      if (typeof record.id !== "string" || !record.id.trim() || identities.has(record.id) ||
+          record.tenantId !== undefined && (typeof record.tenantId !== "string" || !record.tenantId.trim()) ||
+          !Number.isSafeInteger(record.runCount) || record.runCount < 0 || !Number.isSafeInteger(record.failureCount) || record.failureCount < 0)
+        throw new Error("Invalid schedule identity or counters; reconciliation is required");
+      identities.add(record.id);
+      if (record.execution !== undefined) {
+        const execution = record.execution;
+        if (!execution || typeof execution !== "object" || Array.isArray(execution) || typeof execution.id !== "string" || !execution.id.trim() ||
+            !["claimed", "completed", "reconciling"].includes(execution.state) || !Number.isSafeInteger(execution.runCountAtClaim) || execution.runCountAtClaim < 0)
+          throw new Error("Invalid schedule execution; reconciliation is required");
+      }
+    }
+    return records;
   }
 
   private async readAll(): Promise<ScheduleRecord[]> { return this.readSync(); }
@@ -118,11 +129,7 @@ export class ScheduleStore {
   private mutate<T>(operation: (records: ScheduleRecord[]) => T): T {
     const records = this.readSync();
     const result = operation(records);
-    const temporary = `${this.storePath}.${crypto.randomUUID()}.tmp`;
-    try {
-      fs.writeFileSync(temporary, JSON.stringify(records, null, 2), { flag: "wx", mode: 0o600 });
-      fs.renameSync(temporary, this.storePath);
-    } finally { fs.removeSync(temporary); }
+    writeJsonArray(this.storePath, records);
     return result;
   }
 
