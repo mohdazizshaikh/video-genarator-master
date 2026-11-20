@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-21",
+  "codeCommit": "d233e73",
+  "checks": {
+    "backendTypecheck": "passed",
+    "focusedTests": "36 passed / 3 files",
+    "fullSuite": "774 passed / 128 files, maxWorkers=2, exit 0",
+    "build": "passed",
+    "routes": "353 registrations / 46 routers passed",
+    "changedFileLint": "passed",
+    "whitespace": "passed"
+  },
+  "sourceHashes": {
+    "src/services/ContentFreshnessEngine.ts": "2d6b5fd5e1ebcae6a5f96cb318606dbde937260777fdbf79fef763788e843177",
+    "src/services/ContentFreshnessEngine.test.ts": "690498e8ef087ca60d5f84322466f90e960d8bf370454858aef53c95f785a023",
+    "src/server/routers/schedule.ts": "156b5ec6314971af73666bd1b98c9ab6fea5901de5368f60be89bafe7aa46ddc",
+    "src/server/routers/scheduleRecurrence.test.ts": "ad39a6875a5a723fc8161f2cd9844075ba22d9a6fd9a45e214532aaf4f3580e1"
+  }
+}

@@ -205,3 +205,8 @@ See [SCHEDULE_FRESHNESS_PROGRESS.md](SCHEDULE_FRESHNESS_PROGRESS.md). Video runs
 ## Thirty-first increment: scheduler cooldown deferral
 
 See [SCHEDULE_COOLDOWN_PROGRESS.md](SCHEDULE_COOLDOWN_PROGRESS.md). Freshness blocks now defer the same occurrence without advancing counters or one-time status. Guarded writes reject stale configuration, status or execution observations. API and operations documentation describe retry timing. No phase is complete.
+
+
+## Thirty-second increment: freshness store safety
+
+See [FRESHNESS_STORE_SAFETY_PROGRESS.md](FRESHNESS_STORE_SAFETY_PROGRESS.md). Freshness checks reload current records, damaged files are preserved, and writes use private atomic replacement. Failed reads defer dispatch without consuming occurrences. API/operations docs and tracking updated; durable transactions remain open.

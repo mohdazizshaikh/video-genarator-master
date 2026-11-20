@@ -42,3 +42,5 @@ Previously completed enqueue-only records are not backfilled. File-mode coordina
 When the renderer has not been attached yet, a due video stays due and the runner rechecks on its next tick. It does not consume the occurrence. Topic freshness is recorded after verified completion as a separate advisory write. If a warning reports a freshness write failure, the verified render and completed occurrence remain valid.
 
 Freshness cooldown blocks leave run/failure counters unchanged and persist a future `nextRun`. One-time work remains active. The runner retries after that time; manual runs also honor freshness. Cooldowns use the advisory wait (one-second minimum, seven-day cap, one-minute fallback). A concurrent edit, pause or claim prevents a stale deferral from applying.
+
+Freshness histories are read before each check and update. Empty, malformed or invalid records are preserved and block freshness decisions. A `Schedule freshness unavailable` warning leaves the occurrence due; investigate the workspace freshness store and restore/reconcile it rather than replacing it with an empty list. No render is started on that failed check.
