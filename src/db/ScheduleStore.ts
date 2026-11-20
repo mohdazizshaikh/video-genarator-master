@@ -235,6 +235,20 @@ export class ScheduleStore {
     return this.update(id, { status });
   }
 
+  /** Defers the observed occurrence only; does not consume it or write an execution. */
+  async deferForTenant(tenantId: string, id: string, expectedRunCount: number, expectedDueAt: string, configurationDigest: string, retryAt: string): Promise<boolean> {
+    if (!tenantId || !Number.isSafeInteger(expectedRunCount) || !Number.isFinite(Date.parse(retryAt)) || Date.parse(retryAt) <= Date.now()) throw new Error("Invalid schedule deferral");
+    return this.mutate((records) => {
+      const record = records.find((row) => row.tenantId === tenantId && row.id === id);
+      if (!record || record.status !== "active" || record.runCount !== expectedRunCount ||
+          (record.nextRun ?? record.publishAt) !== expectedDueAt || scheduleConfigurationDigest(record) !== configurationDigest ||
+          record.execution && record.execution.state !== "completed") return false;
+      record.nextRun = new Date(retryAt).toISOString();
+      record.updatedAt = new Date().toISOString();
+      return true;
+    });
+  }
+
   async claimForTenant(tenantId: string, id: string, expectedRunCount: number, dueAt: string, producerContract?: { expectedAssets: number; expectsVideo: boolean }, expectedConfigurationDigest?: string): Promise<ScheduleExecution | undefined> {
     if (producerContract && (!Number.isSafeInteger(producerContract.expectedAssets) || producerContract.expectedAssets < 0 || producerContract.expectedAssets > 32 || typeof producerContract.expectsVideo !== "boolean")) throw new Error("Invalid producer contract");
     if (!tenantId || !Number.isSafeInteger(expectedRunCount) || !Number.isFinite(Date.parse(dueAt))) throw new Error("Invalid schedule claim");

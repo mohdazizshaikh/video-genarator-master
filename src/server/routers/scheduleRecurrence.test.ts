@@ -1,3 +1,4 @@
+import { ContentFreshnessEngine } from "../../services/ContentFreshnessEngine";
 import fs from "fs-extra";
 import os from "node:os";
 import path from "node:path";
@@ -99,4 +100,36 @@ describe("schedule runner recurrence integration", () => {
     await vi.advanceTimersByTimeAsync(60000);
     expect(enqueue).toHaveBeenCalledTimes(2);
   });
+});
+
+
+it("defers freshness-blocked one-time work without counting a failed run", async () => {
+  const id = await create({ recurrence: "once" });
+  const check = vi.spyOn(ContentFreshnessEngine.prototype, "check").mockReturnValue({ allowed: false, waitMs: 120000 });
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(await store.get(id)).toMatchObject({ runCount: 0, failureCount: 0, status: "active", nextRun: "2026-10-25T09:03:00.000Z" });
+  expect((await store.get(id))?.execution).toBeUndefined();
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(check).toHaveBeenCalledTimes(1);
+  expect(enqueue).not.toHaveBeenCalled();
+  check.mockReturnValue({ allowed: true });
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(enqueue).toHaveBeenCalledTimes(1);
+  expect((await store.get(id))?.execution?.pendingOutput?.state).toBe("video-queued");
+});
+
+it("does not apply a stale cooldown after a config edit, pause or claim", async () => {
+  const { scheduleConfigurationDigest } = await import("../../db/ScheduleStore");
+  const id = await create(), original = (await store.get(id))!, digest = scheduleConfigurationDigest(original);
+  const defer = () => store.deferForTenant("owner", id, 0, original.nextRun!, digest, "2026-10-25T10:00:00Z");
+  await store.updateForTenant("owner", id, { name: "Changed" });
+  expect(await defer()).toBe(false);
+  await store.updateForTenant("owner", id, { name: original.name });
+  await store.updateStatusForTenant("owner", id, "paused");
+  expect(await defer()).toBe(false);
+  await store.updateStatusForTenant("owner", id, "active");
+  expect(await store.deferForTenant("other", id, 0, original.nextRun!, digest, "2026-10-25T10:00:00Z")).toBe(false);
+  await store.claimForTenant("owner", id, 0, original.nextRun!);
+  expect(await defer()).toBe(false);
+  expect((await store.get(id))?.nextRun).toBe(original.nextRun);
 });

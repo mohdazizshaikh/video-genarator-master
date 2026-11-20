@@ -188,7 +188,8 @@ export class ScheduleRouter {
           { scheduleId, reason: freshnessResult.reason, waitMs: freshnessResult.waitMs },
           "Schedule: content not fresh — skipping this run",
         );
-        await this.store.recordRunForTenant(tenantId, scheduleId, false);
+        const waitMs = Number.isFinite(freshnessResult.waitMs) && freshnessResult.waitMs! > 0 ? Math.min(freshnessResult.waitMs!, 7 * 24 * 3600000) : 60000;
+        await this.store.deferForTenant(tenantId, scheduleId, sched.runCount, dueAt ?? sched.publishAt, scheduleConfigurationDigest(sched), new Date(Date.now() + Math.max(1000, waitMs)).toISOString());
         return false;
       }
 
